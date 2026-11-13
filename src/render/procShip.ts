@@ -30,18 +30,18 @@ const ATLAS = 3
 const skins = new Map<number, { map: THREE.CanvasTexture; spec: THREE.CanvasTexture }>()
 
 const PALETTES: { hull: string; dark: string; foil: string; accent: string; tile: string }[] = [
-  { hull: '#e6e2d8', dark: '#2a3036', foil: '#c9a227', accent: '#1f4e79', tile: '#f4f1ea' },
-  { hull: '#3a4250', dark: '#5c6570', foil: '#b87333', accent: '#c45a3c', tile: '#d7cfc4' },
-  { hull: '#c5d0c4', dark: '#2c332c', foil: '#d8c48a', accent: '#2f6f62', tile: '#eef2ea' },
-  { hull: '#8aa0c2', dark: '#1c2838', foil: '#eee6d4', accent: '#d4a017', tile: '#f7f4ee' },
-  { hull: '#6e3030', dark: '#241010', foil: '#c4b8a8', accent: '#e8dcc8', tile: '#f0e6dc' },
-  { hull: '#3e5240', dark: '#5a6a58', foil: '#8a9a6e', accent: '#f0ead8', tile: '#dce8d4' },
-  { hull: '#d8cfc2', dark: '#3c342c', foil: '#5e82a8', accent: '#9a3b2f', tile: '#f3eee6' },
-  { hull: '#4a4a58', dark: '#6a6a78', foil: '#e8e0d0', accent: '#5a8fbf', tile: '#eceaf0' },
-  { hull: '#f2efe8', dark: '#22262c', foil: '#9a3b2f', accent: '#1f4e79', tile: '#ffffff' },
-  { hull: '#6a5040', dark: '#8a7060', foil: '#d4c4a0', accent: '#6a8f4e', tile: '#e8dcc8' },
-  { hull: '#3a5068', dark: '#6a8498', foil: '#7ec8d8', accent: '#e07a3d', tile: '#dce6ee' },
-  { hull: '#c8b4d4', dark: '#2a2230', foil: '#f0d878', accent: '#4a3080', tile: '#f4eef8' },
+  { hull: '#6a7078', dark: '#1c1e22', foil: '#8a929a', accent: '#163a68', tile: '#c5ccd4' },
+  { hull: '#c8d2dc', dark: '#2a3440', foil: '#7ec8e8', accent: '#1a5a90', tile: '#e8eef4' },
+  { hull: '#3a3c42', dark: '#101114', foil: '#5c6068', accent: '#8a241c', tile: '#6a6e74' },
+  { hull: '#2a3850', dark: '#0c1420', foil: '#4a88c8', accent: '#1a68b0', tile: '#6ab4e4' },
+  { hull: '#8a847c', dark: '#242018', foil: '#c4b49a', accent: '#1e4e82', tile: '#d8d0c4' },
+  { hull: '#1a1a1e', dark: '#08080a', foil: '#3a3a44', accent: '#d46a18', tile: '#2a2a32' },
+  { hull: '#5a646c', dark: '#16181c', foil: '#b8c0c8', accent: '#2a6a9a', tile: '#9aa8b4' },
+  { hull: '#4a4038', dark: '#14100c', foil: '#8a7a68', accent: '#3a6a48', tile: '#c4b8a8' },
+  { hull: '#9aa4b0', dark: '#222830', foil: '#d8e0e8', accent: '#245888', tile: '#f0f4f8' },
+  { hull: '#2c3038', dark: '#0e1014', foil: '#6a7380', accent: '#c43a28', tile: '#4a5058' },
+  { hull: '#3e5248', dark: '#121814', foil: '#7a9a88', accent: '#1a4a40', tile: '#c8d8cc' },
+  { hull: '#5a4a62', dark: '#161018', foil: '#a090b0', accent: '#3a2068', tile: '#d8cce4' },
 ]
 
 function shade(hex: string, amt: number): string {
@@ -105,10 +105,12 @@ function makeSkin(seed: number): { map: THREE.CanvasTexture; spec: THREE.CanvasT
           ctx.lineTo(x + cell, py)
           ctx.stroke()
         }
-        for (let n = 0; n < 40; n += 1) {
-          ctx.fillStyle = shade(slot.fill, rng.next() > 0.5 ? 18 : -18)
-          ctx.fillRect(x + rng.next() * cell, y + rng.next() * cell, 6, 4)
+        for (let n = 0; n < 90; n += 1) {
+          ctx.fillStyle = shade(slot.fill, rng.next() > 0.5 ? 22 : -28)
+          ctx.fillRect(x + rng.next() * cell, y + rng.next() * cell, 4 + rng.next() * 8, 3)
         }
+        ctx.fillStyle = 'rgba(0,0,0,0.22)'
+        for (let n = 0; n < 18; n += 1) ctx.fillRect(x + rng.next() * cell, y + rng.next() * cell, 14, 2)
       } else if (slot.kind === 'carbon') {
         ctx.strokeStyle = 'rgba(255,255,255,0.22)'
         ctx.lineWidth = 1
@@ -292,22 +294,19 @@ class Hull {
   }
 }
 
-/** Profile decides the silhouette. Seed noise keeps two of the same profile from matching. */
-function radiusSteps(segments: number, rng: Rng, profile: Profile): number[] {
+/**
+ * Sanfilippo's radius walk: each segment picks a new radius in a band that
+ * grows with segment count, so the hull swells and pinches instead of tapering smoothly.
+ */
+function radiusSteps(segments: number, rng: Rng, radius: number): number[] {
   const steps: number[] = []
-  let last = 1
+  let previous = radius
   for (let i = 0; i < segments; i += 1) {
-    const t = (i + 1) / segments
-    let shape = Math.sqrt(Math.max(0.12, 1 - t * t * 0.78))
-    if (profile === 'needle') shape = Math.max(0.16, 1 - t * 0.78)
-    else if (profile === 'capsule') shape = 0.55 + Math.sin(Math.min(1, t * 0.92) * Math.PI) * 0.42
-    else if (profile === 'barge') shape = 1 - t * 0.14
-    else if (profile === 'bulb') shape = 0.62 + Math.sin(t * Math.PI) * 0.58
-    else if (profile === 'lander') shape = 1.18 - t * 0.38
-    else if (profile === 'wedge') shape = Math.sqrt(Math.max(0.18, 1 - t * t * 0.88))
-    const next = Math.max(0.16, shape * (1 + (rng.next() - 0.5) * 0.16))
-    steps.push(next / last)
-    last = next
+    const max = radius * (0.1029 * segments) + radius
+    const min = radius * (0.0294 * segments) + radius * 0.42
+    const next = min + rng.next() * (max - min)
+    steps.push(next / Math.max(0.08, previous))
+    previous = next
   }
   return steps
 }
@@ -379,16 +378,16 @@ export function recipeFromCraft(config: SpacecraftConfig, missionId: string): Sh
   const rng = new Rng(seed)
   const profiles: Profile[] = ['needle', 'capsule', 'wedge', 'barge', 'bulb', 'lander']
   const profile = profiles[seed % profiles.length]
-  const sideChoices = profile === 'wedge' || profile === 'barge' ? [6, 8] : [6, 8, 8, 10]
-  const noses: ShipRecipe['nose'][] = profile === 'capsule' || profile === 'lander' ? ['blunt', 'blunt', 'point'] : profile === 'needle' ? ['spike', 'point'] : ['point', 'blunt', 'spike']
+  const sideChoices = [5, 6, 6, 7, 8, 8]
+  const noses: ShipRecipe['nose'][] = profile === 'capsule' || profile === 'lander' ? ['blunt', 'point'] : profile === 'needle' ? ['spike', 'point'] : ['point', 'blunt', 'spike']
   return {
     seed,
     sides: sideChoices[Math.floor(rng.next() * sideChoices.length)],
-    segments: Math.max(3, Math.min(8, 3 + tanks + (profile === 'needle' ? 2 : 0) - (profile === 'lander' ? 1 : 0))),
-    radius: (profile === 'needle' ? 0.32 : profile === 'lander' || profile === 'bulb' ? 0.62 : 0.46) + Math.sqrt(Math.max(dry, 12)) / 19 + tanks * 0.03,
-    length: (profile === 'needle' ? 0.82 : profile === 'lander' ? 0.38 : 0.58) + Math.min(1.6, dry / 540) + tanks * 0.06,
-    stretchX: profile === 'wedge' || profile === 'barge' ? 1.05 + rng.next() * 0.2 : 0.92 + rng.next() * 0.16,
-    stretchZ: profile === 'barge' ? 0.78 + rng.next() * 0.12 : 0.9 + rng.next() * 0.16,
+    segments: Math.max(5, Math.min(10, 5 + tanks + (profile === 'needle' ? 2 : 1))),
+    radius: (profile === 'needle' ? 0.28 : profile === 'lander' || profile === 'bulb' ? 0.58 : 0.4) + Math.sqrt(Math.max(dry, 12)) / 22 + tanks * 0.025,
+    length: (profile === 'needle' ? 0.7 : profile === 'lander' ? 0.34 : 0.5) + Math.min(1.4, dry / 560) + tanks * 0.05,
+    stretchX: profile === 'wedge' || profile === 'barge' ? 1.15 + rng.next() * 0.45 : 0.72 + rng.next() * 0.5,
+    stretchZ: profile === 'barge' ? 0.42 + rng.next() * 0.22 : 0.55 + rng.next() * 0.4,
     nozzles: Math.max(0, engines),
     wings,
     dishes,
@@ -489,37 +488,67 @@ function addBell(hull: Hull, mouth: V3[], nozzles: V3[]): void {
   nozzles.push(v(c.x, c.y - 0.04, c.z))
 }
 
-/** Raised plates, scoops and peaks. These cells are the dark carbon, foil and tile, not the pale base. */
+/** Replaces a hull face the way the Unity generator does: pyramid, box, scoop, ridge, or a blue inset. */
 function greeble(hull: Hull, quad: V3[], rng: Rng, roll: number): void {
   const [a, b, c, d] = quad
   const center = mean(quad)
   const outward = norm(cross(sub(b, a), sub(d, a)))
-  if (roll < 0.28) {
-    const peak = add(center, mul(outward, 0.16 + rng.next() * 0.2))
-    hull.tri(a, b, peak, 2)
-    hull.tri(b, c, peak, 2)
-    hull.tri(c, d, peak, 2)
-    hull.tri(d, a, peak, 2)
+  const tex = roll < 0.18 ? 3 : roll < 0.4 ? 1 : roll < 0.62 ? 2 : 4
+  if (roll < 0.2) {
+    const peak = add(center, mul(outward, 0.22 + rng.next() * 0.38))
+    hull.tri(a, b, peak, tex)
+    hull.tri(b, c, peak, tex)
+    hull.tri(c, d, peak, tex)
+    hull.tri(d, a, peak, tex)
     return
   }
-  if (roll < 0.55) {
-    const box = [a, b, c, d].map((p) => add(lerp(p, center, 0.12), mul(outward, 0.14 + rng.next() * 0.08)))
+  if (roll < 0.52) {
+    const inset = 0.06 + rng.next() * 0.16
+    const depth = 0.16 + rng.next() * 0.28
+    const box = [a, b, c, d].map((p) => add(lerp(p, center, inset), mul(outward, depth)))
     hull.quad(a, b, box[1], box[0], 1)
     hull.quad(b, c, box[2], box[1], 1)
     hull.quad(c, d, box[3], box[2], 1)
     hull.quad(d, a, box[0], box[3], 1)
-    hull.quad(box[0], box[1], box[2], box[3], 2)
+    if (rng.next() < 0.58) {
+      const peak = add(mean(box), mul(outward, 0.1 + rng.next() * 0.2))
+      hull.tri(box[0], box[1], peak, tex)
+      hull.tri(box[1], box[2], peak, tex)
+      hull.tri(box[2], box[3], peak, tex)
+      hull.tri(box[3], box[0], peak, tex)
+    } else hull.quad(box[0], box[1], box[2], box[3], tex)
     return
   }
-  if (roll < 0.78) {
-    const lip = [a, b, c, d].map((p) => add(lerp(p, center, 0.08), mul(outward, 0.06)))
-    const scoop = [a, b, c, d].map((p) => add(lerp(p, center, 0.22), mul(outward, 0.28)))
+  if (roll < 0.74) {
+    const lip = [a, b, c, d].map((p) => add(lerp(p, center, 0.06), mul(outward, 0.05)))
+    const scoop = [a, b, c, d].map((p) => add(lerp(p, center, 0.2 + rng.next() * 0.1), mul(outward, 0.24 + rng.next() * 0.22)))
     hull.quad(lip[0], lip[1], scoop[1], scoop[0], 1)
     hull.quad(lip[1], lip[2], scoop[2], scoop[1], 1)
     hull.quad(lip[2], lip[3], scoop[3], scoop[2], 1)
     hull.quad(lip[3], lip[0], scoop[0], scoop[3], 1)
     hull.quad(scoop[0], scoop[1], scoop[2], scoop[3], 3)
+    return
   }
+  if (roll < 0.9) {
+    const ridge = [a, b, c, d].map((p, i) => add(lerp(p, i % 2 === 0 ? a : b, 0.28), mul(outward, 0.1 + rng.next() * 0.1)))
+    hull.quad(a, b, ridge[1], ridge[0], 1)
+    hull.quad(b, c, ridge[2], ridge[1], 2)
+    hull.quad(c, d, ridge[3], ridge[2], 1)
+    hull.quad(d, a, ridge[0], ridge[3], 2)
+    hull.quad(ridge[0], ridge[1], ridge[2], ridge[3], tex)
+    return
+  }
+  const inner = [a, b, c, d].map((p) => lerp(p, center, 0.22))
+  const sunk = inner.map((p) => add(p, mul(outward, -0.05)))
+  hull.quad(a, b, inner[1], inner[0], 1)
+  hull.quad(b, c, inner[2], inner[1], 1)
+  hull.quad(c, d, inner[3], inner[2], 1)
+  hull.quad(d, a, inner[0], inner[3], 1)
+  hull.quad(inner[0], inner[1], sunk[1], sunk[0], 2)
+  hull.quad(inner[1], inner[2], sunk[2], sunk[1], 2)
+  hull.quad(inner[2], inner[3], sunk[3], sunk[2], 2)
+  hull.quad(inner[3], inner[0], sunk[0], sunk[3], 2)
+  hull.quad(sunk[0], sunk[1], sunk[2], sunk[3], 3)
 }
 
 /** Same plate, foil and tile atlas the hull uses. Shared maps, a fresh material. */
@@ -533,24 +562,26 @@ function hullMaterial(seed: number): THREE.MeshStandardMaterial {
     map: skin.map,
     metalnessMap: skin.spec,
     color: 0xffffff,
-    metalness: 0.16 + (seed % 7) * 0.09,
-    roughness: 0.22 + (seed % 5) * 0.11,
+    metalness: 0.42 + (seed % 7) * 0.07,
+    roughness: 0.28 + (seed % 5) * 0.08,
     side: THREE.DoubleSide,
     transparent: false,
     opacity: 1,
     depthWrite: true,
+    flatShading: true,
   })
 }
 
 function solarMaterial(seed: number): THREE.MeshStandardMaterial {
-  const tones = [0x16324a, 0x1a2740, 0x0e2a28, 0x241428, 0x3a2410]
+  const tones = [0x1a5a9c, 0x163e78, 0x0e4a88, 0x245888, 0x1c6ab0]
   return new THREE.MeshStandardMaterial({
     color: tones[seed % tones.length],
-    metalness: 0.72,
-    roughness: 0.22,
+    metalness: 0.55,
+    roughness: 0.28,
     emissive: tones[seed % tones.length],
-    emissiveIntensity: 0.12,
+    emissiveIntensity: 0.22,
     side: THREE.DoubleSide,
+    flatShading: true,
   })
 }
 
@@ -580,11 +611,11 @@ export function buildGeneratedShip(recipe: ShipRecipe): GeneratedShip {
   const finBody = new Hull()
   const dishBody = new Hull()
   const bellPoints: V3[] = []
-  const wobble = 0.04
+  const wobble = 0.1 + (recipe.seed % 5) * 0.02
   const aft = polygon(recipe.sides, recipe.radius, recipe.stretchX, recipe.stretchZ, 0, rng, wobble)
   const rings: V3[][] = [aft]
   let ring = aft
-  const steps = radiusSteps(recipe.segments, rng, profile)
+  const steps = radiusSteps(recipe.segments, rng, recipe.radius)
   const sideQuads: V3[][] = []
   for (let s = 0; s < recipe.segments; s += 1) {
     const next = scaleRing(lift(ring, recipe.length), steps[s])
@@ -603,18 +634,20 @@ export function buildGeneratedShip(recipe: ShipRecipe): GeneratedShip {
     for (let i = pairs; i < recipe.sides; i += 1) rolls[i] = rolls[i % pairs]
     for (let i = 0; i < recipe.sides; i += 1) {
       const quad = sideQuads[s * recipe.sides + i]
-      hull.quad(quad[0], quad[1], quad[2], quad[3], 0)
       const wingHere = recipe.wings > 0 && s === Math.min(1, recipe.segments - 1) && i % pairs === 0
       const finHere = recipe.fins > 0 && s === recipe.segments - 1 && i % pairs === Math.min(2, pairs - 1)
-      if (wingHere) panel(wingBody, quad, recipe.radius * (profile === 'barge' || profile === 'wedge' ? 1.35 : 0.85) * (0.9 + recipe.wings * 0.32))
-      else if (finHere) panel(finBody, quad, recipe.radius * (profile === 'needle' ? 0.28 : 0.48))
+      if (wingHere) panel(wingBody, quad, recipe.radius * (profile === 'barge' || profile === 'wedge' ? 1.55 : 1.05) * (0.95 + recipe.wings * 0.38))
+      else if (finHere) panel(finBody, quad, recipe.radius * (profile === 'needle' ? 0.34 : 0.55))
       else greeble(hull, quad, rng, rolls[i])
     }
   }
 
-  const noseLen = recipe.length * (nose === 'blunt' ? 0.28 + rng.next() * 0.12 : nose === 'spike' ? 0.9 + rng.next() * 0.35 : 0.5 + rng.next() * 0.28)
-  const noseRing = scaleRing(lift(ring, noseLen), nose === 'blunt' ? 0.52 : nose === 'spike' ? 0.045 : 0.13)
-  hull.stitch(ring, noseRing, 2)
+  const noseLen = recipe.length * (nose === 'blunt' ? 0.32 + rng.next() * 0.16 : nose === 'spike' ? 0.7 + rng.next() * 0.28 : 0.46 + rng.next() * 0.22)
+  const noseRing = scaleRing(lift(ring, noseLen), nose === 'blunt' ? 0.58 : nose === 'spike' ? 0.16 : 0.28)
+  for (let i = 0; i < ring.length; i += 1) {
+    const j = (i + 1) % ring.length
+    greeble(hull, [ring[i], ring[j], noseRing[j], noseRing[i]], rng, rng.next())
+  }
   hull.cap(noseRing, 1, false)
   hull.cap(aft, 4, true)
   rings.push(noseRing)
@@ -655,6 +688,15 @@ export function buildGeneratedShip(recipe: ShipRecipe): GeneratedShip {
   const nozzles = bellPoints.length > 0
     ? bellPoints.map((p) => new THREE.Vector3(p.x, p.y, p.z))
     : placed.nozzles
+  if (nozzles[0]) {
+    const glow = new THREE.Mesh(
+      new THREE.SphereGeometry(Math.max(0.08, recipe.radius * 0.2), 10, 8),
+      new THREE.MeshBasicMaterial({ color: 0xff7a28, transparent: true, opacity: 0.82 }),
+    )
+    glow.position.copy(nozzles[0])
+    glow.name = 'bell-glow'
+    mesh.add(glow)
+  }
 
   return { root, nozzles, left: null, right: null }
 }

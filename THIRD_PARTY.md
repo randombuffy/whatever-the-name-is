@@ -71,6 +71,14 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+## ProceduralMeshGeneration
+
+- Project: ProceduralMeshGeneration
+- Author: Alexander Sanfilippo
+- Repository: https://github.com/AlexSanfilippo/ProceduralMeshGeneration
+- What was used: the extrusion method (a polygon scaled along its normal and stitched into a hull, with face greebles, wings and a bell). The Unity project is not vendored. The port lives in `src/render/procShip.ts`. Catalog mass, thrust and cost are not read off the mesh.
+- Credit is on the Credits screen and in the README.
+
 ## Other dependencies
 
 - React, Three.js, Zustand, Zod, Lucide, Vite, TypeScript and Vitest, under their own package licenses in `node_modules`.

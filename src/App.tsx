@@ -33,10 +33,13 @@ function shortMoney(usd: number): string {
 
 function sceneMode(phase: Phase): SceneMode {
   if (phase === 'design') return 'design'
-  if (phase === 'launch' || phase === 'pad') return 'menu'
-  if (phase === 'flight') return 'flight'
-  if (phase === 'brief' || phase === 'plan' || phase === 'debrief' || phase === 'landing') return 'destination'
+  if (phase === 'brief' || phase === 'plan' || phase === 'debrief') return 'destination'
   return 'menu'
+}
+
+/** Pad, cruise, landing and the surface each own a renderer. The hangar view must not keep drawing under them. */
+function hangarOpen(phase: Phase): boolean {
+  return phase !== 'pad' && phase !== 'launch' && phase !== 'flight' && phase !== 'landing' && phase !== 'surface' && phase !== 'station'
 }
 
 export function App() {
@@ -160,24 +163,26 @@ export function App() {
 
   return (
     <div className="game">
-      <div className="world-layer">
-        <Viewport
-          mode={sceneMode(lost ? 'select' : phase)}
-          craft={craft}
-          selectedInstanceId={selectedInstanceId}
-          burning={phase === 'flight' && Boolean(sim?.burning)}
-          thrust={phase === 'flight' ? sim?.thrustFraction ?? 0 : 0}
-          progress={phase === 'flight' ? sim?.distanceFraction ?? 0 : 0}
-          missionId={mission?.id ?? 'lunar'}
-          reduced={reduced}
-          camera={camera}
-          launchCharge={0}
-          ascent={null}
-          onPick={selectInstance}
-          onNudge={nudgePart}
-        />
-      </div>
-      <div className="vignette" />
+      {hangarOpen(lost ? 'select' : phase) && (
+        <div className="world-layer">
+          <Viewport
+            mode={sceneMode(lost ? 'select' : phase)}
+            craft={craft}
+            selectedInstanceId={selectedInstanceId}
+            burning={false}
+            thrust={0}
+            progress={0}
+            missionId={mission?.id ?? 'lunar'}
+            reduced={reduced}
+            camera={camera}
+            launchCharge={0}
+            ascent={null}
+            onPick={selectInstance}
+            onNudge={nudgePart}
+          />
+        </div>
+      )}
+      {hangarOpen(lost ? 'select' : phase) && <div className="vignette" />}
       {phase !== 'surface' && phase !== 'station' && phase !== 'pad' && phase !== 'flight' && phase !== 'landing' && phase !== 'launch' && (
       <header className="float-top">
         <div className="brand-pill">

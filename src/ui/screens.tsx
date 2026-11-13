@@ -1153,7 +1153,7 @@ export function CreditsScreen() {
       <Glass className="pad-card credits">
         <strong>Mission Control</strong>
         <p>Briefing stills come from the NASA Image and Video Library. A Mars frame comes from the NASA/JPL Mars 2020 raw-image feed. Solar notes come from DONKI notifications. The asteroid count comes from the NEO feed. Each is cached for twelve hours, and the briefing stays up if a request fails. None of those feeds is the trajectory.</p>
-        <p>The spacecraft is extruded the way Alexander Sanfilippo builds one: a polygon scaled and stitched, nose one way and the bell the other. Panel maps come from the two spaceship files in public/3d. https://github.com/AlexSanfilippo/ProceduralMeshGeneration</p>
+        <p>The spacecraft is extruded the way Alexander Sanfilippo builds one: a polygon scaled and stitched, nose one way and the bell the other. Plate, foil and tile are painted on that hull. Catalog parts sit on it. https://github.com/AlexSanfilippo/ProceduralMeshGeneration</p>
         <p>Earth and Mars maps in the cruise sky are CC-BY 4.0 by Akshat. The Moon, Europa, and Jupiter maps, the grass clumps, the launch console, and the suited astronaut are the files supplied in public/3d.</p>
         <p>After booster separation the winged craft uses lift and drag from the NASA Operational Aerodynamic Data Book, September 1985. The stack below that uses an axial drag coefficient with a transonic rise.</p>
         <p>The hangar name still follows Shipwright by Dolf Veenvliet. https://github.com/macouno/shipwright</p>

@@ -27,7 +27,7 @@ The dev server is Vite on http://localhost:5173/.
 
 ## NASA API
 
-The game runs with no key. The briefing asks the [NASA Image and Video Library](https://images.nasa.gov/) (`images-api.nasa.gov`), which does not require a key. If `VITE_NASA_API_KEY` is set, the briefing also requests a near-Earth object count from `api.nasa.gov`.
+The game runs with no key. The briefing asks the [NASA Image and Video Library](https://images.nasa.gov/) (`images-api.nasa.gov`), which does not require a key. If `VITE_NASA_API_KEY` is set, the briefing also requests a near-Earth object count from `api.nasa.gov`, a DONKI flare note, and one Perseverance frame from the Mars 2020 raw-image feed. Those stills are captions. They are not the trajectory.
 
 ```bash
 cp .env.example .env.local
@@ -46,7 +46,7 @@ The engineering engine lives in `src/domain` and does not import React or Three.
 | Application | `src/App.tsx`, `src/store` | Phase flow and persistence |
 | Interface | `src/ui`, `src/styles` | Screens, ledger, mission control |
 | Rendering | `src/render` | Viewport, spacecraft mesh, schematic transfer |
-| Spacecraft | `src/domain/catalog.ts`, `assemble.ts`, `src/render/craft.ts` | Specs and the mesh that follows them |
+| Spacecraft | `src/domain/catalog.ts`, `assemble.ts`, `src/render/procShip.ts` | Specs and the extruded hull. Catalog parts sit on that hull. |
 | Engineering | `src/domain/*.ts` except missions and simulate | Mass, propulsion, power, cost, link, thermal, reliability, validation |
 | Mission | `src/domain/missions.ts`, `orbit.ts`, `simulate.ts`, `score.ts` | Scenarios, burns, events, debrief |
 | External data | `src/nasa` | Image library, optional NEO count, cache, fallback |
@@ -55,7 +55,9 @@ The engineering engine lives in `src/domain` and does not import React or Three.
 
 Both reference repositories were cloned under `reference/` (gitignored) and read. Their applications were not merged.
 
-**Shipwright** (Dolf Veenvliet / macouno) generates one decorative mesh from a name, using Three.js r49 geometry. Mission Control keeps the idea of named mounts (bus, aft, forward, port, starboard, zenith, nadir) and builds a new parametric mesh. A tank's radius comes from propellant mass and density. A solar wing's area comes from rated power divided by 200 W/m². The mesh does not invent watts, thrust or cost. Those stay on the component spec. Shipwright's vertex tables are not included. Informal permission is in that repository's README. Credit is on the Credits screen and in `THIRD_PARTY.md`.
+**ProceduralMeshGeneration** (Alexander Sanfilippo) is the hull: a polygon extruded, scaled, and stitched, with greebles grown from the faces. Catalog parts (tanks, engines, arrays, legs, shield, chute) sit on that hull. Watts, thrust and cost stay on the spec. https://github.com/AlexSanfilippo/ProceduralMeshGeneration
+
+**Shipwright** (Dolf Veenvliet / macouno) is the hangar name and the idea of named mounts. Its vertex tables are not in this tree. Informal permission is in that repository's README. Credit is on the Credits screen and in `THIRD_PARTY.md`.
 
 **VOIDTYPE** (Itz-Murali and Itz-Anya) is a Nuxt typing game. Mission Control does not use its combat, typing, or neon fighter. The renderer fallback chain, the star field, and the shape of the engine flame shader follow that project's Three.js approach and were rewritten here. The attribution license is reproduced in `THIRD_PARTY.md`. Credit is in this file and on the Credits screen: https://github.com/Itz-Murali/Void-Type
 

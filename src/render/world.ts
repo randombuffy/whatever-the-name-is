@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { SpacecraftConfig } from '../domain/types'
-import { buildCraft, disposeCraft } from './craft'
+import { disposeCraft } from './craft'
 import { attachLaunchStack } from './launchStack'
 import { modelLoader, seatSphere } from './gltf'
 import type { AscentState } from '../domain/ascent'
@@ -297,10 +297,8 @@ export class MissionWorld {
       this.scene.remove(this.craft)
       disposeCraft(this.craft)
     }
-    this.craft = buildCraft(view.craft)
-    this.craft.traverse((obj) => {
-      if (obj.userData.offsetRoot) obj.visible = false
-    })
+    this.craft = new THREE.Group()
+    this.craft.name = 'craft-root'
     attachLaunchStack(this.craft, (rig) => {
       const box = new THREE.Box3().setFromObject(rig.root)
       rig.root.position.sub(box.getCenter(new THREE.Vector3()))
