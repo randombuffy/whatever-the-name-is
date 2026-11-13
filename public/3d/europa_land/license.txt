@@ -1,0 +1,11 @@
+Model Information:
+* title:	Stock piles volume measurement- with FAE Drone
+* source:	https://sketchfab.com/3d-models/stock-piles-volume-measurement-with-fae-drone-226e9419dd0347ff9e789cf2c7768568
+* author:	FAE_Drones (https://sketchfab.com/FAE_Drones)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Stock piles volume measurement- with FAE Drone" (https://sketchfab.com/3d-models/stock-piles-volume-measurement-with-fae-drone-226e9419dd0347ff9e789cf2c7768568) by FAE_Drones (https://sketchfab.com/FAE_Drones) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

@@ -1,0 +1,11 @@
+Model Information:
+* title:	Mars - Aram Chaos region
+* source:	https://sketchfab.com/3d-models/mars-aram-chaos-region-5c9b99de0405465f81ff0ba244ef69e2
+* author:	SebastianSosnowski (https://sketchfab.com/SebastianSosnowski)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Mars - Aram Chaos region" (https://sketchfab.com/3d-models/mars-aram-chaos-region-5c9b99de0405465f81ff0ba244ef69e2) by SebastianSosnowski (https://sketchfab.com/SebastianSosnowski) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

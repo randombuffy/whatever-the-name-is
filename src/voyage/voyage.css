@@ -1,0 +1,949 @@
+.mars-app {
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  color: #f4f1e9;
+  background: #17100f;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  --ink: #f4f1e9;
+  --muted: #9c9892;
+  --line: rgba(235, 222, 205, .16);
+  --panel: rgba(22, 20, 19, .76);
+  --panel-deep: rgba(18, 17, 16, .94);
+  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  --display: 'Space Grotesk', Inter, sans-serif;
+  --amber: #f2b56f;
+  /* Smallest text size. 0 keeps the design's sizes; scripts that become unreadable when
+     tiny (Chinese, Japanese, Korean, Arabic, Hindi) raise it (see the i18n section). */
+  --min-text: 0px;
+  --green: #a5d9ad;
+}
+
+.mars-app *{ box-sizing: border-box; }
+.mars-app,.mars-app,.mars-app{ width: 100%; min-width: 320px; height: 100%; margin: 0; }
+.mars-app{ overflow: hidden; }
+.mars-app button{ color: inherit; font: inherit; }
+.mars-app button:focus-visible,.mars-app a:focus-visible{ outline: 2px solid #ffd198; outline-offset: 3px; }
+.mars-app button:disabled{ cursor: not-allowed !important; }
+
+.mars-app { position: relative; isolation: isolate; width: 100%; height: 100dvh; min-height: 560px; overflow: hidden; background: #5d3329; }
+.mars-app .world-layer{ position: absolute; inset: 0; z-index: -2; background: linear-gradient(#211716, #9b604d); }
+.mars-app .world-layer canvas{ display: block; width: 100% !important; height: 100% !important; touch-action: none; }
+.mars-app .world-grain{ pointer-events: none; position: absolute; z-index: -1; inset: 0; opacity: .11; background-image: radial-gradient(rgba(255,255,255,.34) .55px, transparent .7px); background-size: 5px 5px; mask-image: linear-gradient(transparent, #000 35%, #000); }
+.mars-app .storm-wash{ pointer-events: none; position: absolute; z-index: -1; inset: 0; background: linear-gradient(100deg, rgba(181,97,62,.09), rgba(225,141,89,.2)); animation: storm-blink 4s ease-in-out infinite; }
+.mars-app .storm-grain{ opacity: .2; }
+
+.mars-app .opening-screen{ position: absolute; inset: 0; display: grid; place-items: center; background: linear-gradient(90deg, rgba(17,15,15,.2), transparent 58%, rgba(17,15,15,.05)); animation: opening-in 1.3s ease both; }
+.mars-app .opening-lockup{ position: relative; top: -1.5vh; text-align: center; pointer-events: none; }
+.mars-app .opening-lockup h1{ margin: 0; color: #f8f3eb; font: 500 clamp(3.4rem, 8.2vw, 7.7rem)/.95 var(--display); letter-spacing: -.085em; text-shadow: 0 2px 36px rgba(25,14,10,.35); }
+.mars-app .opening-lockup h1 span{ color: #efb87d; font-weight: 400; }
+.mars-app .opening-lockup p{ margin: 17px 0 31px; color: rgba(249,244,236,.86); font: 400 clamp(.9rem, 1.45vw, 1.1rem)/1.5 var(--display); letter-spacing: .08em; }
+.mars-app .opening-lockup p em{ font-style: italic; }
+.mars-app .begin-button{ pointer-events: auto; display: inline-flex; align-items: center; justify-content: space-between; gap: 44px; min-width: 230px; border: 1px solid rgba(247,228,202,.82); padding: 16px 19px 16px 23px; color: #211716; background: #f0c38e; font: 600 .7rem/1 var(--mono); letter-spacing: .1em; cursor: pointer; transition: background .2s, transform .2s, border-color .2s; }
+.mars-app .begin-button b{ font-size: 1rem; font-weight: 400; }
+.mars-app .begin-button:hover{ background: #ffdfb5; border-color: #ffdfb5; transform: translateY(-2px); }
+.mars-app .begin-appear{ animation: panel-in .55s ease both; }
+.mars-app .skip-intro{ position: absolute; top: 31px; right: 37px; padding: 10px 0 10px 12px; border: 0; color: rgba(250,242,230,.8); background: transparent; font: 500 .62rem var(--mono); letter-spacing: .1em; cursor: pointer; }
+.mars-app .skip-intro span{ padding-left: 8px; color: var(--amber); }
+.mars-app .opening-coordinates,.mars-app .opening-footnote,.mars-app .opening-kicker,.mars-app .cinematic-caption{ display: none; }
+
+.mars-app .mission-ui{ position: absolute; inset: 0; pointer-events: none; }
+.mars-app .mission-ui button,.mars-app .modal-scrim button,.mars-app .source-panel a{ pointer-events: auto; }
+.mars-app .topbar{ position: absolute; top: 20px; left: 28px; right: 28px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; min-height: 46px; padding: 0 0 13px; border-bottom: 1px solid rgba(245,232,216,.18); }
+.mars-app .brand-lockup{ display: flex; align-items: center; gap: 11px; }
+.mars-app .brand-orbit{ position: relative; display: grid; place-items: center; width: 29px; height: 29px; border: 1px solid rgba(248,221,191,.68); border-radius: 50%; transform: rotate(-25deg); }
+.mars-app .brand-orbit:before{ content: ''; position: absolute; left: -4px; right: -4px; height: 9px; border: 1px solid #edb979; border-radius: 50%; }
+.mars-app .brand-orbit span{ width: 5px; height: 5px; border-radius: 50%; background: #d3a576; }
+.mars-app .brand-lockup strong{ display: block; font: 600 .92rem/.96 var(--display); letter-spacing: .07em; }
+.mars-app .brand-lockup em{ color: #efb87d; font-style: normal; font-weight: 400; }
+.mars-app .brand-lockup small{ display: block; margin-top: 4px; color: rgba(240,233,223,.58); font: 400 max(.49rem, var(--min-text))/1 var(--mono); letter-spacing: .17em; }
+.mars-app .mission-stamp{ color: rgba(245,239,229,.72); font: 400 max(.58rem, var(--min-text)) var(--mono); letter-spacing: .075em; white-space: nowrap; }
+.mars-app .mission-stamp strong{ color: #fff3e0; font-weight: 500; }
+.mars-app .signal-dot,.mars-app .crew-chip span,.mars-app .live-dot,.mars-app .status-light{ display: inline-block; width: 6px; height: 6px; margin-right: 8px; border-radius: 50%; background: #a4c39a; }
+.mars-app .stamp-divider{ padding: 0 9px; color: rgba(242,225,205,.32); }
+.mars-app .top-actions{ display: flex; justify-content: flex-end; align-items: center; gap: 9px; }
+.mars-app .crew-chip{ display: inline-flex; align-items: center; height: 30px; padding: 0 8px; color: #d0d5bc; font: 500 max(.54rem, var(--min-text)) var(--mono); letter-spacing: .05em; }
+.mars-app .crew-chip span{ width: 5px; height: 5px; }
+.mars-app .crew-chip.risk{ color: #e0a58e; }
+.mars-app .crew-chip.risk span{ background: #d9826e; }
+.mars-app .icon-button{ display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 1px solid rgba(242,226,207,.22); border-radius: 2px; color: rgba(249,240,229,.76); background: rgba(23,18,16,.17); font: 500 .72rem var(--mono); cursor: pointer; transition: border-color .18s, color .18s, background .18s; }
+.mars-app .icon-button:hover{ color: #fff; border-color: #bd8c62; background: rgba(43,32,27,.5); }
+
+.mars-app .objective-track{ position: absolute; top: 83px; left: 50%; display: flex; align-items: center; gap: 19px; transform: translateX(-50%); padding: 7px 12px 8px; border: 1px solid rgba(234,219,200,.18); background: rgba(23,19,17,.45); backdrop-filter: blur(12px); }
+.mars-app .objective-caption{ padding-right: 11px; border-right: 1px solid var(--line); color: #eee7dc; white-space: nowrap; font: 500 max(.51rem, var(--min-text)) var(--mono); letter-spacing: .06em; }
+.mars-app .objective-caption span{ display: block; margin-top: 4px; color: rgba(232,222,207,.45); font-size: max(.45rem, var(--min-text)); }
+.mars-app .objective-step{ display: flex; align-items: center; gap: 6px; color: rgba(237,228,216,.43); white-space: nowrap; font: 400 max(.5rem, var(--min-text)) var(--mono); letter-spacing: .07em; }
+.mars-app .objective-step > span{ display: grid; place-items: center; width: 17px; height: 17px; border: 1px solid rgba(231,216,198,.24); border-radius: 50%; color: inherit; font-size: max(.48rem, var(--min-text)); }
+.mars-app .objective-step.complete{ color: rgba(192,226,189,.85); }
+.mars-app .objective-step.complete > span{ border-color: rgba(173,224,177,.55); background: rgba(110,168,116,.2); }
+.mars-app .objective-step.current{ color: #ffcb91; }
+.mars-app .objective-step.current > span{ border-color: #f2b56f; box-shadow: 0 0 12px rgba(242,181,111,.28); }
+
+.mars-app .resource-dock{ position: absolute; top: 128px; left: 50%; display: grid; grid-template-columns: repeat(6, minmax(80px, 1fr)) 86px; width: min(760px, calc(100% - 500px)); min-width: 610px; padding: 10px 12px 11px; border: 1px solid rgba(236,218,195,.2); background: rgba(23,20,19,.66); backdrop-filter: blur(16px); box-shadow: 0 10px 34px rgba(25,13,9,.14); transform: translateX(-50%); }
+.mars-app .resource-readout{ min-width: 0; padding: 0 10px; border-right: 1px solid rgba(235,222,205,.1); }
+.mars-app .resource-readout-top{ display: grid; grid-template-columns: 13px 1fr auto; align-items: center; gap: 5px; }
+.mars-app .resource-symbol{ color: var(--resource-color); font-size: .78rem; text-align: center; }
+.mars-app .resource-name{ overflow: hidden; color: rgba(245,236,224,.65); font: 400 max(.52rem, var(--min-text)) var(--mono); letter-spacing: .025em; text-overflow: ellipsis; white-space: nowrap; }
+.mars-app .resource-number{ color: #f7f0e5; font: 500 .75rem var(--mono); white-space: nowrap; }
+.mars-app .resource-number small{ margin-left: 1px; color: rgba(231,220,206,.44); font-size: max(.5rem, var(--min-text)); }
+.mars-app .resource-track{ height: 2px; margin-top: 8px; background: rgba(229,217,201,.15); }
+.mars-app .resource-track span{ display: block; height: 100%; background: var(--resource-color); box-shadow: 0 0 8px color-mix(in srgb, var(--resource-color), transparent 35%); transition: width .55s ease; }
+.mars-app .is-stressed .resource-track span{ background: #ef826b; box-shadow: 0 0 9px rgba(239,130,107,.6); }
+.mars-app .is-stressed .resource-number{ color: #ffae96; }
+.mars-app .cargo-readout{ display: flex; align-items: center; justify-content: center; gap: 8px; padding-left: 9px; }
+.mars-app .cargo-readout > span{ color: #f0c48e; font-size: 1rem; }
+.mars-app .cargo-readout small{ display: block; color: rgba(239,230,215,.44); font: 400 max(.43rem, var(--min-text)) var(--mono); letter-spacing: .06em; white-space: nowrap; }
+.mars-app .cargo-readout strong{ color: #f6e6d0; font: 500 .81rem var(--mono); }
+.mars-app .cargo-readout i{ color: rgba(239,230,215,.44); font-size: max(.57rem, var(--min-text)); font-style: normal; }
+
+.mars-app .scene-context{ position: absolute; top: 212px; left: 50%; color: rgba(246,233,215,.54); transform: translateX(-50%); white-space: nowrap; font: 400 max(.48rem, var(--min-text)) var(--mono); letter-spacing: .12em; }
+.mars-app .scene-context span{ padding-right: 6px; color: #f1b977; }
+.mars-app .scene-context b{ padding: 0 5px; color: rgba(241,224,201,.34); font-weight: 400; }
+
+.mars-app .right-rail{ position: absolute; top: 45%; right: 28px; width: 191px; padding: 10px; border: 1px solid rgba(242,225,205,.17); background: rgba(22,20,19,.61); backdrop-filter: blur(15px); transform: translateY(-22%); }
+.mars-app .rail-label{ display: flex; justify-content: space-between; padding: 1px 2px 8px; color: rgba(237,229,217,.63); font: 400 max(.48rem, var(--min-text)) var(--mono); letter-spacing: .1em; }
+.mars-app .rail-label span{ color: #c2deb8; }
+.mars-app .rail-module{ display: flex; align-items: center; width: 100%; gap: 8px; min-height: 41px; padding: 5px 3px; border: 0; border-top: 1px solid rgba(234,219,199,.09); color: #f1e8dd; text-align: left; background: transparent; cursor: pointer; transition: background .17s; }
+.mars-app .rail-module:hover,.mars-app .rail-module.chosen{ background: rgba(237,203,160,.09); }
+.mars-app .rail-glyph{ display: grid; place-items: center; width: 23px; height: 23px; border: 1px solid rgba(233,220,199,.16); color: #eab77f; font-size: .9rem; }
+.mars-app .rail-module-name{ min-width: 0; flex: 1; overflow: hidden; font: 500 max(.57rem, var(--min-text)) var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+.mars-app .rail-module-name small{ display: block; margin-top: 3px; color: #a7d0a4; font: 400 max(.44rem, var(--min-text)) var(--mono); letter-spacing: .06em; }
+.mars-app .rail-module.offline .rail-module-name small{ color: #e9947f; }
+.mars-app .rail-arrow{ color: rgba(239,224,205,.37); font-size: .75rem; }
+.mars-app .add-system-button{ display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; height: 34px; margin-top: 8px; border: 1px solid rgba(236,185,126,.48); color: #f2ca9a; background: rgba(199,134,76,.11); font: 500 max(.53rem, var(--min-text)) var(--mono); letter-spacing: .09em; cursor: pointer; transition: .2s; }
+.mars-app .add-system-button span{ font-size: .96rem; }
+.mars-app .add-system-button:hover{ border-color: #ffcb8f; background: rgba(199,134,76,.22); }
+
+.mars-app .lower-left{ position: absolute; bottom: 133px; left: 30px; width: 194px; padding: 12px 13px 10px; border-left: 1px solid rgba(231,211,188,.34); background: linear-gradient(90deg, rgba(24,18,15,.52), transparent); }
+.mars-app .telemetry-tag{ color: rgba(241,230,215,.57); font: 400 max(.48rem, var(--min-text)) var(--mono); letter-spacing: .1em; }
+.mars-app .live-dot{ width: 5px; height: 5px; margin-right: 6px; }
+.mars-app .weather-line{ display: flex; align-items: center; gap: 8px; margin: 12px 0 10px; }
+.mars-app .weather-icon{ color: #f4c58e; font-size: 1.02rem; }
+.mars-app .weather-line b{ display: block; color: #f2e7d7; font: 500 .61rem var(--mono); }
+.mars-app .weather-line small{ display: block; margin-top: 3px; color: rgba(236,222,204,.55); font: 400 max(.45rem, var(--min-text)) var(--mono); }
+.mars-app .storm-status .storm-icon{ color: #f7ad78; }
+.mars-app .telemetry-readout{ display: flex; justify-content: space-between; padding: 4px 0; border-top: 1px solid rgba(235,221,203,.09); color: rgba(241,229,213,.56); font: 400 max(.48rem, var(--min-text)) var(--mono); }
+.mars-app .telemetry-readout b{ color: #f2e9dc; font-weight: 400; }
+.mars-app .telemetry-readout i{ color: rgba(239,225,206,.48); font-size: max(.43rem, var(--min-text)); font-style: normal; }
+.mars-app .telemetry-source{ display: flex; justify-content: space-between; padding-top: 8px; color: rgba(240,227,210,.37); font: 400 max(.39rem, var(--min-text)) var(--mono); letter-spacing: .07em; }
+.mars-app .telemetry-source button{ border: 0; padding: 0; color: #e5b17b; background: transparent; font: 400 max(.42rem, var(--min-text)) var(--mono); cursor: pointer; }
+
+.mars-app .bottom-dock{ position: absolute; bottom: 30px; left: 50%; display: flex; align-items: center; gap: 13px; width: min(760px, calc(100% - 420px)); min-width: 590px; min-height: 73px; padding: 9px 10px 9px 14px; border: 1px solid rgba(244,225,201,.23); background: rgba(23,21,20,.83); box-shadow: 0 15px 42px rgba(27,14,9,.24); backdrop-filter: blur(18px); transform: translateX(-50%); }
+.mars-app .camera-note{ display: flex; align-items: center; gap: 9px; min-width: 128px; }
+.mars-app .camera-note > span{ display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid rgba(235,205,171,.27); border-radius: 50%; color: #f1c48d; font-size: .88rem; }
+.mars-app .camera-note b,.mars-app .build-dock-button > span:nth-child(2){ display: block; color: #f1e8dc; font: 500 max(.56rem, var(--min-text)) var(--mono); letter-spacing: .06em; }
+.mars-app .camera-note small,.mars-app .build-dock-button small{ display: block; margin-top: 4px; color: rgba(233,222,207,.46); font: 400 max(.43rem, var(--min-text)) var(--mono); letter-spacing: .05em; }
+.mars-app .bottom-separator{ width: 1px; height: 35px; flex: none; background: rgba(235,222,205,.16); }
+.mars-app .build-dock-button{ display: flex; align-items: center; gap: 9px; min-width: 125px; padding: 4px 0; border: 0; text-align: left; background: transparent; cursor: pointer; }
+.mars-app .build-plus{ display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid rgba(237,180,117,.48); color: #f5c18a; font-size: 1rem; }
+.mars-app .build-dock-button kbd{ margin-left: auto; padding: 3px 5px; border: 1px solid rgba(234,217,196,.18); color: rgba(242,230,213,.48); font: 400 max(.47rem, var(--min-text)) var(--mono); }
+.mars-app .sol-status{ position: relative; flex: 1; min-width: 108px; height: 40px; padding-left: 39px; }
+.mars-app .sol-index{ position: absolute; left: 0; top: 0; color: rgba(239,223,203,.5); font: 400 max(.42rem, var(--min-text))/.9 var(--mono); letter-spacing: .08em; }
+.mars-app .sol-index b{ display: block; margin-top: 3px; color: #f7e8d3; font-size: .75rem; font-weight: 400; }
+.mars-app .sol-bars{ display: flex; align-items: end; gap: 2px; height: 19px; }
+.mars-app .sol-bars i{ display: block; width: 4px; height: 5px; background: rgba(239,197,144,.39); }
+.mars-app .sol-bars i:nth-child(3n){ height: 11px; }.mars-app .sol-bars i:nth-child(4n){ height: 15px; }.mars-app .sol-bars i:nth-child(5n){ height: 8px; }
+.mars-app .sol-status > small{ display: block; margin-top: 5px; color: rgba(237,223,206,.48); font: 400 max(.43rem, var(--min-text)) var(--mono); letter-spacing: .04em; }
+.mars-app .storm-status{ display: flex; align-items: center; flex: 1; gap: 8px; min-width: 122px; color: #edaa7a; }
+.mars-app .storm-icon{ font-size: 1rem; }.mars-app .storm-status b{ display: block; font: 500 max(.53rem, var(--min-text)) var(--mono); }.mars-app .storm-status small{ display: block; margin-top: 4px; color: rgba(241,218,194,.52); font: 400 max(.43rem, var(--min-text)) var(--mono); }
+.mars-app .advance-button{ display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 126px; height: 42px; padding: 0 11px; border: 1px solid rgba(236,183,121,.57); color: #f3c68f; background: rgba(176,113,61,.15); font: 500 max(.56rem, var(--min-text)) var(--mono); letter-spacing: .05em; cursor: pointer; transition: .18s; }
+.mars-app .advance-button b{ font-size: .95rem; font-weight: 400; }
+.mars-app .advance-button:hover:not(:disabled){ border-color: #ffd49f; color: #fff1dc; background: rgba(205,142,86,.27); }
+.mars-app .advance-button:disabled,.mars-app .report-button:disabled{ opacity: .36; cursor: not-allowed; }
+.mars-app .report-button{ display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 104px; height: 42px; padding: 0 10px; border: 1px solid rgba(222,224,202,.19); color: rgba(232,229,213,.78); background: rgba(196,198,169,.08); text-align: left; font: 500 max(.49rem, var(--min-text))/1.32 var(--mono); letter-spacing: .06em; cursor: pointer; transition: .18s; }
+.mars-app .report-button b{ color: #b8d4ad; font-size: .89rem; font-weight: 400; }
+.mars-app .report-button:not(:disabled):hover{ border-color: #a5d9ad; background: rgba(143,195,147,.17); }
+.mars-app .mission-footer{ position: absolute; right: 28px; bottom: 0; left: 28px; display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items: center; min-height: 28px; border-top: 1px solid rgba(245,232,216,.13); color: rgba(233,222,207,.48); }
+.mars-app .controls-hint{ justify-self: center; color: rgba(242,231,216,.47); white-space: nowrap; font: 400 max(.43rem, var(--min-text)) var(--mono); letter-spacing: .075em; }
+.mars-app .controls-hint span{ color: rgba(251,239,221,.8); }.mars-app .controls-hint i{ padding: 0 5px; color: rgba(241,221,198,.3); font-style: normal; }
+.mars-app .mission-credit{ color: rgba(233,222,207,.43); white-space: nowrap; font: 400 max(.4rem, var(--min-text)) var(--mono); letter-spacing: .075em; }
+.mars-app .mission-credit i{ padding: 0 5px; color: rgba(241,221,198,.25); font-style: normal; }
+.mars-app .mission-footer > button{ justify-self: end; border: 0; padding: 5px 0 5px 8px; color: #c5a17b; background: transparent; white-space: nowrap; font: 400 max(.42rem, var(--min-text)) var(--mono); letter-spacing: .06em; cursor: pointer; transition: color .18s; }
+.mars-app .mission-footer > button:hover{ color: #f0d1ac; }
+
+.mars-app .module-inspector,.mars-app .build-panel,.mars-app .help-panel{ pointer-events: auto; position: absolute; z-index: 3; border: 1px solid rgba(237,219,195,.2); background: rgba(22,20,19,.92); box-shadow: 0 18px 55px rgba(27,14,9,.28); backdrop-filter: blur(20px); animation: panel-in .25s ease both; }
+.mars-app .module-inspector{ top: 41%; left: 28px; width: 318px; padding: 19px 18px 17px; }
+.mars-app .panel-close{ position: absolute; top: 10px; right: 10px; display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 1px solid rgba(234,219,198,.2); color: rgba(241,230,213,.69); background: rgba(255,255,255,.025); font: 300 1.1rem/1 var(--display); cursor: pointer; }
+.mars-app .panel-close:hover{ color: #fff; border-color: rgba(243,190,131,.55); }
+.mars-app .inspector-kicker{ color: rgba(237,221,199,.55); font: 400 max(.49rem, var(--min-text)) var(--mono); letter-spacing: .11em; }
+.mars-app .inspector-kicker span{ color: #e9b67f; }
+.mars-app .inspector-heading{ display: flex; align-items: center; gap: 12px; margin: 17px 0 16px; }
+.mars-app .inspector-heading > span{ display: grid; place-items: center; width: 41px; height: 41px; border: 1px solid rgba(242,189,131,.37); color: #edbb83; font-size: 1.25rem; }
+.mars-app .inspector-heading h2,.mars-app .build-panel-head h2,.mars-app .help-panel h2{ margin: 0; color: #f7f0e6; font: 500 1rem var(--display); letter-spacing: -.02em; }
+.mars-app .inspector-heading p{ margin: 5px 0 0; color: rgba(235,224,209,.57); font-size: .64rem; line-height: 1.5; }
+.mars-app .inspector-metrics{ display: grid; grid-template-columns: repeat(3, 1fr); padding: 11px 0; border-top: 1px solid rgba(234,219,199,.13); border-bottom: 1px solid rgba(234,219,199,.13); }
+.mars-app .inspector-metrics small{ display: block; margin-bottom: 6px; color: rgba(235,222,204,.45); font: 400 max(.43rem, var(--min-text)) var(--mono); letter-spacing: .08em; }
+.mars-app .inspector-metrics b{ color: #eee5d8; font: 400 max(.54rem, var(--min-text)) var(--mono); }
+.mars-app .inspector-metrics .metric-good{ color: #a8d5a6; }.mars-app .inspector-metrics .metric-off{ color: #e99a81; }
+.mars-app .inspector-actions{ display: flex; gap: 7px; margin-top: 14px; }
+.mars-app .inspector-primary,.mars-app .inspector-secondary{ flex: 1; min-height: 35px; padding: 0 8px; border: 1px solid rgba(230,181,126,.45); color: #f0c492; background: rgba(195,133,79,.1); font: 500 max(.49rem, var(--min-text)) var(--mono); letter-spacing: .045em; cursor: pointer; }
+.mars-app .inspector-primary span{ color: rgba(239,213,185,.57); font-size: max(.42rem, var(--min-text)); }.mars-app .inspector-primary:hover:not(:disabled){ background: rgba(206,141,82,.23); }
+.mars-app .inspector-primary:disabled{ opacity: .36; }.mars-app .inspector-secondary{ border-color: rgba(234,220,200,.19); color: rgba(240,230,214,.72); background: rgba(255,255,255,.03); }
+.mars-app .inspector-secondary:hover{ border-color: rgba(234,220,200,.44); }
+
+.mars-app .build-panel{ bottom: 117px; left: 50%; width: 425px; padding: 20px; transform: translateX(-50%); }
+.mars-app .build-panel-head{ display: flex; align-items: start; justify-content: space-between; }
+.mars-app .build-panel-head h2{ margin-top: 7px; font-size: 1.06rem; }
+.mars-app .build-cargo{ display: flex; align-items: center; justify-content: space-between; margin: 15px 0 6px; padding: 8px 10px; border-block: 1px solid rgba(235,220,199,.12); color: rgba(235,222,205,.55); font: 400 max(.48rem, var(--min-text)) var(--mono); letter-spacing: .08em; }
+.mars-app .build-cargo b{ color: #efc08b; font: 500 .75rem var(--mono); }.mars-app .build-cargo small{ color: rgba(238,223,203,.48); font-size: max(.55rem, var(--min-text)); }
+.mars-app .build-offers{ display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 9px; }
+.mars-app .build-offer{ display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 62px; padding: 8px; border: 1px solid rgba(235,221,203,.14); text-align: left; background: rgba(255,255,255,.025); cursor: pointer; transition: .17s; }
+.mars-app .build-offer:hover:not(:disabled){ border-color: rgba(242,188,128,.57); background: rgba(222,169,111,.1); }
+.mars-app .build-offer.unavailable{ opacity: .37; }
+.mars-app .offer-glyph{ display: grid; place-items: center; width: 25px; height: 25px; flex: none; border: 1px solid rgba(236,184,126,.3); color: #e8b87f; font-size: .94rem; }
+.mars-app .offer-copy{ min-width: 0; flex: 1; }.mars-app .offer-copy b{ display: block; overflow: hidden; color: #f0e8dc; font: 500 max(.54rem, var(--min-text)) var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+.mars-app .offer-copy small{ display: block; overflow: hidden; margin-top: 5px; color: rgba(234,222,204,.49); font-size: max(.49rem, var(--min-text)); text-overflow: ellipsis; white-space: nowrap; }
+.mars-app .offer-cost{ color: #eec18b; white-space: nowrap; font: 500 max(.48rem, var(--min-text)) var(--mono); }
+.mars-app .build-footnote{ margin-top: 12px; color: rgba(236,224,208,.47); font-size: max(.58rem, var(--min-text)); }
+.mars-app .help-panel{ top: 79px; right: 28px; width: 302px; padding: 20px 18px 16px; }
+.mars-app .help-panel h2{ margin-top: 10px; }
+.mars-app .help-panel p{ margin: 10px 0 0; color: rgba(239,229,214,.65); font-size: .68rem; line-height: 1.65; }
+
+.mars-app .event-feed{ position: absolute; z-index: 2; top: 223px; left: 27px; display: grid; gap: 6px; width: 275px; pointer-events: none; }
+.mars-app .feed-item{ display: flex; gap: 9px; padding: 8px 10px; border-left: 1px solid rgba(235,185,127,.54); background: rgba(23,20,19,.54); backdrop-filter: blur(10px); animation: feed-in .3s ease both; }
+.mars-app .feed-item > span{ color: #edc18e; font: 500 .7rem var(--mono); }.mars-app .feed-item b{ display: block; color: #f4eadb; font: 500 max(.56rem, var(--min-text)) var(--mono); }
+.mars-app .feed-item small{ display: block; margin-top: 4px; color: rgba(235,222,205,.57); font-size: max(.53rem, var(--min-text)); line-height: 1.4; }
+.mars-app .feed-alert{ border-color: rgba(240,128,103,.7); }.mars-app .feed-alert > span{ color: #f1876f; }.mars-app .feed-good{ border-color: rgba(153,204,157,.55); }.mars-app .feed-good > span{ color: #a8d6a5; }
+.mars-app .toast-message{ position: absolute; z-index: 12; bottom: 120px; left: 50%; padding: 10px 15px; border: 1px solid rgba(241,218,190,.24); color: #f5eadb; background: rgba(22,20,19,.93); transform: translateX(-50%); font: 400 max(.59rem, var(--min-text)) var(--mono); letter-spacing: .025em; animation: panel-in .2s ease both; }
+.mars-app .toast-message span{ padding-right: 8px; color: #efbb82; }
+
+.mars-app .modal-scrim{ position: absolute; z-index: 10; inset: 0; display: grid; place-items: center; padding: 22px; background: rgba(14,12,11,.68); backdrop-filter: blur(7px); animation: opening-in .2s ease both; pointer-events: auto; }
+.mars-app .crisis-modal{ width: min(492px, 100%); padding: 27px 28px 21px; border: 1px solid rgba(242,203,158,.3); background: linear-gradient(135deg, rgba(43,31,26,.98), rgba(24,22,21,.98)); box-shadow: 0 24px 85px rgba(0,0,0,.4); }
+.mars-app .crisis-eyebrow{ display: flex; align-items: center; gap: 8px; color: #f0b47c; font: 500 max(.54rem, var(--min-text)) var(--mono); letter-spacing: .11em; }
+.mars-app .alert-mark{ display: grid; place-items: center; width: 17px; height: 17px; border: 1px solid rgba(244,153,111,.74); border-radius: 50%; color: #fa9971; }
+.mars-app .crisis-modal h2{ margin: 19px 0 8px; color: #f7eee4; font: 500 1.7rem/1.15 var(--display); letter-spacing: -.05em; }
+.mars-app .crisis-modal > p{ max-width: 410px; margin: 0; color: rgba(239,226,210,.67); font-size: .78rem; line-height: 1.6; }
+.mars-app .crisis-impact{ display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 20px 0 14px; }
+.mars-app .crisis-impact > div{ display: grid; grid-template-columns: 25px 1fr; align-items: center; padding: 9px 10px; border: 1px solid rgba(237,222,202,.12); background: rgba(255,255,255,.025); }
+.mars-app .crisis-impact > div > span{ grid-row: span 2; color: #f0b779; font-size: .95rem; }
+.mars-app .crisis-impact small{ color: rgba(239,227,210,.48); font: 400 max(.43rem, var(--min-text)) var(--mono); letter-spacing: .07em; }
+.mars-app .crisis-impact b{ margin-top: 4px; color: #f1e5d6; font: 500 max(.52rem, var(--min-text)) var(--mono); }
+.mars-app .crisis-choice{ display: flex; align-items: center; gap: 11px; width: 100%; min-height: 63px; margin-top: 7px; padding: 9px 11px; border: 1px solid rgba(235,220,201,.17); text-align: left; background: rgba(255,255,255,.025); cursor: pointer; transition: .17s; }
+.mars-app .crisis-choice:hover:not(:disabled){ border-color: rgba(244,190,131,.64); background: rgba(211,153,94,.1); }
+.mars-app .crisis-choice:disabled{ opacity: .4; }
+.mars-app .choice-glyph{ display: grid; place-items: center; width: 30px; height: 30px; flex: none; border: 1px solid rgba(238,184,126,.34); color: #f1bf84; font-size: 1rem; }
+.mars-app .crisis-choice > span:nth-child(2){ min-width: 0; flex: 1; }
+.mars-app .crisis-choice b{ display: block; color: #f2e7d8; font: 500 max(.56rem, var(--min-text)) var(--mono); letter-spacing: .03em; }
+.mars-app .crisis-choice small{ display: block; margin-top: 5px; color: rgba(238,225,207,.53); font-size: max(.55rem, var(--min-text)); }
+.mars-app .crisis-choice strong{ color: #edbd88; white-space: nowrap; font: 500 max(.48rem, var(--min-text)) var(--mono); }
+.mars-app .crisis-foot{ margin-top: 15px; color: rgba(235,220,200,.42); font: 400 max(.45rem, var(--min-text)) var(--mono); letter-spacing: .055em; }
+
+.mars-app .report-scrim{ background: rgba(14,13,12,.46); backdrop-filter: none; }
+.mars-app .mission-report{ position: relative; width: min(800px, 100%); padding: 29px 35px 23px; border: 1px solid rgba(237,222,202,.25); background: rgba(24,22,21,.97); box-shadow: 0 24px 90px rgba(0,0,0,.45); animation: panel-in .3s ease both; }
+.mars-app .report-overline{ display: flex; align-items: center; color: rgba(239,228,212,.69); font: 400 max(.51rem, var(--min-text)) var(--mono); letter-spacing: .1em; }
+.mars-app .report-overline > span:last-child{ margin-left: auto; color: rgba(238,221,199,.47); }
+.mars-app .report-title{ display: flex; align-items: end; justify-content: space-between; margin: 23px 0 19px; }
+.mars-app .report-title h2{ margin: 7px 0 0; color: #f5ebde; font: 500 clamp(1.6rem, 4vw, 2.45rem)/1.05 var(--display); letter-spacing: -.06em; }
+.mars-app .survival-score{ display: flex; align-items: center; gap: 9px; padding-left: 15px; border-left: 1px solid var(--line); }
+.mars-app .survival-score b{ color: #c4dfa9; font: 400 2rem/.9 var(--display); }.mars-app .survival-score span{ color: rgba(238,226,207,.56); font: 400 max(.43rem, var(--min-text))/1.45 var(--mono); letter-spacing: .07em; }
+.mars-app .report-world{ position: relative; display: flex; align-items: center; justify-content: space-between; min-height: 104px; overflow: hidden; padding: 17px 20px; background: radial-gradient(ellipse at 50% 140%, rgba(180,91,57,.53), transparent 57%), linear-gradient(90deg, rgba(50,36,31,.94), rgba(76,47,36,.93), rgba(34,28,26,.92)); }
+.mars-app .report-world:before{ content: ''; position: absolute; right: 9%; bottom: -83px; width: 180px; height: 120px; border: 1px solid rgba(239,187,135,.33); border-radius: 50% 50% 0 0; box-shadow: -70px 18px 0 -28px rgba(237,185,132,.18), 63px 10px 0 -22px rgba(237,185,132,.18); }
+.mars-app .report-world-copy{ position: relative; z-index: 1; }.mars-app .report-world-copy span,.mars-app .report-world-copy b,.mars-app .report-world-copy small{ display: block; }.mars-app .report-world-copy span{ color: #f4c28c; font: 500 max(.49rem, var(--min-text)) var(--mono); letter-spacing: .1em; }.mars-app .report-world-copy b{ margin-top: 6px; color: #f3e7d8; font: 500 1rem var(--display); }.mars-app .report-world-copy small{ margin-top: 4px; color: rgba(241,226,206,.55); font: 400 max(.45rem, var(--min-text)) var(--mono); letter-spacing: .07em; }
+.mars-app .report-ribbon{ position: relative; z-index: 1; color: rgba(243,232,217,.71); white-space: nowrap; font: 400 max(.48rem, var(--min-text)) var(--mono); letter-spacing: .055em; }.mars-app .report-ribbon span{ color: #f1bf82; }.mars-app .report-ribbon i{ padding: 0 6px; color: rgba(238,225,205,.33); font-style: normal; }
+.mars-app .report-stats{ display: grid; grid-template-columns: repeat(6, 1fr); margin-top: 14px; border: 1px solid rgba(236,220,199,.12); }
+.mars-app .report-stats > div{ padding: 11px 10px 9px; border-right: 1px solid rgba(236,220,199,.1); }.mars-app .report-stats > div:last-child{ border: 0; }
+.mars-app .report-stats small{ display: block; color: rgba(239,226,207,.46); font: 400 max(.43rem, var(--min-text)) var(--mono); letter-spacing: .07em; }
+.mars-app .report-stats b{ display: block; margin: 7px 0 4px; color: #f3ebdf; font: 400 1.05rem var(--display); }.mars-app .report-stats b i{ color: rgba(237,222,203,.44); font: 400 max(.51rem, var(--min-text)) var(--mono); font-style: normal; }
+.mars-app .report-stats span{ color: #a6d3a7; font: 400 max(.41rem, var(--min-text)) var(--mono); letter-spacing: .04em; }.mars-app .report-stats span.report-low{ color: #f0a38a; }
+.mars-app .report-summary{ display: grid; grid-template-columns: 130px 1fr; gap: 15px; margin-top: 17px; padding-bottom: 16px; border-bottom: 1px solid rgba(235,220,200,.14); }
+.mars-app .report-summary > span{ color: rgba(239,223,202,.48); font: 400 max(.46rem, var(--min-text)) var(--mono); letter-spacing: .08em; }.mars-app .report-summary p{ margin: 0; color: rgba(244,234,219,.75); font-size: .69rem; line-height: 1.55; }
+.mars-app .report-footer{ display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 15px; }.mars-app .report-footer > span{ color: rgba(236,222,202,.38); font: 400 max(.41rem, var(--min-text)) var(--mono); letter-spacing: .04em; }.mars-app .report-footer > div{ display: flex; align-items: center; gap: 8px; }
+.mars-app .report-source-button{ padding: 10px 8px; border: 0; color: #e7bd8d; background: transparent; font: 400 max(.48rem, var(--min-text)) var(--mono); cursor: pointer; }.mars-app .report-source-button:hover{ color: #fff; }
+.mars-app .report-restart{ min-width: 134px; padding: 11px 12px 11px 14px; gap: 12px; font-size: max(.52rem, var(--min-text)); }.mars-app .report-close{ position: absolute; top: 12px; right: 12px; display: grid; place-items: center; width: 27px; height: 27px; border: 1px solid rgba(235,221,202,.2); color: #ddd0bf; background: transparent; font-size: 1.1rem; cursor: pointer; }
+
+.mars-app .source-scrim{ justify-items: end; padding: 0; background: rgba(15,13,12,.48); }
+.mars-app .source-panel{ position: relative; width: min(468px, 100%); height: 100%; overflow-y: auto; padding: 33px 28px 20px; border-left: 1px solid rgba(239,220,195,.24); background: rgba(24,22,21,.98); box-shadow: -18px 0 65px rgba(0,0,0,.28); animation: source-in .28s ease both; }
+.mars-app .source-panel > .inspector-kicker{ margin-top: 17px; }.mars-app .source-panel h2{ margin: 9px 30px 8px 0; color: #f4eadc; font: 500 1.48rem/1.16 var(--display); letter-spacing: -.045em; }
+.mars-app .source-intro{ margin: 0 0 19px; color: rgba(238,226,210,.62); font-size: .69rem; line-height: 1.65; }
+.mars-app .source-entry{ display: grid; grid-template-columns: 91px 1fr; gap: 13px; padding: 14px 0; border-top: 1px solid rgba(236,221,201,.13); }
+.mars-app .source-tag{ align-self: start; display: inline-block; padding: 6px 7px; border: 1px solid rgba(164,214,172,.35); color: #afd9b0; font: 500 max(.43rem, var(--min-text))/1.25 var(--mono); letter-spacing: .04em; }
+.mars-app .source-tag.model{ border-color: rgba(140,201,216,.35); color: #a8d8e0; }.mars-app .source-tag.game{ border-color: rgba(239,181,125,.38); color: #efc18f; }
+.mars-app .source-entry b{ color: #f1e7d8; font: 500 .64rem var(--mono); }
+.mars-app .source-entry p{ margin: 6px 0 7px; color: rgba(239,226,209,.59); font-size: .62rem; line-height: 1.63; }
+.mars-app .source-entry a{ display: block; width: fit-content; margin-top: 5px; color: #eab779; text-decoration: none; font: 400 max(.54rem, var(--min-text)) var(--mono); }.mars-app .source-entry a:hover{ color: #ffdaa9; text-decoration: underline; }
+.mars-app .source-footer{ display: flex; justify-content: space-between; margin-top: 10px; padding-top: 13px; border-top: 1px solid rgba(236,221,201,.13); color: rgba(237,221,201,.4); font: 400 max(.42rem, var(--min-text)) var(--mono); letter-spacing: .06em; }
+
+.mars-app .scene-label{ display: flex; align-items: center; gap: 6px; padding: 5px 7px; border: 1px solid rgba(236,221,199,.22); color: rgba(248,239,225,.85); background: rgba(25,22,20,.7); backdrop-filter: blur(5px); white-space: nowrap; font: 500 9px/1 var(--mono); letter-spacing: .04em; transition: .2s; }
+.mars-app .scene-label-selected{ border-color: rgba(255,209,154,.72); color: #ffdfb4; background: rgba(34,25,20,.87); }
+.mars-app .scene-label-critical{ border-color: rgba(255,109,89,.7); color: #ffc1ad; }
+.mars-app .scene-label-dot{ width: 4px; height: 4px; border-radius: 50%; background: #ed9f78; }.mars-app .scene-label-dot.is-live{ background: #a1d8a1; box-shadow: 0 0 5px #a1d8a1; }
+.mars-app .scene-label-critical .scene-label-dot{ background: #ff6255; box-shadow: 0 0 7px #ff6255; }
+.mars-app .scene-loading{ padding: 10px 14px; border: 1px solid rgba(241,216,189,.25); color: #f2e1cb; background: rgba(22,18,15,.78); font: 400 max(.58rem, var(--min-text)) var(--mono); letter-spacing: .1em; }
+.mars-app .scene-startup{ position: absolute; inset: 0; display: grid; place-content: center; gap: 13px; color: rgba(246,230,208,.73); background: radial-gradient(ellipse at 50% 48%, #694235, #231918 65%); text-align: center; font: 400 max(.57rem, var(--min-text)) var(--mono); letter-spacing: .1em; }
+.mars-app .scene-startup span{ justify-self: center; width: 18px; height: 18px; border: 1px solid rgba(244,197,143,.75); border-right-color: transparent; border-radius: 50%; animation: scene-spin .85s linear infinite; }
+
+@keyframes opening-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes panel-in { from { opacity: 0; translate: 0 7px; } to { opacity: 1; translate: 0 0; } }
+@keyframes source-in { from { opacity: .6; transform: translateX(18px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes feed-in { from { opacity: 0; transform: translateX(-7px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes storm-blink { 0%,100% { opacity: .45; } 50% { opacity: .8; } }
+@keyframes scene-spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 1100px) {
+  .mars-app .resource-dock{ width: min(690px, calc(100% - 340px)); min-width: 570px; }
+  .mars-app .right-rail{ right: 16px; width: 174px; }
+  .mars-app .topbar{ left: 18px; right: 18px; }.mars-app .lower-left{ left: 17px; }
+  .mars-app .bottom-dock{ width: min(720px, calc(100% - 300px)); min-width: 560px; }
+  .mars-app .objective-track{ gap: 12px; }
+}
+@media (max-width: 800px) {
+  .mars-app { min-height: 500px; }
+  .mars-app .topbar{ top: 12px; left: 12px; right: 12px; grid-template-columns: 1fr auto; }
+  .mars-app .mission-stamp{ display: none; }.mars-app .brand-lockup strong{ font-size: .82rem; }.mars-app .crew-chip{ font-size: max(.48rem, var(--min-text)); }
+  .mars-app .objective-track{ top: 66px; width: calc(100% - 24px); justify-content: space-between; gap: 5px; padding: 6px; }
+  .mars-app .objective-caption{ display: none; }.mars-app .objective-step{ gap: 3px; font-size: max(.42rem, var(--min-text)); }.mars-app .objective-step > span{ width: 15px; height: 15px; font-size: max(.41rem, var(--min-text)); }
+  .mars-app .resource-dock{ top: 108px; left: 12px; right: 12px; width: auto; min-width: 0; grid-template-columns: repeat(6, minmax(0, 1fr)); padding: 8px 5px; transform: none; }
+  .mars-app .resource-readout{ padding: 0 4px; }.mars-app .resource-readout-top{ grid-template-columns: 11px 1fr; gap: 3px; }.mars-app .resource-name{ font-size: max(.43rem, var(--min-text)); }.mars-app .resource-number{ grid-column: 2; font-size: .63rem; }.mars-app .resource-track{ margin-top: 5px; }
+  .mars-app .cargo-readout{ display: none; }.mars-app .scene-context{ top: 165px; font-size: max(.39rem, var(--min-text)); }
+  .mars-app .right-rail{ display: none; }.mars-app .lower-left{ display: none; }
+  .mars-app .bottom-dock{ left: 10px; right: 10px; bottom: 22px; width: auto; min-width: 0; gap: 8px; padding: 7px; transform: none; }
+  .mars-app .camera-note{ min-width: 0; }.mars-app .camera-note > span{ width: 25px; height: 25px; }.mars-app .camera-note b{ display: none; }.mars-app .camera-note small{ max-width: 60px; font-size: max(.39rem, var(--min-text)); line-height: 1.3; }
+  .mars-app .build-dock-button{ min-width: 85px; gap: 6px; }.mars-app .build-dock-button kbd{ display: none; }.mars-app .build-plus{ width: 25px; height: 25px; }.mars-app .build-dock-button > span:nth-child(2){ font-size: max(.48rem, var(--min-text)); }.mars-app .build-dock-button small{ font-size: max(.38rem, var(--min-text)); }
+  .mars-app .sol-status{ min-width: 60px; padding-left: 30px; }.mars-app .sol-bars{ gap: 1px; }.mars-app .sol-bars i{ width: 3px; }.mars-app .sol-status > small{ font-size: max(.36rem, var(--min-text)); }
+  .mars-app .bottom-separator{ height: 31px; }.mars-app .advance-button{ min-width: 96px; gap: 5px; height: 38px; padding: 0 7px; font-size: max(.47rem, var(--min-text)); }.mars-app .report-button{ min-width: 67px; height: 38px; padding: 0 6px; font-size: max(.41rem, var(--min-text)); }
+  .mars-app .mission-footer{ right: 12px; left: 12px; min-height: 24px; grid-template-columns: 1fr auto; }
+  .mars-app .mission-credit{ display: none; }.mars-app .controls-hint{ justify-self: start; font-size: max(.37rem, var(--min-text)); letter-spacing: .04em; }.mars-app .mission-footer > button{ font-size: max(.38rem, var(--min-text)); }
+  .mars-app .module-inspector{ top: auto; left: 10px; bottom: 105px; width: min(330px, calc(100% - 20px)); padding: 13px; }
+  .mars-app .build-panel{ bottom: 91px; width: min(425px, calc(100% - 20px)); padding: 15px; }.mars-app .build-offer{ min-height: 55px; padding: 6px; }.mars-app .offer-copy small{ font-size: max(.44rem, var(--min-text)); }
+  .mars-app .help-panel{ top: 62px; right: 10px; width: min(300px, calc(100% - 20px)); }
+  .mars-app .event-feed{ top: 174px; left: 11px; width: min(250px, calc(100% - 22px)); }.mars-app .toast-message{ bottom: 94px; width: max-content; max-width: calc(100% - 24px); text-align: center; }
+  .mars-app .mission-report{ padding: 24px 18px 16px; }.mars-app .report-world{ min-height: 85px; padding: 11px; }.mars-app .report-ribbon{ display: none; }.mars-app .report-stats{ grid-template-columns: repeat(3, 1fr); }.mars-app .report-stats > div:nth-child(3){ border-right: 0; }.mars-app .report-stats > div:nth-child(-n+3){ border-bottom: 1px solid rgba(236,220,199,.1); }
+  .mars-app .report-summary{ grid-template-columns: 1fr; gap: 7px; }.mars-app .report-summary p{ font-size: .63rem; }.mars-app .report-footer{ align-items: start; flex-direction: column; }.mars-app .report-footer > div{ align-self: stretch; justify-content: space-between; }
+  .mars-app .source-panel{ padding: 25px 19px 18px; }.mars-app .source-entry{ grid-template-columns: 83px 1fr; gap: 8px; }
+}
+@media (max-width: 430px) {
+  .mars-app .crew-chip{ height: 27px; padding: 0 5px; font-size: max(.42rem, var(--min-text)); }.mars-app .icon-button{ width: 27px; height: 27px; }
+  .mars-app .resource-name{ display: none; }.mars-app .resource-readout-top{ grid-template-columns: 1fr auto; }.mars-app .resource-symbol{ grid-row: span 1; }.mars-app .resource-number{ grid-column: 2; }
+  .mars-app .bottom-dock{ gap: 6px; }.mars-app .camera-note{ gap: 3px; }.mars-app .camera-note small{ width: 39px; font-size: max(.35rem, var(--min-text)); }.mars-app .bottom-separator{ display: none; }
+  .mars-app .sol-status{ min-width: 46px; }.mars-app .sol-bars i:nth-child(n+12){ display: none; }.mars-app .advance-button{ min-width: 81px; font-size: max(.42rem, var(--min-text)); }.mars-app .report-button{ min-width: 56px; font-size: max(.37rem, var(--min-text)); }
+  .mars-app .opening-lockup h1{ font-size: clamp(3.35rem, 16vw, 5rem); }.mars-app .begin-button{ min-width: 212px; }
+  .mars-app .crisis-modal{ padding: 22px 17px 17px; }.mars-app .crisis-modal h2{ font-size: 1.42rem; }.mars-app .crisis-impact b{ font-size: max(.45rem, var(--min-text)); }.mars-app .crisis-choice{ gap: 7px; padding: 8px; }.mars-app .crisis-choice small{ max-width: 185px; font-size: max(.49rem, var(--min-text)); }.mars-app .crisis-choice strong{ font-size: max(.42rem, var(--min-text)); }
+  .mars-app .report-title{ align-items: center; }.mars-app .survival-score{ gap: 6px; padding-left: 8px; }.mars-app .survival-score b{ font-size: 1.55rem; }.mars-app .survival-score span{ font-size: max(.37rem, var(--min-text)); }.mars-app .report-title h2{ max-width: 215px; font-size: 1.5rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mars-app *,.mars-app *::before,.mars-app *::after{ animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
+}
+
+/* ================================================================
+   MISSION FLOW HUD — landing sequence + phased settlement
+   ================================================================ */
+.mars-app { --hud-bg: rgba(20, 17, 15, .78); --hud-line: rgba(238, 220, 196, .18); --observed: #afd9b0; --modelled: #a8d8e0; --gameplay: #efc18f; }
+
+.mars-app .hud-card{ pointer-events: auto; border: 1px solid var(--hud-line); background: var(--hud-bg); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 18px 50px rgba(20, 10, 6, .28); animation: panel-in .35s ease both; }
+.mars-app .hud-kicker{ color: rgba(237, 221, 199, .6); font: 500 max(.5rem, var(--min-text)) var(--mono); letter-spacing: .12em; }
+.mars-app .hud-kicker span{ margin-left: 8px; color: var(--amber); }
+.mars-app .hud-kicker.alert{ color: #f5a27c; }
+.mars-app .hud-footnote{ margin: 12px 0 0; color: rgba(236, 224, 208, .45); font: 400 max(.5rem, var(--min-text))/1.5 var(--mono); letter-spacing: .03em; }
+.mars-app .primary-action{ pointer-events: auto; display: inline-flex; align-items: center; justify-content: space-between; gap: 22px; min-height: 42px; padding: 0 16px; border: 1px solid rgba(247, 228, 202, .8); color: #211716; background: #f0c38e; font: 600 .6rem/1.2 var(--mono); letter-spacing: .09em; cursor: pointer; transition: background .18s, transform .18s; text-align: left; }
+.mars-app .primary-action b{ font-size: .95rem; font-weight: 400; }
+.mars-app .primary-action:hover:not(:disabled){ background: #ffdfb5; transform: translateY(-1px); }
+.mars-app .primary-action:disabled{ opacity: .38; cursor: not-allowed; }
+.mars-app .primary-action.wide{ width: 100%; margin-top: 14px; }
+.mars-app .text-button{ height: 30px; padding: 0 10px; border: 1px solid rgba(242, 226, 207, .22); color: rgba(249, 240, 229, .8); background: rgba(23, 18, 16, .2); font: 500 max(.5rem, var(--min-text)) var(--mono); letter-spacing: .08em; cursor: pointer; }
+.mars-app .text-button:hover{ border-color: #bd8c62; color: #fff; }
+
+.mars-app .evidence-tag{ display: inline-block; flex: none; padding: 2px 5px; border: 1px solid currentColor; font: 500 max(.42rem, var(--min-text))/1.3 var(--mono); letter-spacing: .06em; vertical-align: 1px; white-space: nowrap; }
+.mars-app .evidence-tag.is-observed{ color: var(--observed); }
+.mars-app .evidence-tag.is-modelled{ color: var(--modelled); }
+.mars-app .evidence-tag.is-gameplay{ color: var(--gameplay); }
+
+/* Timeline */
+.mars-app .mission-timeline{ position: absolute; z-index: 4; top: 78px; left: 50%; transform: translateX(-50%); pointer-events: none; }
+.mars-app .mission-timeline ol{ display: flex; gap: 4px; margin: 0; padding: 5px 6px; list-style: none; border: 1px solid var(--hud-line); background: rgba(20, 17, 15, .5); backdrop-filter: blur(12px); }
+.mars-app .timeline-step{ display: flex; align-items: center; gap: 6px; padding: 4px 8px 4px 5px; color: rgba(237, 228, 216, .4); font: 400 max(.5rem, var(--min-text)) var(--mono); letter-spacing: .08em; white-space: nowrap; }
+.mars-app .timeline-index{ display: grid; place-items: center; width: 18px; height: 18px; border: 1px solid rgba(231, 216, 198, .22); border-radius: 50%; font-size: max(.45rem, var(--min-text)); }
+.mars-app .timeline-step.is-done{ color: rgba(192, 226, 189, .82); }
+.mars-app .timeline-step.is-done .timeline-index{ border-color: rgba(173, 224, 177, .5); background: rgba(110, 168, 116, .2); }
+.mars-app .timeline-step.is-current{ color: #ffd3a0; background: rgba(240, 180, 110, .1); }
+.mars-app .timeline-step.is-current .timeline-index{ border-color: #f2b56f; color: #ffd3a0; box-shadow: 0 0 12px rgba(242, 181, 111, .35); }
+.mars-app .mission-timeline.is-minimal{ top: 22px; opacity: .85; }
+.mars-app .stage-approach .mission-timeline,.mars-app .stage-site_select .mission-timeline{ top: 22px; }
+
+.mars-app .cinematic-brand{ position: absolute; z-index: 4; top: 22px; left: 28px; pointer-events: none; }
+.mars-app .skip-button{ position: absolute; z-index: 6; top: 24px; right: 28px; padding: 9px 12px; border: 1px solid rgba(242, 226, 207, .28); color: rgba(250, 242, 230, .85); background: rgba(20, 17, 15, .4); backdrop-filter: blur(8px); font: 500 max(.55rem, var(--min-text)) var(--mono); letter-spacing: .1em; cursor: pointer; }
+.mars-app .skip-button span{ padding-left: 6px; color: var(--amber); }
+.mars-app .skip-button:hover{ border-color: #f0c38e; color: #fff; }
+
+/* Approach */
+.mars-app .approach-card{ position: absolute; z-index: 5; left: 28px; bottom: 54px; width: min(340px, calc(100% - 32px)); padding: 18px; }
+.mars-app .approach-facts{ display: grid; gap: 9px; margin: 0 0 16px; }
+.mars-app .approach-facts div{ display: grid; grid-template-columns: 82px 1fr; align-items: baseline; }
+.mars-app .approach-facts dt{ color: rgba(237, 221, 199, .5); font: 400 max(.5rem, var(--min-text)) var(--mono); letter-spacing: .12em; }
+.mars-app .approach-facts dd{ margin: 0; color: #f6eee3; font: 500 .7rem var(--mono); letter-spacing: .06em; }
+.mars-app .approach-card .primary-action{ width: 100%; }
+
+/* Site selection */
+.mars-app .site-panel{ position: absolute; z-index: 5; top: 74px; right: 28px; width: min(470px, calc(100% - 32px)); max-height: calc(100% - 120px); overflow-y: auto; padding: 18px 18px 16px; }
+.mars-app .site-panel h2,.mars-app .decision-card h2,.mars-app .post-landing h2,.mars-app .phase-panel h2{ margin: 8px 0 4px; color: #f7f0e6; font: 500 1.15rem/1.25 var(--display); letter-spacing: -.02em; }
+.mars-app .site-why{ margin: 0 0 12px; color: rgba(239, 229, 214, .66); font-size: .72rem; line-height: 1.5; }
+.mars-app .site-tabs{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.mars-app .site-tab{ display: grid; gap: 3px; padding: 9px 9px 8px; border: 1px solid rgba(235, 221, 203, .15); text-align: left; background: rgba(255, 255, 255, .025); cursor: pointer; transition: .17s; }
+.mars-app .site-tab b{ color: #f2e9dd; font: 500 .62rem var(--mono); }
+.mars-app .site-tab small{ color: rgba(235, 222, 204, .5); font-size: max(.56rem, var(--min-text)); }
+.mars-app .site-tab.is-active{ border-color: #f0c38e; background: rgba(240, 195, 142, .12); }
+.mars-app .site-tab:hover{ border-color: rgba(242, 188, 128, .6); }
+.mars-app .hazard-pill{ justify-self: start; margin-top: 3px; padding: 2px 4px; font: 500 max(.42rem, var(--min-text)) var(--mono); letter-spacing: .06em; }
+.mars-app .hazard-1{ color: #a8d6a5; background: rgba(110, 168, 116, .16); }
+.mars-app .hazard-2{ color: #f0c48e; background: rgba(240, 195, 142, .14); }
+.mars-app .hazard-3{ color: #f39b80; background: rgba(240, 120, 100, .15); }
+.mars-app .site-detail{ margin-top: 12px; }
+.mars-app .site-coords{ padding-bottom: 8px; color: rgba(240, 230, 214, .72); font-size: .66rem; line-height: 1.45; }
+.mars-app .site-coords span{ color: rgba(240, 210, 170, .4); }
+.mars-app .site-rows{ margin: 0; padding: 0; list-style: none; border-top: 1px solid rgba(235, 220, 199, .12); }
+.mars-app .site-rows li{ border-bottom: 1px solid rgba(235, 220, 199, .1); }
+.mars-app .site-row{ display: grid; grid-template-columns: 18px 104px 1fr auto; align-items: center; gap: 8px; width: 100%; padding: 8px 2px; border: 0; text-align: left; background: transparent; cursor: pointer; }
+.mars-app .site-row:hover{ background: rgba(240, 195, 142, .06); }
+.mars-app .site-row-icon{ color: var(--amber); font-size: .78rem; text-align: center; }
+.mars-app .site-row-label{ color: rgba(236, 224, 208, .55); font: 400 max(.52rem, var(--min-text)) var(--mono); letter-spacing: .04em; }
+.mars-app .site-row-value{ color: #f1e8dc; font-size: .66rem; line-height: 1.35; }
+.mars-app .site-row-note{ margin: 0 0 9px 26px; color: rgba(236, 224, 208, .62); font-size: .62rem; line-height: 1.55; }
+.mars-app .site-sources{ display: grid; gap: 4px; margin-top: 10px; }
+.mars-app .site-sources a,.mars-app .phase-learn a{ color: #e5b17b; text-decoration: none; font: 400 max(.52rem, var(--min-text)) var(--mono); }
+.mars-app .site-sources a:hover{ color: #ffdaa9; text-decoration: underline; }
+.mars-app .globe-marker{ padding: 4px 7px; border: 1px solid rgba(240, 225, 205, .35); color: rgba(248, 240, 228, .78); background: rgba(20, 16, 14, .62); white-space: nowrap; font: 500 10px var(--mono); letter-spacing: .04em; transform: translateY(-18px); }
+.mars-app .globe-marker.is-focus{ border-color: #f0c38e; color: #ffe1b8; background: rgba(40, 28, 20, .85); }
+
+/* Cinematic EDL HUD */
+.mars-app .edl-phase{ position: absolute; z-index: 5; top: 74px; left: 50%; display: grid; justify-items: center; gap: 7px; transform: translateX(-50%); pointer-events: none; }
+.mars-app .edl-mission{ color: rgba(245, 236, 222, .62); font: 400 max(.52rem, var(--min-text)) var(--mono); letter-spacing: .14em; }
+.mars-app .edl-mission span{ padding: 0 6px; color: rgba(240, 210, 170, .4); }
+.mars-app .edl-mission em{ color: var(--amber); font-style: normal; }
+.mars-app .edl-steps{ display: flex; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.mars-app .edl-steps li{ color: rgba(240, 228, 212, .38); font: 500 .78rem var(--mono); letter-spacing: .16em; }
+.mars-app .edl-steps li i{ padding-left: 10px; color: rgba(240, 210, 170, .3); font-style: normal; }
+.mars-app .edl-steps li.is-done{ color: rgba(192, 226, 189, .8); }
+.mars-app .edl-steps li.is-current{ color: #ffd6a4; text-shadow: 0 0 18px rgba(255, 190, 120, .45); }
+.mars-app .edl-telemetry{ position: absolute; z-index: 5; left: 28px; bottom: 54px; display: grid; grid-template-columns: repeat(3, auto); gap: 22px; padding: 12px 16px; border-left: 1px solid rgba(240, 195, 142, .55); background: linear-gradient(90deg, rgba(18, 14, 12, .62), rgba(18, 14, 12, .1)); pointer-events: none; }
+.mars-app .edl-telemetry small{ display: block; color: rgba(237, 221, 199, .5); font: 400 max(.46rem, var(--min-text)) var(--mono); letter-spacing: .12em; }
+.mars-app .edl-telemetry b{ display: block; margin-top: 4px; color: #f7efe3; font: 500 .95rem var(--mono); font-variant-numeric: tabular-nums; }
+.mars-app .edl-event b{ color: #ffd3a0; font-size: .66rem; letter-spacing: .08em; margin-top: 7px; }
+.mars-app .edl-disclaimer{ position: absolute; z-index: 5; left: 50%; bottom: 14px; transform: translateX(-50%); color: rgba(240, 228, 212, .45); white-space: nowrap; font: 400 max(.46rem, var(--min-text)) var(--mono); letter-spacing: .06em; pointer-events: none; }
+.mars-app .edl-choice-chip{ position: absolute; z-index: 5; top: 132px; left: 50%; transform: translateX(-50%); padding: 6px 10px; border: 1px solid rgba(240, 195, 142, .5); color: #ffd6a4; background: rgba(20, 16, 14, .55); font: 500 max(.5rem, var(--min-text)) var(--mono); letter-spacing: .12em; animation: panel-in .3s ease both; }
+.mars-app .objective-banner{ position: absolute; z-index: 4; right: 28px; bottom: 54px; display: grid; gap: 4px; max-width: 280px; padding: 10px 14px; border-right: 1px solid rgba(240, 195, 142, .55); text-align: right; background: linear-gradient(270deg, rgba(18, 14, 12, .6), rgba(18, 14, 12, .05)); pointer-events: none; }
+.mars-app .objective-banner b{ color: #f7efe3; font: 500 .72rem var(--display); }
+.mars-app .objective-banner span{ color: rgba(239, 226, 210, .6); font-size: .6rem; line-height: 1.45; }
+
+.mars-app .decision-card{ position: absolute; z-index: 7; top: 50%; right: 28px; width: min(420px, calc(100% - 32px)); padding: 18px; transform: translateY(-46%); border-color: rgba(245, 170, 120, .45); }
+.mars-app .decision-card > p{ margin: 4px 0 12px; color: rgba(239, 226, 210, .68); font-size: .7rem; line-height: 1.5; }
+.mars-app .decision-option{ display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 7px; padding: 11px; border: 1px solid rgba(235, 220, 201, .2); text-align: left; background: rgba(255, 255, 255, .03); cursor: pointer; transition: .17s; }
+.mars-app .decision-option:hover,.mars-app .decision-option:focus-visible{ border-color: #f0c38e; background: rgba(240, 195, 142, .12); }
+.mars-app .decision-option b{ display: block; color: #f6ecdf; font: 500 .6rem var(--mono); letter-spacing: .06em; }
+.mars-app .decision-option small{ display: block; margin-top: 5px; color: rgba(238, 225, 207, .62); font-size: .6rem; line-height: 1.45; }
+.mars-app .decision-glyph{ display: grid; place-items: center; width: 34px; height: 34px; flex: none; border: 1px solid rgba(238, 184, 126, .4); color: #f1bf84; font-size: 1.05rem; }
+
+.mars-app .landing-confirmed{ position: absolute; z-index: 6; top: 40%; left: 50%; display: grid; justify-items: center; gap: 8px; padding: 22px 48px; transform: translate(-50%, -50%); pointer-events: none; background: radial-gradient(ellipse at center, rgba(18, 12, 9, .55), rgba(18, 12, 9, 0) 72%); animation: confirm-in .6s ease both; }
+.mars-app .landing-confirmed b{ color: #f8f1e6; font: 500 clamp(1.3rem, 3.4vw, 2.2rem) var(--display); letter-spacing: .14em; text-shadow: 0 2px 30px rgba(20, 10, 5, .6); }
+.mars-app .landing-confirmed span{ color: #c4e3bd; font: 500 .62rem var(--mono); letter-spacing: .22em; text-shadow: 0 1px 12px rgba(0, 0, 0, .6); }
+.mars-app .confirm-fade{ animation: confirm-out 4.5s ease forwards; }
+.mars-app .post-landing{ position: absolute; z-index: 5; left: 28px; bottom: 54px; width: min(380px, calc(100% - 32px)); padding: 18px; animation-delay: 1.6s; }
+.mars-app .post-landing p{ margin: 4px 0 0; color: rgba(239, 226, 210, .68); font-size: .7rem; line-height: 1.55; }
+
+.mars-app .stage-fade{ position: absolute; z-index: 3; inset: 0; pointer-events: none; background: #050404; animation: fade-out 1.6s ease forwards; }
+.mars-app .stage-fade.fade-descent{ background: #d9b8a0; animation-duration: 2.2s; }
+.mars-app .stage-fade.fade-post_landing{ background: #a7836c; }
+
+/* Settlement HUD */
+.mars-app .resource-dock{ top: 120px; left: 394px; right: auto; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(92px, 118px); grid-template-columns: none; width: fit-content; min-width: 0; max-width: calc(100% - 620px); transform: none; }
+.mars-app .resource-dock .resource-readout{ padding: 0 8px; }
+.mars-app .resource-suffix{ margin-top: 5px; color: rgba(245, 220, 180, .62); font: 400 max(.44rem, var(--min-text)) var(--mono); white-space: nowrap; }
+.mars-app .phase-panel{ position: absolute; z-index: 3; top: 120px; left: 28px; width: 350px; max-height: calc(100% - 180px); overflow-y: auto; padding: 16px 16px 14px; }
+.mars-app .phase-why{ margin: 2px 0 12px; color: rgba(239, 226, 210, .66); font-size: .66rem; line-height: 1.5; }
+.mars-app .phase-why b{ color: rgba(245, 215, 175, .85); font-weight: 500; }
+.mars-app .phase-body{ display: grid; gap: 6px; }
+.mars-app .phase-choice{ display: flex; align-items: center; gap: 10px; width: 100%; min-height: 58px; padding: 9px 10px; border: 1px solid rgba(235, 220, 201, .16); text-align: left; background: rgba(255, 255, 255, .025); cursor: pointer; transition: .17s; }
+.mars-app .phase-choice:hover:not(:disabled){ border-color: rgba(244, 190, 131, .6); background: rgba(211, 153, 94, .1); }
+.mars-app .phase-choice.is-selected{ border-color: #a5d9ad; background: rgba(120, 180, 125, .12); }
+.mars-app .phase-choice:disabled{ opacity: .38; cursor: not-allowed; }
+.mars-app .phase-choice-copy{ min-width: 0; flex: 1; }
+.mars-app .phase-choice b{ display: block; color: #f2e7d8; font: 500 max(.58rem, var(--min-text)) var(--mono); letter-spacing: .03em; }
+.mars-app .phase-choice small{ display: block; margin-top: 4px; color: rgba(238, 225, 207, .58); font-size: .6rem; line-height: 1.42; }
+.mars-app .phase-choice strong{ color: #edbd88; white-space: nowrap; font: 500 max(.5rem, var(--min-text)) var(--mono); }
+.mars-app .phase-choice.is-selected strong{ color: #b9dfb5; }
+.mars-app .phase-hint{ margin: 4px 0 0; color: rgba(236, 224, 208, .5); font-size: max(.58rem, var(--min-text)); line-height: 1.45; }
+.mars-app .status-list{ display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.mars-app .status-list li{ display: grid; grid-template-columns: 22px 1fr; color: rgba(239, 229, 214, .7); font-size: .66rem; line-height: 1.4; }
+.mars-app .status-list li > span:last-child{ min-width: 0; }
+.mars-app .status-list li b{ color: #f6ecdf; font-weight: 500; }
+.mars-app .status-list small{ display: block; color: rgba(236, 224, 208, .48); font-size: max(.58rem, var(--min-text)); }
+.mars-app .status-list .ok{ color: #a8d6a5; }
+.mars-app .status-list .warn{ color: #f5a27c; }
+.mars-app .stepper{ display: flex; align-items: center; gap: 9px; padding: 9px 10px; border: 1px solid rgba(235, 220, 201, .16); background: rgba(255, 255, 255, .025); }
+.mars-app .stepper > div{ flex: 1; min-width: 0; }
+.mars-app .stepper b{ display: block; color: #f2e7d8; font: 500 max(.58rem, var(--min-text)) var(--mono); }
+.mars-app .stepper small{ display: block; margin-top: 4px; color: rgba(238, 225, 207, .58); font-size: max(.58rem, var(--min-text)); }
+.mars-app .stepper button{ width: 28px; height: 28px; border: 1px solid rgba(238, 184, 126, .45); color: #f1bf84; background: rgba(199, 134, 76, .1); font: 500 .9rem var(--mono); cursor: pointer; }
+.mars-app .stepper button:disabled{ opacity: .3; cursor: not-allowed; }
+.mars-app .stepper output{ min-width: 16px; color: #fff3e0; text-align: center; font: 500 .9rem var(--mono); }
+.mars-app .stepper strong{ color: #edbd88; font: 500 max(.48rem, var(--min-text)) var(--mono); white-space: nowrap; }
+.mars-app .power-balance{ margin-top: 4px; padding: 10px; border: 1px solid rgba(235, 220, 201, .12); background: rgba(0, 0, 0, .15); }
+.mars-app .balance-row{ display: grid; grid-template-columns: 128px 1fr 34px; align-items: center; gap: 8px; margin-bottom: 6px; color: rgba(236, 224, 208, .6); font: 400 max(.5rem, var(--min-text)) var(--mono); }
+.mars-app .balance-row i{ height: 6px; background: rgba(229, 217, 201, .1); }
+.mars-app .balance-row em{ display: block; height: 100%; background: #f5c37c; transition: width .4s ease; }
+.mars-app .balance-row.demand em{ background: #e8957c; }
+.mars-app .balance-row b{ color: #f6ecdf; text-align: right; font-weight: 500; }
+.mars-app .balance-note{ color: rgba(236, 224, 208, .62); font-size: max(.58rem, var(--min-text)); line-height: 1.45; }
+.mars-app .balance-note b{ color: #f6ecdf; }
+.mars-app .forecast-line{ display: flex; justify-content: space-between; padding: 7px 0; color: rgba(236, 224, 208, .55); font: 400 max(.52rem, var(--min-text)) var(--mono); letter-spacing: .06em; }
+.mars-app .forecast-line b{ color: #ffd3a0; font-weight: 500; }
+.mars-app .phase-learn{ margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(235, 220, 199, .12); }
+.mars-app .learn-toggle{ padding: 0; border: 0; color: #e5b17b; background: transparent; font: 400 max(.54rem, var(--min-text)) var(--mono); letter-spacing: .04em; cursor: pointer; }
+.mars-app .learn-toggle:hover{ color: #ffdaa9; }
+.mars-app .phase-learn ul{ display: grid; gap: 8px; margin: 9px 0 0; padding: 0; list-style: none; }
+.mars-app .phase-learn li{ color: rgba(239, 229, 214, .66); font-size: .6rem; line-height: 1.55; }
+
+.mars-app .warning-stack{ position: absolute; z-index: 3; top: 196px; left: 50%; display: grid; gap: 6px; width: min(400px, calc(100% - 820px)); min-width: 300px; transform: translateX(-50%); pointer-events: none; }
+.mars-app .warning-item{ padding: 8px 11px; border-left: 2px solid #f0c48e; background: rgba(36, 24, 18, .82); backdrop-filter: blur(10px); animation: feed-in .3s ease both; }
+.mars-app .warning-item.is-critical{ border-color: #ff7058; background: rgba(60, 22, 16, .85); }
+.mars-app .warning-item b{ display: block; color: #ffdcc8; font: 500 max(.58rem, var(--min-text)) var(--mono); letter-spacing: .04em; }
+.mars-app .warning-item small{ display: block; margin-top: 3px; color: rgba(245, 225, 205, .72); font-size: .6rem; }
+
+.mars-app .right-rail{ top: 120px; transform: none; max-height: calc(100% - 440px); overflow-y: auto; } /* stays clear of the energy card below */
+.mars-app .module-inspector{ top: 120px; left: auto; right: 236px; }
+.mars-app .energy-card{ top: auto; left: auto; right: 28px; bottom: 54px; width: 196px; background: linear-gradient(270deg, rgba(24, 18, 15, .7), rgba(24, 18, 15, .25)); border-left: 0; border-right: 1px solid rgba(231, 211, 188, .34); }
+.mars-app .energy-card .telemetry-source{ align-items: center; }
+.mars-app .event-feed{ top: auto; bottom: 120px; left: 50%; width: 330px; transform: translateX(-50%); }
+.mars-app .toast-message{ top: auto; bottom: 236px; }
+.mars-app .bottom-dock{ bottom: 40px; width: auto; min-width: 0; }
+.mars-app .sol-status{ min-width: 150px; }
+.mars-app .sol-bars i{ width: 10px; height: 10px; }
+.mars-app .sol-bars i.is-storm{ background: rgba(240, 140, 100, .45); }
+.mars-app .sol-bars i.is-past{ background: #f0c38e; }
+.mars-app .sol-bars i.is-past.is-storm{ background: #e8957c; }
+.mars-app .build-dock-button:disabled{ opacity: .35; }
+.mars-app .report-reopen{ position: absolute; z-index: 6; left: 50%; bottom: 46px; transform: translateX(-50%); }
+
+.mars-app .pad-label{ padding: 6px 9px; border: 1px solid rgba(240, 225, 205, .5); color: #f8efe2; background: rgba(24, 19, 16, .82); white-space: nowrap; font: 500 10px var(--mono); letter-spacing: .06em; cursor: pointer; }
+.mars-app .pad-label.is-chosen{ border-color: #ffcf96; color: #ffe1b8; }
+.mars-app .scene-label-target{ border-color: rgba(240, 200, 150, .5); color: #f2d2a6; }
+.mars-app .scene-label-off{ opacity: .7; }
+
+/* Report */
+.mars-app .mission-report{ width: min(980px, 100%); max-height: calc(100% - 20px); overflow-y: auto; }
+.mars-app .report-grid{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 18px; }
+.mars-app .report-stats{ grid-template-columns: repeat(5, 1fr); }
+.mars-app .energy-chart{ margin: 0 0 12px; padding: 12px; border: 1px solid rgba(236, 220, 199, .12); background: rgba(0, 0, 0, .14); }
+.mars-app .energy-chart figcaption{ display: flex; justify-content: space-between; margin-bottom: 8px; color: rgba(239, 226, 207, .5); font: 400 max(.46rem, var(--min-text)) var(--mono); letter-spacing: .08em; }
+.mars-app .energy-chart figcaption span{ display: flex; align-items: center; gap: 5px; }
+.mars-app .energy-chart .key{ display: inline-block; width: 8px; height: 8px; margin-left: 6px; }
+.mars-app .key.gen{ background: #f5c37c; } .mars-app .key.dem{ background: #e8957c; } .mars-app .key.sto{ height: 2px; background: #8dd9dc; }
+.mars-app .energy-chart svg{ display: block; width: 100%; height: 130px; }
+.mars-app .storm-band{ fill: rgba(232, 149, 124, .1); }
+.mars-app .bar-gen{ fill: #f5c37c; } .mars-app .bar-dem{ fill: #e8957c; opacity: .8; }
+.mars-app .line-sto{ fill: none; stroke: #8dd9dc; stroke-width: .7; vector-effect: non-scaling-stroke; }
+.mars-app .shed-dot{ fill: #ff7058; }
+.mars-app .chart-axis{ display: flex; justify-content: space-around; margin-top: 5px; color: rgba(239, 226, 207, .5); font: 400 max(.46rem, var(--min-text)) var(--mono); }
+.mars-app .chart-axis .is-storm{ color: #f0a38a; }
+.mars-app .decision-list{ display: grid; gap: 0; margin: 0; padding: 0; list-style: none; border-top: 1px solid rgba(236, 220, 199, .12); }
+.mars-app .decision-list li{ display: grid; grid-template-columns: 96px 1fr; column-gap: 10px; padding: 8px 0; border-bottom: 1px solid rgba(236, 220, 199, .1); }
+.mars-app .decision-list small{ grid-row: span 2; color: rgba(239, 226, 207, .48); font: 400 max(.48rem, var(--min-text)) var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+.mars-app .decision-list b{ color: #f3ebdf; font: 500 .62rem var(--mono); }
+.mars-app .decision-list p{ margin: 3px 0 0; color: rgba(244, 234, 219, .68); font-size: .62rem; line-height: 1.45; }
+.mars-app .status-light.outcome-operational{ background: #a4c39a; }
+.mars-app .status-light.outcome-degraded{ background: #f0c38e; }
+.mars-app .status-light.outcome-evacuated{ background: #ff7058; }
+.mars-app .report-footer > span{ display: flex; flex-wrap: wrap; align-items: center; gap: 5px; max-width: 420px; line-height: 1.6; }
+.mars-app .crisis-foot{ display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.mars-app .source-entry > .evidence-tag{ justify-self: start; }
+
+@keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes confirm-in { from { opacity: 0; letter-spacing: .3em; } to { opacity: 1; } }
+@keyframes confirm-out { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
+
+@media (max-width: 1180px) {
+  .mars-app .resource-dock{ max-width: calc(100% - 410px); }
+  .mars-app .warning-stack{ left: auto; right: 16px; transform: none; width: 300px; }
+  .mars-app .right-rail{ display: none; }
+  .mars-app .module-inspector{ right: 16px; }
+}
+@media (max-width: 800px) {
+  .mars-app .mission-timeline{ top: 56px; left: 10px; right: 10px; transform: none; }
+  .mars-app .mission-timeline ol{ justify-content: space-between; padding: 4px; }
+  .mars-app .timeline-step{ padding: 3px; }
+  .mars-app .timeline-step .timeline-label{ display: none; }
+  .mars-app .timeline-step.is-current .timeline-label{ display: inline; font-size: max(.44rem, var(--min-text)); }
+  .mars-app .mission-timeline.is-minimal,.mars-app .stage-approach .mission-timeline,.mars-app .stage-site_select .mission-timeline{ top: 58px; }
+  .mars-app .cinematic-brand{ top: 14px; left: 14px; }
+  .mars-app .skip-button{ top: 14px; right: 12px; }
+  .mars-app .resource-dock{ top: 96px; left: 10px; right: 10px; width: auto; max-width: none; transform: none; grid-auto-columns: minmax(0, 1fr); padding: 7px 4px; }
+  .mars-app .resource-suffix{ display: none; }
+  .mars-app .resource-dock .cargo-readout{ display: flex; padding-left: 4px; gap: 4px; }
+  .mars-app .phase-panel{ top: auto; left: 10px; right: 10px; bottom: 34px; width: auto; max-height: 44vh; }
+  .mars-app .phase-panel.phase-crisis{ bottom: 104px; max-height: 34vh; }
+  .mars-app .phase-panel h2{ font-size: 1rem; }
+  .mars-app .warning-stack{ top: 150px; left: 10px; right: 10px; width: auto; min-width: 0; }
+  .mars-app .energy-card{ display: none; }
+  .mars-app .module-inspector{ top: 150px; right: 10px; left: 10px; bottom: auto; width: auto; }
+  .mars-app .event-feed{ display: none; }
+  .mars-app .bottom-dock{ left: 10px; right: 10px; bottom: 30px; transform: none; }
+  .mars-app .sol-status{ min-width: 70px; }
+  .mars-app .sol-bars i{ width: 6px; }
+  .mars-app .toast-message{ top: 150px; }
+  .mars-app .site-panel{ top: auto; bottom: 10px; left: 10px; right: 10px; width: auto; max-height: 64vh; padding: 14px; }
+  .mars-app .site-row{ grid-template-columns: 16px 1fr auto; }
+  .mars-app .site-row-label{ display: none; }
+  .mars-app .approach-card,.mars-app .post-landing{ left: 10px; right: 10px; bottom: 34px; width: auto; }
+  .mars-app .edl-phase{ top: 92px; }
+  .mars-app .edl-steps li{ font-size: .6rem; letter-spacing: .1em; }
+  .mars-app .edl-telemetry{ left: 10px; right: 10px; bottom: 34px; gap: 12px; }
+  .mars-app .edl-telemetry b{ font-size: .78rem; }
+  .mars-app .edl-disclaimer{ white-space: normal; width: calc(100% - 20px); text-align: center; bottom: 8px; }
+  .mars-app .objective-banner{ display: none; }
+  .mars-app .decision-card{ top: auto; bottom: 10px; left: 10px; right: 10px; width: auto; transform: none; }
+  .mars-app .report-grid{ grid-template-columns: 1fr; }
+  .mars-app .report-stats{ grid-template-columns: repeat(3, 1fr); }
+  .mars-app .text-button{ display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mars-app .stage-fade{ animation-duration: .4s !important; }
+  .mars-app .confirm-fade{ animation: confirm-out 4.5s linear forwards !important; animation-duration: 4.5s !important; }
+}
+.mars-app .report-stats span.report-warn{ color: #f0c48e; }
+
+/* ================================================================
+   FIELD-OPERATIONS LANGUAGE — sheets instead of boxed cards
+   Information sits on the Mars view as edge-anchored sheets with a
+   single accent rule, mission markers and compact readouts.
+   ================================================================ */
+.mars-app .sr-only{ position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.mars-app .hud-sheet{ pointer-events: auto; position: absolute; z-index: 5; padding: 16px 20px 16px 18px; border-left: 1px solid rgba(240, 195, 142, .55); background: linear-gradient(90deg, rgba(15, 12, 10, .9), rgba(15, 12, 10, .72) 62%, rgba(15, 12, 10, .38)); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); animation: sheet-in .4s ease both; }
+.mars-app .mission-marker{ display: flex; align-items: center; gap: 8px; color: rgba(237, 221, 199, .62); font: 500 max(.52rem, var(--min-text)) var(--mono); letter-spacing: .12em; }
+.mars-app .mission-marker b{ padding-right: 8px; border-right: 1px solid rgba(240, 195, 142, .4); color: var(--amber); font-weight: 500; }
+.mars-app .mission-marker i{ color: rgba(240, 210, 170, .32); font-style: normal; }
+.mars-app .marker-aside{ margin-left: auto; color: #f0c48e; }
+.mars-app .sheet-label{ margin: 14px 0 0; color: rgba(237, 221, 199, .45); font: 400 max(.48rem, var(--min-text)) var(--mono); letter-spacing: .12em; }
+.mars-app .sheet-objective{ margin: 6px 0 2px; color: #f8f1e6; font: 500 1.32rem/1.2 var(--display); letter-spacing: -.025em; }
+.mars-app .hud-sheet .sheet-objective{ font-size: 1.32rem; }
+.mars-app .readout-list{ display: grid; margin: 12px 0 0; }
+.mars-app .readout-list > div{ display: grid; grid-template-columns: 118px 1fr; gap: 10px; align-items: baseline; padding: 6px 0; border-top: 1px solid rgba(235, 220, 199, .08); }
+.mars-app .readout-list dt{ color: rgba(237, 221, 199, .5); font: 400 max(.52rem, var(--min-text)) var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+.mars-app .readout-list dd{ margin: 0; color: #f1e8dc; font-size: .7rem; line-height: 1.4; }
+.mars-app .readout-list dd.is-warn{ color: #f5b08e; }
+.mars-app .sheet-actions{ display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 14px; }
+.mars-app .sheet-actions .hud-footnote{ margin: 0; max-width: 260px; }
+.mars-app .primary-action{ min-height: 38px; gap: 14px; padding: 0 14px; flex: none; }
+.mars-app .primary-action.wide{ width: auto; }
+.mars-app .tag-letter{ display: inline-grid; place-items: center; width: 12px; height: 12px; margin-left: 3px; border: 1px solid currentColor; border-radius: 50%; font: 600 max(.38rem, var(--min-text))/1 var(--mono); vertical-align: 2px; }
+.mars-app .tag-letter.is-observed{ color: var(--observed); } .mars-app .tag-letter.is-modelled{ color: var(--modelled); } .mars-app .tag-letter.is-gameplay{ color: var(--gameplay); }
+@keyframes sheet-in { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
+
+/* Approach brief */
+.mars-app .mission-brief{ left: 28px; bottom: 50px; width: min(420px, calc(100% - 32px)); }
+
+/* Site evaluation: right-edge sheet beside the globe */
+.mars-app .site-eval{ top: 66px; right: 0; bottom: 0; left: auto; width: min(500px, 100%); overflow-y: auto; padding: 14px 30px 40px 34px; border-left: 0; background: linear-gradient(270deg, rgba(13, 10, 9, .94) 0%, rgba(13, 10, 9, .86) 72%, rgba(13, 10, 9, 0) 100%); animation-name: fade-in; }
+.mars-app .eval-question{ margin: 12px 0 2px; color: rgba(248, 241, 230, .82); font: 500 .95rem var(--display); }
+.mars-app .eval-focus{ margin: 16px 0 14px; padding-left: 14px; border-left: 2px solid var(--amber); }
+.mars-app .eval-coords{ color: rgba(240, 210, 170, .72); font: 400 max(.52rem, var(--min-text)) var(--mono); letter-spacing: .08em; }
+.mars-app .eval-focus h3{ margin: 6px 0 4px; color: #fbf3e8; font: 500 2rem/1.05 var(--display); letter-spacing: -.04em; }
+.mars-app .eval-summary{ margin: 0 0 10px; color: rgba(239, 229, 214, .68); font-size: .7rem; line-height: 1.5; }
+.mars-app .eval-tradeoff{ display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 0; }
+.mars-app .eval-tradeoff dt{ font: 500 max(.48rem, var(--min-text)) var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+.mars-app .eval-tradeoff .is-gain dt{ color: #a8d6a5; } .mars-app .eval-tradeoff .is-risk dt{ color: #f39b80; }
+.mars-app .eval-tradeoff dd{ margin: 4px 0 0; color: rgba(243, 235, 223, .82); font-size: .64rem; line-height: 1.45; }
+.mars-app .eval-matrix{ width: 100%; margin-top: 8px; border-collapse: collapse; table-layout: fixed; }
+.mars-app .eval-matrix th,.mars-app .eval-matrix td{ padding: 7px 6px; border-bottom: 1px solid rgba(235, 220, 199, .09); text-align: left; }
+.mars-app .eval-matrix thead th{ padding: 0; border-bottom: 1px solid rgba(235, 220, 199, .22); }
+.mars-app .eval-matrix thead th:first-child{ width: 31%; }
+.mars-app .eval-matrix thead button{ width: 100%; padding: 8px 6px; border: 0; border-top: 2px solid transparent; color: rgba(240, 230, 214, .55); text-align: left; background: transparent; font: 500 max(.56rem, var(--min-text)) var(--mono); letter-spacing: .04em; cursor: pointer; }
+.mars-app .eval-matrix thead button i{ display: inline-grid; place-items: center; width: 15px; height: 15px; margin-right: 6px; border: 1px solid currentColor; border-radius: 50%; font: 500 max(.44rem, var(--min-text)) var(--mono); font-style: normal; }
+.mars-app .eval-matrix thead button:hover{ color: #f7eadb; }
+.mars-app .eval-matrix thead th.is-focus button{ border-top-color: var(--amber); color: #ffe1b8; background: rgba(240, 195, 142, .1); }
+.mars-app .eval-matrix tbody th{ color: rgba(237, 221, 199, .5); font: 400 max(.5rem, var(--min-text)) var(--mono); letter-spacing: .04em; }
+.mars-app .eval-matrix td{ color: rgba(240, 230, 214, .62); font-size: .64rem; cursor: pointer; }
+.mars-app .eval-matrix td.is-focus{ color: #fbf1e3; background: rgba(240, 195, 142, .07); }
+.mars-app .eval-matrix td.hazard-3{ color: #f39b80; } .mars-app .eval-matrix td.hazard-2{ color: #f0c48e; } .mars-app .eval-matrix td.hazard-1{ color: #a8d6a5; }
+.mars-app .eval-matrix td.hazard-3:not(.is-focus),.mars-app .eval-matrix td.hazard-2:not(.is-focus),.mars-app .eval-matrix td.hazard-1:not(.is-focus){ opacity: .7; }
+.mars-app .eval-legend{ display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 8px 0 0; color: rgba(236, 224, 208, .45); font: 400 max(.48rem, var(--min-text)) var(--mono); }
+.mars-app .eval-legend .tag-letter{ margin: 0 2px 0 0; }
+.mars-app .eval-notes{ margin-top: 14px; border-top: 1px solid rgba(235, 220, 199, .12); }
+.mars-app .eval-notes summary{ padding: 10px 0 4px; color: #e5b17b; font: 400 max(.54rem, var(--min-text)) var(--mono); cursor: pointer; list-style: none; }
+.mars-app .eval-notes summary::before{ content: '+ '; }
+.mars-app .eval-notes[open] summary::before{ content: '− '; }
+.mars-app .eval-notes ul{ display: grid; gap: 9px; margin: 6px 0 10px; padding: 0; list-style: none; }
+.mars-app .eval-notes li{ color: rgba(240, 230, 214, .78); font-size: .63rem; line-height: 1.45; }
+.mars-app .eval-notes li b{ display: block; color: rgba(237, 221, 199, .5); font: 400 max(.48rem, var(--min-text)) var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+.mars-app .eval-notes li p{ margin: 3px 0 0; color: rgba(236, 224, 208, .55); font-size: .6rem; }
+.mars-app .site-eval .sheet-actions{ position: sticky; bottom: -40px; margin: 16px -30px -40px -34px; padding: 14px 30px 18px 34px; background: linear-gradient(0deg, rgba(13, 10, 9, .98) 70%, rgba(13, 10, 9, 0)); }
+.mars-app .globe-marker{ cursor: pointer; pointer-events: auto; }
+.mars-app .globe-marker i{ margin-right: 6px; color: var(--amber); font-style: normal; }
+.mars-app .globe-marker:hover{ border-color: #f0c38e; color: #fff; }
+
+/* Touchdown report */
+.mars-app .touchdown-report{ left: 28px; bottom: 50px; width: min(470px, calc(100% - 32px)); animation-delay: 1.4s; }
+
+/* Settlement: operations sheet + vitals strip */
+.mars-app .phase-panel.hud-sheet{ top: 118px; left: 0; width: 378px; max-height: calc(100% - 170px); overflow-y: auto; padding: 16px 22px 16px 28px; border-left: 0; background: linear-gradient(90deg, rgba(15, 12, 10, .9), rgba(15, 12, 10, .78) 78%, rgba(15, 12, 10, .2)); box-shadow: inset 2px 0 0 rgba(240, 195, 142, .5); }
+.mars-app .phase-panel .sheet-objective{ font-size: 1.12rem; }
+.mars-app .phase-panel .phase-why{ margin-top: 6px; }
+.mars-app .phase-body{ gap: 0; border-top: 1px solid rgba(235, 220, 199, .1); }
+.mars-app .phase-choice{ min-height: 0; padding: 10px 4px 10px 6px; border: 0; border-bottom: 1px solid rgba(235, 220, 201, .09); background: transparent; }
+.mars-app .phase-choice:hover:not(:disabled){ border-color: rgba(235, 220, 201, .09); background: rgba(240, 195, 142, .06); }
+.mars-app .phase-choice.is-selected{ border-color: rgba(235, 220, 201, .09); background: rgba(165, 217, 173, .06); box-shadow: inset 2px 0 0 #a5d9ad; }
+.mars-app .phase-choice .choice-glyph{ width: 22px; height: 22px; border: 0; color: #e9b67f; }
+.mars-app .choice-side{ display: grid; justify-items: end; gap: 4px; }
+.mars-app .choice-side em{ color: rgba(237, 221, 199, .35); font: 500 max(.44rem, var(--min-text)) var(--mono); font-style: normal; letter-spacing: .08em; }
+.mars-app .phase-choice.is-selected .choice-side em{ color: #a8d6a5; }
+.mars-app .stepper{ padding: 10px 4px 10px 6px; border: 0; border-bottom: 1px solid rgba(235, 220, 201, .09); background: transparent; }
+.mars-app .power-balance{ margin-top: 8px; border: 0; padding: 8px 0 2px; background: transparent; }
+.mars-app .status-list{ padding-top: 10px; }
+.mars-app .phase-panel .sheet-actions{ position: sticky; bottom: -16px; margin: 12px -22px -16px -28px; padding: 12px 22px 14px 28px; background: linear-gradient(0deg, rgba(15, 12, 10, .96) 65%, rgba(15, 12, 10, 0)); }
+.mars-app ul.phase-learn{ display: grid; gap: 8px; margin: 8px 0 0; padding: 10px 0 0; list-style: none; border-top: 1px solid rgba(235, 220, 199, .1); }
+
+.mars-app .resource-dock{ top: 118px; left: 398px; display: flex; align-items: stretch; gap: 0; width: auto; max-width: calc(100% - 640px); padding: 7px 0 8px; border: 0; border-bottom: 1px solid rgba(236, 218, 195, .2); background: linear-gradient(180deg, rgba(16, 13, 11, .66), rgba(16, 13, 11, .4)); box-shadow: none; overflow-x: auto; }
+.mars-app .vital-group{ position: relative; display: flex; gap: 16px; padding: 13px 16px 0; border-right: 1px solid rgba(235, 222, 205, .12); }
+.mars-app .vital-group-label{ position: absolute; top: 0; left: 16px; color: rgba(237, 221, 199, .4); font: 500 max(.4rem, var(--min-text)) var(--mono); letter-spacing: .14em; white-space: nowrap; }
+.mars-app .resource-dock .resource-readout{ min-width: 74px; padding: 0; border: 0; }
+.mars-app .resource-dock .resource-readout-top{ display: flex; align-items: baseline; gap: 6px; }
+.mars-app .resource-dock .resource-name{ color: rgba(245, 236, 224, .62); font-size: max(.5rem, var(--min-text)); }
+.mars-app .resource-dock .resource-number{ margin-left: auto; font-size: .78rem; }
+.mars-app .resource-trend{ color: #a8d6a5; font: 500 max(.44rem, var(--min-text)) var(--mono); }
+.mars-app .resource-trend.is-worse{ color: #f39b80; }
+.mars-app .resource-dock .resource-track{ margin-top: 6px; }
+.mars-app .resource-dock .cargo-readout{ display: flex; flex-direction: column; justify-content: flex-end; gap: 3px; padding: 0 16px; }
+.mars-app .resource-dock .cargo-readout small{ color: rgba(237, 221, 199, .4); font: 500 max(.4rem, var(--min-text)) var(--mono); letter-spacing: .14em; }
+.mars-app .resource-dock .cargo-readout strong{ color: #f0c48e; font: 500 .8rem var(--mono); }
+
+.mars-app .right-rail{ padding: 8px 0 8px 12px; border: 0; border-right: 1px solid rgba(240, 195, 142, .4); background: linear-gradient(270deg, rgba(15, 12, 10, .72), rgba(15, 12, 10, .2)); right: 0; padding-right: 20px; }
+.mars-app .rail-module{ border-top-color: rgba(234, 219, 199, .06); }
+.mars-app .rail-glyph{ border: 0; }
+.mars-app .energy-card{ right: 0; padding-right: 24px; }
+.mars-app .energy-history{ position: relative; display: flex; align-items: flex-end; gap: 3px; height: 34px; margin-top: 8px; padding-bottom: 12px; border-top: 1px solid rgba(235, 221, 203, .09); }
+.mars-app .energy-history i{ flex: 1; min-height: 2px; background: rgba(245, 195, 124, .7); }
+.mars-app .energy-history i.is-storm{ background: rgba(232, 149, 124, .75); }
+.mars-app .energy-history i.is-shed{ box-shadow: inset 0 2px 0 #ff7058; }
+.mars-app .energy-history span{ position: absolute; left: 0; bottom: 0; color: rgba(240, 227, 210, .38); font: 400 max(.38rem, var(--min-text)) var(--mono); letter-spacing: .08em; }
+.mars-app .bottom-dock{ border: 0; border-top: 1px solid rgba(244, 225, 201, .22); background: linear-gradient(0deg, rgba(16, 13, 11, .88), rgba(16, 13, 11, .66)); box-shadow: none; }
+
+@media (max-width: 1180px) {
+  .mars-app .resource-dock{ max-width: calc(100% - 410px); }
+  .mars-app .right-rail{ display: none; }
+}
+@media (max-width: 800px) {
+  .mars-app .hud-sheet{ animation-name: fade-in; }
+  .mars-app .mission-brief,.mars-app .touchdown-report{ left: 0; right: 0; bottom: 26px; width: auto; padding: 14px 16px 14px 16px; background: linear-gradient(0deg, rgba(15, 12, 10, .95), rgba(15, 12, 10, .82) 80%, rgba(15, 12, 10, .4)); }
+  .mars-app .sheet-objective,.mars-app .hud-sheet .sheet-objective{ font-size: 1.1rem; }
+  .mars-app .readout-list > div{ grid-template-columns: 104px 1fr; padding: 5px 0; }
+  .mars-app .sheet-actions{ flex-wrap: wrap; }
+  .mars-app .sheet-actions .primary-action{ margin-left: auto; }
+  .mars-app .site-eval{ top: auto; left: 0; right: 0; width: auto; max-height: 64vh; padding: 16px 16px 30px; border-top: 1px solid rgba(240, 195, 142, .4); background: rgba(13, 10, 9, .94); }
+  .mars-app .site-eval .sheet-actions{ bottom: -30px; margin: 14px -16px -30px; padding: 12px 16px 16px; }
+  .mars-app .eval-focus h3{ font-size: 1.5rem; }
+  .mars-app .eval-tradeoff{ grid-template-columns: 1fr; gap: 6px; }
+  .mars-app .eval-matrix thead th:first-child{ width: 26%; }
+  .mars-app .phase-panel.hud-sheet{ top: auto; left: 0; right: 0; bottom: 26px; width: auto; max-height: 44vh; padding: 12px 16px 14px; background: rgba(15, 12, 10, .92); box-shadow: inset 0 1px 0 rgba(240, 195, 142, .45); }
+  .mars-app .phase-panel.hud-sheet.phase-crisis{ bottom: 100px; max-height: 32vh; }
+  .mars-app .phase-panel .sheet-actions{ margin: 10px -16px -14px; padding: 10px 16px 12px; }
+  .mars-app .resource-dock{ top: 94px; left: 0; right: 0; max-width: none; padding: 6px 0 7px; }
+  .mars-app .vital-group{ gap: 10px; padding: 12px 10px 0; }
+  .mars-app .vital-group-label{ left: 10px; }
+  .mars-app .resource-dock .resource-readout{ min-width: 56px; }
+  .mars-app .resource-dock .resource-name{ font-size: max(.44rem, var(--min-text)); }
+  .mars-app .resource-dock .resource-number{ font-size: .66rem; }
+  .mars-app .resource-suffix{ display: none; }
+  .mars-app .resource-dock .cargo-readout{ display: flex; padding: 0 10px; }
+}
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+.mars-app .site-eval{ backdrop-filter: none; -webkit-backdrop-filter: none; }
+@media (max-width: 800px) { .mars-app .warning-item + .warning-item{ display: none; } }
+.mars-app .site-eval .sheet-actions,.mars-app .phase-panel .sheet-actions{ border-top: 1px solid rgba(235, 220, 199, .1); }
+.mars-app .site-eval .sheet-actions{ background: rgba(13, 10, 9, .97); }
+.mars-app .phase-panel .sheet-actions{ background: rgba(15, 12, 10, .95); }
+
+/* Solar particle event + mission rules */
+.mars-app .flare-wash{ pointer-events: none; position: absolute; z-index: -1; inset: 0; background: radial-gradient(ellipse at 70% 0%, rgba(255, 214, 160, .16), transparent 60%); animation: storm-blink 2.6s ease-in-out infinite; }
+.mars-app .flare-modal{ border-color: rgba(255, 210, 150, .4); }
+.mars-app .sol-bars i.is-flare{ background: rgba(255, 214, 140, .55); }
+.mars-app .sol-bars i.is-past.is-flare{ background: #ffd68c; }
+.mars-app .mission-rules{ display: grid; gap: 2px; margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(235, 220, 199, .1); }
+.mars-app .rules-title{ margin-bottom: 4px; color: rgba(237, 221, 199, .45); font: 500 max(.44rem, var(--min-text)) var(--mono); letter-spacing: .12em; }
+.mars-app .rule{ display: grid; grid-template-columns: 16px 1fr auto; align-items: baseline; gap: 6px; color: rgba(239, 229, 214, .7); font-size: .6rem; line-height: 1.5; }
+.mars-app .rule i{ font-style: normal; font: 500 max(.56rem, var(--min-text)) var(--mono); }
+.mars-app .rule b{ color: rgba(240, 230, 214, .55); font: 400 max(.5rem, var(--min-text)) var(--mono); }
+.mars-app .rule.is-ok i{ color: #a8d6a5; }
+.mars-app .rule.is-risk i,.mars-app .rule.is-risk b{ color: #f0c48e; }
+.mars-app .rule.is-failed i,.mars-app .rule.is-failed b,.mars-app .rule.is-failed span{ color: #ff8a70; }
+.mars-app .report-failure{ margin: 6px 0 0; color: #ff9a80; font: 500 .62rem var(--mono); }
+
+/* Reading level, glossary, bonus goals, run history */
+.mars-app .reading-toggle{ display: inline-flex; height: 30px; padding: 2px; border: 1px solid rgba(242, 226, 207, .22); background: rgba(23, 18, 16, .3); cursor: pointer; }
+.mars-app .reading-toggle span{ display: grid; place-items: center; padding: 0 8px; color: rgba(240, 230, 214, .45); font: 500 max(.48rem, var(--min-text)) var(--mono); letter-spacing: .08em; }
+.mars-app .reading-toggle span.is-on{ color: #211716; background: #f0c38e; }
+.mars-app .reading-toggle:hover span:not(.is-on){ color: #f7eadb; }
+.mars-app .help-panel{ max-height: calc(100% - 100px); overflow-y: auto; }
+.mars-app .glossary-title{ margin-top: 14px; }
+.mars-app .glossary{ display: grid; gap: 7px; margin: 8px 0 0; }
+.mars-app .glossary dt{ color: #f0c48e; font: 500 max(.56rem, var(--min-text)) var(--mono); }
+.mars-app .glossary dd{ margin: 2px 0 0; color: rgba(239, 229, 214, .7); font-size: .64rem; line-height: 1.5; }
+.mars-app .rule.goal.is-met i,.mars-app .rule.goal.is-met span{ color: #ffd68c; }
+.mars-app .rule.goal.is-open i{ color: rgba(240, 230, 214, .45); }
+.mars-app .rule.goal.is-missed i,.mars-app .rule.goal.is-missed span,.mars-app .rule.goal.is-missed b{ color: rgba(240, 230, 214, .35); }
+.mars-app .bonus-goals{ margin-top: 12px; }
+.mars-app .report-extras{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 18px; margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(236, 220, 199, .12); }
+.mars-app .extras-title{ margin-bottom: 8px; color: rgba(239, 226, 207, .5); font: 500 max(.48rem, var(--min-text)) var(--mono); letter-spacing: .1em; }
+.mars-app .goal-list{ display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.mars-app .goal-list li{ display: grid; grid-template-columns: 16px auto 1fr; align-items: baseline; gap: 6px; font-size: .62rem; color: rgba(240, 230, 214, .5); }
+.mars-app .goal-list li b{ color: rgba(240, 230, 214, .55); font: 500 max(.56rem, var(--min-text)) var(--mono); }
+.mars-app .goal-list li.is-met,.mars-app .goal-list li.is-met b,.mars-app .goal-list li.is-met i{ color: #ffd68c; }
+.mars-app .goal-list li i{ font-style: normal; }
+.mars-app .run-table{ width: 100%; border-collapse: collapse; font: 400 max(.54rem, var(--min-text)) var(--mono); }
+.mars-app .run-table th{ padding: 4px 6px; color: rgba(239, 226, 207, .45); font-weight: 400; text-align: left; border-bottom: 1px solid rgba(236, 220, 199, .14); }
+.mars-app .run-table td{ padding: 5px 6px; color: rgba(243, 235, 223, .72); border-bottom: 1px solid rgba(236, 220, 199, .07); }
+.mars-app .run-table tr.is-current td{ color: #fff3e0; background: rgba(240, 195, 142, .08); }
+.mars-app .run-table td.outcome-operational{ color: #a8d6a5; } .mars-app .run-table td.outcome-degraded{ color: #f0c48e; } .mars-app .run-table td.outcome-evacuated{ color: #ff9a80; }
+.mars-app .extras-hint{ margin: 8px 0 0; color: rgba(236, 224, 208, .5); font-size: .6rem; }
+.mars-app .survival-score{ position: relative; }
+.mars-app .best-badge{ position: absolute; top: -18px; right: 0; padding: 2px 6px; color: #211716; background: #ffd68c; font: 600 max(.42rem, var(--min-text)) var(--mono); font-style: normal; letter-spacing: .1em; white-space: nowrap; animation: panel-in .5s ease both; }
+@media (max-width: 800px) {
+  .mars-app .report-extras{ grid-template-columns: 1fr; }
+  .mars-app .reading-toggle span{ padding: 0 6px; font-size: max(.42rem, var(--min-text)); }
+}
+
+/* i18n: messages are stored in natural case; the design's upper-case labels are applied
+   here so each language uppercases with its own rules (html[lang] sets the locale). */
+.mars-app .u{ text-transform: uppercase; }
+.mars-app .nu{ text-transform: none; }
+
+/* ---------- Language picker ---------- */
+.mars-app .language-picker{ position: relative; display: inline-flex; align-items: center; height: 30px; padding: 0 9px; border: 1px solid rgba(242, 226, 207, .22); color: rgba(249, 240, 229, .82); background: rgba(23, 18, 16, .3); font: 500 max(.55rem, var(--min-text)) var(--mono); letter-spacing: .1em; cursor: pointer; transition: border-color .18s, color .18s; }
+.mars-app .language-picker:hover{ color: #fff; border-color: #bd8c62; }
+.mars-app .language-picker:focus-within{ outline: 2px solid #f0c38e; outline-offset: 2px; }
+.mars-app .language-short{ white-space: nowrap; pointer-events: none; }
+.mars-app .language-short i{ padding-left: 3px; color: var(--amber); font-style: normal; }
+.mars-app .language-picker select{ position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; font-size: 16px; color-scheme: dark; cursor: pointer; }
+.mars-app .language-picker option{ color: #f5ebdd; background: #1e1714; }
+.mars-app .corner-controls{ position: absolute; z-index: 6; top: 24px; right: 28px; display: flex; align-items: stretch; gap: 8px; }
+.mars-app .corner-controls .skip-button{ position: static; }
+.mars-app .corner-controls .language-picker{ height: auto; background: rgba(20, 17, 15, .4); backdrop-filter: blur(8px); }
+/* Mid widths: the centred timeline shares the top row, so stack the picker above Skip. */
+@media (min-width: 801px) and (max-width: 1180px) {
+  .mars-app .corner-controls{ flex-direction: column; align-items: flex-end; }
+  .mars-app .corner-controls .language-picker{ height: 30px; }
+}
+@media (max-width: 800px) {
+  .mars-app .corner-controls{ top: 14px; right: 12px; gap: 6px; }
+  .mars-app .cinematic-brand .brand-lockup small{ max-width: 120px; line-height: 1.45; }
+  .mars-app .language-picker{ padding: 0 7px; font-size: max(.48rem, var(--min-text)); }
+}
+@media (max-width: 430px) {
+  .mars-app .top-actions{ gap: 6px; }
+  .mars-app .top-actions .language-picker{ height: 27px; padding: 0 6px; }
+  .mars-app .reading-toggle{ height: 27px; }
+  .mars-app .reading-toggle span{ padding: 0 5px; }
+  .mars-app .icon-button{ flex-shrink: 0; }
+}
+
+/* ---------- Languages: fonts, minimum text size, right-to-left ---------- */
+/* Base fonts cover Latin (incl. Vietnamese and Turkish) and Cyrillic; Space Grotesk has
+   no Cyrillic, so Russian headings fall back to Inter through --display. Other scripts
+   get a Noto font, loaded only when that language is chosen (registry.ts). */
+.mars-app:lang(zh-Hans) { --script: 'Noto Sans SC'; }
+.mars-app:lang(ja) { --script: 'Noto Sans JP'; }
+.mars-app:lang(ko) { --script: 'Noto Sans KR'; }
+.mars-app:lang(ar) { --script: 'Noto Sans Arabic'; }
+.mars-app:lang(hi) { --script: 'Noto Sans Devanagari'; }
+.mars-app:is(:lang(zh-Hans),.mars-app :lang(ja),.mars-app :lang(ko),.mars-app :lang(ar),.mars-app :lang(hi)){
+  font-family: Inter, var(--script), ui-sans-serif, system-ui, sans-serif;
+  --mono: 'JetBrains Mono', var(--script), ui-monospace, SFMono-Regular, monospace;
+  --display: 'Space Grotesk', Inter, var(--script), sans-serif;
+  /* The HUD's tiny monospace labels work for Latin capitals but not for these scripts. */
+  --min-text: .56rem;
+}
+/* Letter spacing breaks joined Arabic letters and the Devanagari headline. */
+.mars-app:is(:lang(ar),.mars-app :lang(hi)) *, .mars-app:is(:lang(ar),.mars-app :lang(hi)) *::before, .mars-app:is(:lang(ar),.mars-app :lang(hi)) *::after{ letter-spacing: 0 !important; }
+
+/* Right-to-left: Mirrored layout rules are generated from this file at build time
+   (postcss-rtlcss, see vite.config.ts). These are the extras it cannot infer. */
+.mars-app [dir="rtl"] .feed-item,.mars-app [dir="rtl"] .warning-item{ animation-name: feed-in-rtl; }
+.mars-app [dir="rtl"] .source-panel{ animation-name: source-in-rtl; }
+.mars-app [dir="rtl"] .hud-sheet{ animation-name: sheet-in-rtl; }
+@media (max-width: 800px) { .mars-app [dir="rtl"] .hud-sheet{ animation-name: fade-in; } }
+@keyframes feed-in-rtl { from { opacity: 0; transform: translateX(7px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes source-in-rtl { from { opacity: .6; transform: translateX(-18px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes sheet-in-rtl { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: none; } }
+/* Direction arrows drawn by the interface point the other way. */
+.mars-app [dir="rtl"] .flip{ display: inline-block; transform: scaleX(-1); }
+/* Number pairs such as "97 / 100" keep their left-to-right order. */
+.mars-app [dir="rtl"] .num{ direction: ltr; unicode-bidi: isolate; }
+
+/* Longer languages (e.g. German, Russian, French, Portuguese): text wraps instead of being
+   cut off. Scoped to non-English pages so the English layout stays exactly as designed. */
+.mars-app:not(:lang(en)) .offer-copy b, .mars-app:not(:lang(en)) .offer-copy small, .mars-app:not(:lang(en)) .rail-module-name { overflow: visible; white-space: normal; overflow-wrap: anywhere; }
+.mars-app:not(:lang(en)) .vital-group-label { inset-inline-end: 10px; white-space: normal; overflow-wrap: anywhere; line-height: 1.15; letter-spacing: .08em; }
+.mars-app:not(:lang(en)) .vital-group { padding-top: 22px; }
+.mars-app:not(:lang(en)) .resource-dock .resource-readout-top { align-items: flex-end; }
+.mars-app:not(:lang(en)) .resource-dock .resource-name { max-width: 13ch; overflow: visible; white-space: normal; overflow-wrap: break-word; line-height: 1.15; }
+.mars-app:not(:lang(en)) .energy-chart figcaption, .mars-app:not(:lang(en)) .energy-chart figcaption span { flex-wrap: wrap; row-gap: 4px; }
+/* The controls hint keeps its full width; the credit line in the middle gives way first. */
+.mars-app:not(:lang(en)) .mission-footer { grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 12px; }
+.mars-app:not(:lang(en)) .controls-hint { justify-self: start; }
+.mars-app:not(:lang(en)) .mission-credit { min-width: 0; overflow: hidden; text-overflow: ellipsis; text-align: center; }
+/* A single long word (e.g. a German compound) wraps inside its box instead of pushing a panel
+   wider than the screen; only running text (p, li) may break it between any two letters. */
+.mars-app:not(:lang(en)) :is(.mission-report,.mars-app .hud-sheet,.mars-app .source-panel,.mars-app .help-panel,.mars-app .module-inspector,.mars-app .build-panel,.mars-app .crisis-modal){ overflow-wrap: break-word; }
+.mars-app:not(:lang(en)) :is(.mission-report,.mars-app .hud-sheet,.mars-app .source-panel,.mars-app .help-panel,.mars-app .module-inspector,.mars-app .build-panel,.mars-app .crisis-modal) :is(p,.mars-app li){ overflow-wrap: anywhere; }
+.mars-app:not(:lang(en)) .phase-body { grid-template-columns: minmax(0, 1fr); } /* a long word may not widen the choices past the panel */
+.mars-app:not(:lang(en)) .survival-score b { white-space: nowrap; } /* the score never splits */
+/* Narrow comparison cells: a little less side padding lets long words (e.g. Russian
+   "подтверждено") fit whole on a 375 px phone. */
+.mars-app:not(:lang(en)) .eval-matrix td { padding-inline: 5px; }
+.mars-app:not(:lang(en)) .report-footer > div { flex-wrap: wrap; }
+.mars-app:not(:lang(en)) .report-footer .report-restart { margin-inline-start: auto; }
+.mars-app:not(:lang(en)) .sheet-actions { flex-wrap: wrap; }
+.mars-app:not(:lang(en)) .sheet-actions .primary-action { flex: 0 1 auto; min-width: 0; margin-inline-start: auto; }
+.mars-app:not(:lang(en)) .primary-action > span { overflow-wrap: anywhere; text-align: start; }
+/* Step names would push the timeline into the logo and corner controls, so only the
+   current step is written out (as on phones); the others stay readable for screen readers. */
+.mars-app:not(:lang(en)) .timeline-step:not(.is-current) .timeline-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.mars-app:not(:lang(en)) .timeline-step:not(.is-current) { padding-inline-end: 5px; }
+@media (max-width: 800px) {
+  /* The footer stays one line (panels sit right above it): the button keeps its full
+     label and the controls hint, which is only a tip, gives way with an ellipsis. */
+  .mars-app:not(:lang(en)) .mission-footer { grid-template-columns: minmax(0, 1fr) auto; column-gap: 10px; }
+  .mars-app:not(:lang(en)) .controls-hint { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .mars-app:not(:lang(en)) .mission-footer > *, .mars-app:not(:lang(en)) .mission-footer > button { padding-block: 3px; line-height: 1.3; }
+  .mars-app:not(:lang(en)) .warning-stack, .mars-app:not(:lang(en)) .module-inspector { margin-top: 10px; }
+}
+@media (max-width: 430px) {
+  /* The decorative tagline under the logo gives way to the controls. */
+  .mars-app:not(:lang(en)) :is(.topbar,.mars-app .cinematic-brand) .brand-lockup small{ display: none; }
+  /* Longer labels (e.g. "Semplice / Dettagliato") must still leave the last top-bar button on screen. */
+  .mars-app:not(:lang(en)) .top-actions { gap: 4px; }
+  .mars-app:not(:lang(en)) .top-actions .language-picker { padding: 0 4px; }
+  .mars-app:not(:lang(en)) .crew-chip { padding: 0 3px; }
+  .mars-app:not(:lang(en)) .reading-toggle span { padding: 0 4px; letter-spacing: .02em; }
+}
+
+/* Attention pass: cold open, contracts, steering, share card, louder storm. */
+.mars-app .cold-open{ pointer-events: none; position: absolute; z-index: 4; left: 28px; bottom: 16%; max-width: min(560px, calc(100% - 48px)); text-shadow: 0 1px 2px rgba(0, 0, 0, .55), 0 2px 18px rgba(0, 0, 0, .45); }
+.mars-app .cold-open::before{ content: ''; position: absolute; z-index: -1; inset: -48px -72px -48px -48px; background: radial-gradient(ellipse at 30% 60%, rgba(3, 3, 4, .42), rgba(3, 3, 4, .16) 48%, rgba(3, 3, 4, 0) 70%); }
+.mars-app .cold-open p{ margin: 0; color: rgba(248, 241, 230, .78); font: 400 .95rem/1.45 var(--sans, Inter, sans-serif); }
+.mars-app .cold-open .u{ color: #f0c38e; font: 500 max(.62rem, var(--min-text)) var(--mono); letter-spacing: .16em; }
+.mars-app .cold-open h2{ margin: 8px 0 10px; color: #f8f1e6; font: 500 clamp(2.1rem, 5vw, 3.6rem)/1.02 var(--display); letter-spacing: -.03em; }
+.mars-app .mission-brief{ max-height: min(78vh, 640px); overflow-y: auto; }
+.mars-app .contract-picker{ margin-top: 12px; }
+.mars-app .contract-options{ display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.mars-app .contract-options > span{ margin-right: 4px; color: rgba(237, 221, 199, .55); font: 500 max(.5rem, var(--min-text)) var(--mono); letter-spacing: .12em; }
+.mars-app .contract-options button{ min-height: 30px; padding: 4px 10px; border: 1px solid rgba(242, 226, 207, .28); color: rgba(248, 241, 230, .8); background: rgba(20, 16, 14, .35); font: 500 max(.55rem, var(--min-text)) var(--mono); letter-spacing: .08em; cursor: pointer; }
+.mars-app .contract-options button.is-on{ border-color: #f0c38e; color: #211716; background: #f0c38e; }
+.mars-app .contract-blurb,.mars-app .contract-suggest{ margin: 8px 0 0; color: rgba(236, 224, 208, .72); font-size: .72rem; line-height: 1.45; }
+.mars-app .contract-suggest{ color: #f0c38e; letter-spacing: .06em; }
+.mars-app .skill-pad{ position: absolute; z-index: 6; top: 50%; right: 28px; width: min(380px, calc(100% - 32px)); padding: 16px 16px 12px; transform: translateY(-50%); }
+.mars-app .skill-pad h2{ margin: 6px 0 4px; color: #f7f0e6; font: 500 1.15rem/1.25 var(--display); }
+.mars-app .skill-pad > p{ margin: 0 0 10px; color: rgba(239, 226, 210, .72); font-size: .72rem; line-height: 1.45; }
+.mars-app .skill-track{ position: relative; height: 54px; margin: 8px 0; background: rgba(255, 255, 255, .06); touch-action: none; cursor: pointer; }
+.mars-app .skill-band{ position: absolute; top: 0; bottom: 0; background: rgba(168, 214, 165, .32); }
+.mars-app .skill-marker{ position: absolute; top: 8px; bottom: 8px; width: 12px; background: #f0c38e; }
+.mars-app .skill-time{ height: 3px; background: rgba(255, 255, 255, .08); }
+.mars-app .skill-time span{ display: block; height: 100%; background: #f0c38e; transform-origin: left center; }
+.mars-app .share-view{ position: relative; width: min(520px, calc(100% - 28px)); max-height: min(86vh, 720px); overflow: auto; padding: 22px 22px 18px; border: 1px solid rgba(240, 195, 142, .4); background: rgba(18, 14, 12, .94); }
+.mars-app .share-view h2{ margin: 8px 0; color: #f8f1e6; font: 500 1.6rem/1.2 var(--display); }
+.mars-app .share-line{ margin: 0 0 8px; color: #f0c38e; font: 500 .95rem var(--mono); }
+.mars-app .is-storm .storm-wash{ background: linear-gradient(100deg, rgba(120, 72, 48, .28), rgba(196, 140, 96, .38)); }
+.mars-app .report-footer > div{ flex-wrap: wrap; }
+@media (max-width: 800px) {
+  .mars-app .cold-open{ left: 12px; right: 12px; bottom: 12%; max-width: none; }
+  .mars-app .skill-pad{ top: auto; right: 10px; left: 10px; bottom: 108px; width: auto; transform: none; }
+  .mars-app .cold-open h2{ font-size: 2rem; }
+}

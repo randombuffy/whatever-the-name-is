@@ -1,0 +1,11 @@
+Model Information:
+* title:	Tesla Bot
+* source:	https://sketchfab.com/3d-models/tesla-bot-a65fe7cd17814149936912300fb8620b
+* author:	donalleniii (https://sketchfab.com/donalleniii)
+
+Model License:
+* license type:	CC-BY-NC-4.0 (http://creativecommons.org/licenses/by-nc/4.0/)
+* requirements:	Author must be credited. No commercial use.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Tesla Bot" (https://sketchfab.com/3d-models/tesla-bot-a65fe7cd17814149936912300fb8620b) by donalleniii (https://sketchfab.com/donalleniii) licensed under CC-BY-NC-4.0 (http://creativecommons.org/licenses/by-nc/4.0/)

@@ -1,0 +1,85 @@
+/* Hallmark · v2.0.0 · scope: app · shape: app screen
+ * critique: the viewport is the signature and the ledger is the proof, so the chrome stays quieter than the spacecraft
+ * waive: 54 labels stay sentence case in the body face, a step smaller, because this is a flight console
+ * theme: Voyd (by request) · type: Orbitron / Rajdhani / Space Mono, from Space-Exploration and Starwards
+ * answered: density over a marketing hero, tables and ledgers before cards, one navy accent
+ */
+:root {
+  --bg: #000000;
+  --fg: #dadada;
+  --muted: rgba(218, 218, 218, 0.68);
+  --surface: #111111;
+  --hairline: rgba(218, 218, 218, 0.10);
+  --hover: rgba(218, 218, 218, 0.06);
+  --navy: #173e76;
+  --navy-hover: #1a4a8c;
+  --accent-border: #102445;
+  --primary-text: #fdfcf9;
+  --secondary: #161616;
+  --secondary-hover: #1c1c1c;
+  --fault: #c4b8a8;
+  --good: #d7d3cb;
+  --font: "Rajdhani", "Titillium Web", "Segoe UI", sans-serif;
+  --display: "Orbitron", "Electrolize", "Rajdhani", sans-serif;
+  --mono: "Space Mono", "IBM Plex Mono", ui-monospace, monospace;
+  --text-xs: 11px;
+  --text-sm: 12.5px;
+  --text-md: 14px;
+  --text-lg: 15.75px;
+  --text-xl: 17.7px;
+  --radius-card: 12px;
+  --radius-control: 10px;
+  --radius-button: 12px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --dur: 160ms;
+  --shadow: none;
+  --control: 36px;
+  --glass: #111111;
+  --glass-line: transparent;
+  --glow: transparent;
+  color-scheme: dark;
+}
+
+@font-face {
+  font-family: "Electrolize";
+  src: url("/fonts/Electrolize-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Titillium Web";
+  src: url("/fonts/TitilliumWeb-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Bebas Neue";
+  src: url("/fonts/BebasNeue-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-display: swap;
+}
+
+* { box-sizing: border-box; }
+html, body { overflow-x: clip; }
+html, body, #root { height: 100%; margin: 0; background: var(--bg); color: var(--fg); }
+body {
+  font-family: var(--font);
+  font-size: var(--text-md);
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+}
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--primary-text); outline-offset: 2px; }
+.noscript { max-width: 36rem; margin: 2rem auto; padding: 0 1rem; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
