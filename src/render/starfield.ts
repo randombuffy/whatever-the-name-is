@@ -29,7 +29,26 @@ function onSphere(radius: number, theta: number, phi: number, out: THREE.Vector3
   )
 }
 
-function nebulaTexture(hex: number): THREE.CanvasTexture {
+function glowDot(): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas')
+  canvas.width = 64
+  canvas.height = 64
+  const ctx = canvas.getContext('2d')!
+  const glow = ctx.createRadialGradient(32, 32, 0, 32, 32, 32)
+  glow.addColorStop(0, 'rgba(255,255,255,1)')
+  glow.addColorStop(0.18, 'rgba(255,255,255,0.95)')
+  glow.addColorStop(0.42, 'rgba(255,255,255,0.28)')
+  glow.addColorStop(1, 'rgba(255,255,255,0)')
+  ctx.fillStyle = glow
+  ctx.fillRect(0, 0, 64, 64)
+  const tex = new THREE.CanvasTexture(canvas)
+  tex.colorSpace = THREE.SRGBColorSpace
+  return tex
+}
+
+const STAR_DOT = glowDot()
+
+function nebulaTexture(hex: number, seed: number): THREE.CanvasTexture {
   const canvas = document.createElement('canvas')
   canvas.width = 256
   canvas.height = 256
@@ -38,12 +57,28 @@ function nebulaTexture(hex: number): THREE.CanvasTexture {
   const g = (hex >> 8) & 255
   const b = hex & 255
   const glow = ctx.createRadialGradient(128, 118, 8, 128, 128, 128)
-  glow.addColorStop(0, `rgba(${r},${g},${b},0.62)`)
-  glow.addColorStop(0.28, `rgba(${r},${g},${b},0.28)`)
-  glow.addColorStop(0.62, `rgba(${Math.min(255, r + 40)},${g},${Math.min(255, b + 30)},0.1)`)
+  glow.addColorStop(0, `rgba(${r},${g},${b},0.55)`)
+  glow.addColorStop(0.35, `rgba(${r},${g},${b},0.22)`)
   glow.addColorStop(1, 'rgba(0,0,0,0)')
   ctx.fillStyle = glow
   ctx.fillRect(0, 0, 256, 256)
+  for (let i = 0; i < 5; i += 1) {
+    const cx = 40 + hash(seed + i * 3) * 180
+    const cy = 40 + hash(seed + i * 5) * 170
+    const dust = ctx.createRadialGradient(cx, cy, 2, cx, cy, 28 + hash(seed + i) * 40)
+    const rr = Math.min(255, r + 30)
+    const bb = Math.min(255, b + 20)
+    dust.addColorStop(0, `rgba(${rr},${g},${bb},0.35)`)
+    dust.addColorStop(1, 'rgba(0,0,0,0)')
+    ctx.fillStyle = dust
+    ctx.fillRect(0, 0, 256, 256)
+  }
+  ctx.strokeStyle = `rgba(${r},${g},${b},0.18)`
+  ctx.lineWidth = 8
+  ctx.beginPath()
+  ctx.moveTo(20, 150)
+  ctx.bezierCurveTo(80, 40, 160, 200, 240, 90)
+  ctx.stroke()
   const tex = new THREE.CanvasTexture(canvas)
   tex.colorSpace = THREE.SRGBColorSpace
   return tex
@@ -78,6 +113,7 @@ function starPoints(count: number, radius: number, band: boolean, seed: number, 
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3))
   return new THREE.Points(geo, new THREE.PointsMaterial({
     size,
+    map: STAR_DOT,
     sizeAttenuation: false,
     vertexColors: true,
     transparent: true,
@@ -107,7 +143,8 @@ function cluster(count: number, center: THREE.Vector3, spread: number, seed: num
   geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3))
   return new THREE.Points(geo, new THREE.PointsMaterial({
-    size: 1.35,
+    size: 2.1,
+    map: STAR_DOT,
     sizeAttenuation: false,
     vertexColors: true,
     transparent: true,
@@ -121,11 +158,12 @@ export function makeStarfield(radius = 900): THREE.Group {
   const root = new THREE.Group()
   root.name = 'starfield'
   root.frustumCulled = false
-  const field = starPoints(5200, radius, false, 11, 1.05)
-  const milky = starPoints(3800, radius * 0.96, true, 29, 1.2)
+  const field = starPoints(6400, radius, false, 11, 1.15)
+  const bright = starPoints(420, radius * 0.98, false, 53, 3.4)
+  const milky = starPoints(4200, radius * 0.96, true, 29, 1.45)
   field.frustumCulled = false
   milky.frustumCulled = false
-  root.add(field, milky)
+  root.add(field, bright, milky)
   const hubs = [
     { theta: 0.4, phi: 1.15, spread: 48, n: 420, hue: 0.22, hex: 0x7aa7ff },
     { theta: 2.1, phi: 0.85, spread: 36, n: 280, hue: 0.72, hex: 0xff9a6a },
@@ -146,7 +184,7 @@ export function makeStarfield(radius = 900): THREE.Group {
     knots.frustumCulled = false
     root.add(knots)
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: nebulaTexture(hub.hex),
+      map: nebulaTexture(hub.hex, 90 + i * 13),
       color: 0xffffff,
       transparent: true,
       opacity: 0.42,

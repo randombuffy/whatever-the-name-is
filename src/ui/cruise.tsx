@@ -40,7 +40,7 @@ import { FLIGHT_ACTIONS, keyLabel, keyName, loadBinds, saveBinds, type FlightAct
 import { CruiseWorld, FLIGHT_CAMS, type FlightCam } from '../render/cruiseWorld'
 import { useActiveMission, useMission } from '../store/useMission'
 import { setBed, setScoreBoost, sting } from './audio'
-import { sayOnce } from './voice'
+import { say, sayOnce } from './voice'
 import { Mix } from './mix'
 import { createEngineTone } from './tone'
 const CAM_ICON = {
@@ -89,7 +89,7 @@ export function CruiseScreen() {
   const checkpoints = useMission((state) => state.checkpoints)
   const restoreCheckpoint = useMission((state) => state.restoreCheckpoint)
 
-  const [camera, setCamera] = useState<FlightCam>('chase')
+  const [camera, setCamera] = useState<FlightCam>('side')
   const [throttle, setThrottle] = useState(1)
   const [engines, setEngines] = useState(true)
   const [stable, setStable] = useState(true)
@@ -106,7 +106,11 @@ export function CruiseScreen() {
 
   useEffect(() => {
     if (!decisionId) return
+    const decision = useMission.getState().sim?.decision
     sting('radio', useMission.getState().audio)
+    if (!decision) return
+    const options = decision.options.map((option, index) => `${index + 1}, ${option.label}`).join('. ')
+    say(`${decision.title}. ${decision.detail} ${options}`, useMission.getState().audio)
   }, [decisionId])
 
   useEffect(() => {
@@ -114,10 +118,10 @@ export function CruiseScreen() {
     sting('warn', useMission.getState().audio)
   }, [failed])
 
-  const arrival = Boolean(sim && !sim.failed && (sim.status === 'complete' || sim.distanceFraction >= 0.96))
+  const arrival = Boolean(sim && !sim.failed && (sim.status === 'complete' || sim.distanceFraction >= 0.99))
   useEffect(() => {
     if (!arrival) return undefined
-    const id = window.setTimeout(() => go('landing'), 800)
+    const id = window.setTimeout(() => go('landing'), 200)
     return () => window.clearTimeout(id)
   }, [arrival, go])
 
@@ -161,8 +165,8 @@ export function CruiseScreen() {
       last = now
       const down = keys.current
       const map = bindsRef.current
-      const stickPitch = (down.has(map.pitchDown) ? 1 : 0) - (down.has(map.pitchUp) ? 1 : 0)
-      const stickYaw = (down.has(map.yawRight) ? 1 : 0) - (down.has(map.yawLeft) ? 1 : 0)
+      const stickPitch = (down.has(map.pitchDown) || down.has('s') ? 1 : 0) - (down.has(map.pitchUp) || down.has('w') ? 1 : 0)
+      const stickYaw = (down.has(map.yawRight) || down.has('d') ? 1 : 0) - (down.has(map.yawLeft) || down.has('a') ? 1 : 0)
       const stickRoll = (down.has(map.rollRight) ? 1 : 0) - (down.has(map.rollLeft) ? 1 : 0)
       if (down.has(map.throttleUp)) throttleRef.current = Math.min(1, throttleRef.current + dt * 0.45)
       if (down.has(map.throttleDown)) throttleRef.current = Math.max(0, throttleRef.current - dt * 0.45)

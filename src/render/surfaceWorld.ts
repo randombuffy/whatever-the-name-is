@@ -11,6 +11,7 @@ import { bakeHeightsRay, flattenPad, heightFromGrid, landUrl, loadTerrain, type 
 import { buildMarsGround, MARS_LANDING, MARS_SUN, type MarsGround } from './marsGround'
 import { bindWalkAstronaut, type WalkAstronaut } from './walkAstronaut'
 import { modelLoader } from './gltf'
+import { trackMove } from '../input/moveKeys'
 import { viewRatio } from './pixels'
 
 export type SurfaceCam = 'chase' | 'mast' | 'overhead'
@@ -149,6 +150,7 @@ export class SurfaceWorld {
   private lookYaw = 0.4
   private orbitYaw = 0
   private lookPitch = -0.18
+  private gap = 9
   private keys = new Set<string>()
   private locked = false
   private arm: THREE.Object3D | null = null
@@ -194,12 +196,13 @@ export class SurfaceWorld {
       this.introDone = true
       this.intro = 20
     }
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' })
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' })
     this.renderer.setPixelRatio(viewRatio(true))
     this.renderer.setSize(canvas.clientWidth || 1, canvas.clientHeight || 1)
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
-    this.renderer.shadowMap.enabled = true
+    const marsEarly = setup.missionId === 'mars' || setup.missionId === 'custom'
+    this.renderer.shadowMap.enabled = !marsEarly
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
     const mars = setup.missionId === 'mars' || setup.missionId === 'custom'
     this.scene.background = new THREE.Color(mars ? 0x8a6a58 : this.colors.skyTop)
@@ -212,8 +215,8 @@ export class SurfaceWorld {
     this.scene.add(this.hemi)
     this.sun = new THREE.DirectionalLight(mars ? 0xfff0dd : 0xfff1df, mars ? 2.7 : 2.9)
     if (mars) this.renderer.toneMappingExposure = 1.12
-    this.sun.castShadow = true
-    this.sun.shadow.mapSize.set(mars ? 2048 : 1024, mars ? 2048 : 1024)
+    this.sun.castShadow = !mars
+    this.sun.shadow.mapSize.set(1024, 1024)
     this.sun.shadow.camera.near = 2
     this.sun.shadow.camera.far = 140
     this.sun.shadow.camera.left = -48
@@ -240,7 +243,10 @@ export class SurfaceWorld {
     this.globeR = 0
     this.lander = new THREE.Group()
     this.scene.add(this.lander)
-    attachOrbiter(this.lander, 7, true, () => this.seat(this.lander, 0, 0), setup.craft, setup.missionId)
+    attachOrbiter(this.lander, 5.2, true, undefined, setup.craft, setup.missionId)
+    this.lander.traverse((obj) => {
+      if (obj.userData.nozzle || /plume|flame/i.test(obj.name)) obj.visible = false
+    })
     this.scene.add(this.rover, this.suit, this.heli)
     if (setup.roverMassKg !== null) this.loadRover()
     this.loadSuit()
@@ -255,10 +261,10 @@ export class SurfaceWorld {
       this.marsGround.dress(this.scene)
       const [lx, lz] = MARS_LANDING
       if (!saved) {
-        this.drive = { x: lx + 4.4, z: lz + 0.6, yaw: -0.4, speed: 0 }
-        this.foot = { x: lx + 1.5, z: lz + 2.6 }
-        this.lookYaw = Math.atan2(6 - this.foot.x, 4 - this.foot.z)
-        this.heliAt = { x: lx + 7, z: lz - 4 }
+        this.drive = { x: lx + 6.2, z: lz + 5.4, yaw: 0.6, speed: 0 }
+        this.foot = { x: lx + 8.4, z: lz + 2.4 }
+        this.lookYaw = Math.atan2(lx - this.foot.x, lz - this.foot.z)
+        this.heliAt = { x: lx + 11, z: lz - 6 }
       }
       this.marsGround.setPieces([])
       this.seat(this.lander, lx, lz)
@@ -579,10 +585,7 @@ export class SurfaceWorld {
     this.poseDust(focus.x, focus.z, stepDt)
     this.poseRoute()
     this.frame()
-    if (this.marsGround && !this.campSeated) {
-      this.campSeated = true
-      this.seat(this.lander, this.lander.position.x, this.lander.position.z)
-    }
+    if (this.marsGround) this.pinLander()
     if (this.marsGround) {
       this.marsGround.follow(this.camera)
       this.sun.position.set(focus.x + MARS_SUN.x * 80, MARS_SUN.y * 80, focus.z + MARS_SUN.z * 80)
@@ -640,7 +643,7 @@ export class SurfaceWorld {
       gradX: grade.x,
       gradZ: grade.z,
     }, dt)
-    if (this.hits(next.x, next.z, 1.25)) {
+    if (this.hits(next.x, next.z, 1.25) || !this.climbOk(this.drive.x, this.drive.z, next.x, next.z, 0.55)) {
       this.drive = { ...this.drive, speed: this.drive.speed * -0.25 }
       this.bump = 0.7
       if (Math.abs(this.drive.speed) > 0.4) this.wheels = Math.max(12, this.wheels - 7)
@@ -660,13 +663,15 @@ export class SurfaceWorld {
     const strafe = this.keys.has('a') ? 1 : this.keys.has('d') ? -1 : 0
     const moving = forward !== 0 || strafe !== 0
     const gravity = Math.max(0.04, this.setup.gravity)
-    const pace = (this.oxygen > 8 ? 3.05 : 1.6) * Math.sqrt(gravity / 3.71)
+    const pace = (this.oxygen > 8 ? 6.4 : 3.2) * Math.sqrt(gravity / 3.71)
     const grade = this.grade(this.foot.x, this.foot.z)
     const slope = Math.hypot(grade.x, grade.z)
     const nx = this.foot.x + (Math.sin(this.lookYaw) * forward + Math.cos(this.lookYaw) * strafe) * pace * (1 - Math.min(0.65, slope)) * dt
     const nz = this.foot.z + (Math.cos(this.lookYaw) * forward - Math.sin(this.lookYaw) * strafe) * pace * (1 - Math.min(0.65, slope)) * dt
-    const stepUp = this.heightAt(nx, nz) - this.heightAt(this.foot.x, this.foot.z)
-    if (!this.hits(nx, nz, 0.55) && stepUp < 1.8) {
+    const blocked = this.hits(nx, nz, 0.42, this.hop)
+    const steep = this.hop < 0.35 && !this.climbOk(this.foot.x, this.foot.z, nx, nz, 0.7)
+    const clear = !blocked && !steep
+    if (clear) {
       this.foot.x = nx
       this.foot.z = nz
     }
@@ -700,7 +705,7 @@ export class SurfaceWorld {
     const speed = this.energy > 0 ? 7 : 0
     const nx = this.heliAt.x + Math.sin(this.lookYaw) * forward * speed * dt
     const nz = this.heliAt.z + Math.cos(this.lookYaw) * forward * speed * dt
-    if (!this.hits(nx, nz, 0.4)) {
+    if (!this.hits(nx, nz, 0.4, 8)) {
       this.heliAt.x = nx
       this.heliAt.z = nz
     }
@@ -747,7 +752,7 @@ export class SurfaceWorld {
     const gy = this.heightAt(this.drive.x, this.drive.z)
     this.bob += (gy - this.bob) * 0.18
     const bounce = Math.sin(this.odometer * 4) * 0.02 * Math.min(1, Math.abs(this.drive.speed))
-    this.rover.position.set(this.drive.x, this.bob + bounce, this.drive.z)
+    this.rover.position.set(this.drive.x, this.bob + bounce + 0.06, this.drive.z)
     const grade = this.grade(this.drive.x, this.drive.z)
     this.up.copy(this.normalAt(this.drive.x, this.drive.z))
     const slope = new THREE.Vector3(-grade.x, 0, -grade.z)
@@ -765,7 +770,7 @@ export class SurfaceWorld {
     if (this.mastHead) this.mastHead.rotation.y = this.mastBase + (this.cam === 'mast' && this.mode === 'drive' ? this.orbitYaw : 0)
     const fy = this.heightAt(this.foot.x, this.foot.z)
     const up = this.normalAt(this.foot.x, this.foot.z)
-    this.suit.position.set(this.foot.x, fy, this.foot.z).addScaledVector(up, this.hop)
+    this.suit.position.set(this.foot.x, fy + 0.06, this.foot.z).addScaledVector(up, this.hop)
     const ahead = new THREE.Vector3(Math.sin(this.lookYaw), 0, Math.cos(this.lookYaw))
     ahead.addScaledVector(up, -ahead.dot(up))
     if (ahead.lengthSq() < 1e-6) ahead.set(0, 0, 1)
@@ -793,7 +798,7 @@ export class SurfaceWorld {
 
   private frame(): void {
     const focus = this.focus()
-    const y = this.heightAt(focus.x, focus.z)
+    const y = this.heightAt(focus.x, focus.z) + (this.mode === 'eva' ? this.hop : 0)
     const up = this.normalAt(focus.x, focus.z)
     this.camera.up.copy(up)
     if (this.cam === 'overhead') {
@@ -809,8 +814,8 @@ export class SurfaceWorld {
     if (this.mode === 'eva' || this.cam === 'chase') {
       const yaw = this.mode === 'eva' ? this.lookYaw : this.drive.yaw
       const glance = this.mode === 'eva' ? 0 : this.orbitYaw
-      const back = this.mode === 'eva' ? 4.2 : 6.4
-      const lift = this.mode === 'eva' ? 1.85 : 2.4
+      const back = this.mode === 'eva' ? this.gap : this.gap + 2.2
+      const lift = this.mode === 'eva' ? 1.7 + this.gap * 0.08 : 2.2 + this.gap * 0.06
       const eye = new THREE.Vector3(focus.x, y, focus.z)
       const backDir = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw))
       backDir.addScaledVector(up, -backDir.dot(up)).normalize()
@@ -843,8 +848,8 @@ export class SurfaceWorld {
     else if (this.crisis === 'power') prompt = 'Battery under 15%. Sleep, or push and lose the rover.'
     else if (this.crisis === 'comm') prompt = 'No relay. Wait for the orbiter, or burn power on a blind send.'
     else if (!this.introDone) prompt = this.setup.siteId === 'jezero'
-      ? 'On Jezero crater. WASD walk. F boards the rover. E picks a sample.'
-      : 'On the surface. WASD walk. F boards the rover. E picks a sample.'
+      ? 'On Jezero crater. WASD or arrows to walk. F boards the rover. E picks a sample.'
+      : 'On the surface. WASD or arrows to walk. F boards the rover. E picks a sample.'
     else if (this.notice) prompt = this.notice
     else if (this.mode === 'drive' && this.energy <= 0) prompt = 'Batteries empty. Wait in the sun.'
     else if (this.mode === 'drive' && this.parked) prompt = 'Parked. WASD drive. F get down.'
@@ -859,7 +864,7 @@ export class SurfaceWorld {
     const held = this.notes.filter((item) => !item.sent)
     const chosen = held.length > 0 ? held[Math.abs(this.pick) % held.length] : null
     return {
-      speed: this.mode === 'drive' ? this.drive.speed : this.mode === 'scout' ? 7 : walking ? 3.05 : 0,
+      speed: this.mode === 'drive' ? this.drive.speed : this.mode === 'scout' ? 7 : walking ? 6.4 : 0,
       slopeDeg: slope,
       energy: this.energy,
       oxygen: this.oxygen,
@@ -910,7 +915,8 @@ export class SurfaceWorld {
 
   private onWheel = (event: WheelEvent) => {
     event.preventDefault()
-    this.fov = Math.max(26, Math.min(72, this.fov + Math.sign(event.deltaY) * 3))
+    this.gap = Math.max(3.4, Math.min(36, this.gap * (event.deltaY > 0 ? 1.12 : 0.88)))
+    this.fov = Math.max(48, Math.min(68, this.fov + Math.sign(event.deltaY)))
     this.camera.fov = this.fov
     this.camera.updateProjectionMatrix()
   }
@@ -933,11 +939,12 @@ export class SurfaceWorld {
   private heightGrid: HeightGrid | null = null
   private marsGround: MarsGround | null = null
   private campSeated = false
+  private landerLift = 0.05
   private lastHeight = 0
 
   private heightAt(x: number, z: number): number {
     if (this.marsGround) {
-      this.lastHeight = this.marsGround.height(x, z)
+      this.lastHeight = this.marsGround.stand(x, z)
       return this.lastHeight
     }
     if (this.heightGrid) {
@@ -960,6 +967,14 @@ export class SurfaceWorld {
     return pad * (1 - blend) + raw * blend
   }
 
+  /** A rise steeper than this is a face, not a path. The body stops instead of entering it. */
+  private climbOk(x0: number, z0: number, x1: number, z1: number, limit: number): boolean {
+    const rise = this.heightAt(x1, z1) - this.heightAt(x0, z0)
+    const run = Math.hypot(x1 - x0, z1 - z0)
+    if (run < 1e-4) return true
+    return rise <= 0.85 && rise / run <= limit
+  }
+
   private grade(x: number, z: number): { x: number; z: number } {
     const e = 0.45
     return {
@@ -968,12 +983,19 @@ export class SurfaceWorld {
     }
   }
 
-  private hits(x: number, z: number, radius: number): boolean {
-    const ship = Math.hypot(x - this.lander.position.x, z - this.lander.position.z)
-    if (ship < 3.3 + radius * 0.15) return true
-    const camp = this.marsGround?.solid() ?? []
-    if (camp.some((block) => Math.hypot(x - block.x, z - block.z) < block.radius + radius * 0.2)) return true
-    return this.rocks.some((rock) => Math.hypot(x - rock.x, z - rock.z) < rock.r + radius * 0.35)
+  private hits(x: number, z: number, radius: number, hop = 0): boolean {
+    const blocks: { x: number; z: number; radius: number; height: number }[] = [
+      { x: this.lander.position.x, z: this.lander.position.z, radius: 2.2, height: 3.4 },
+    ]
+    for (const block of this.marsGround?.solid() ?? []) blocks.push(block)
+    if (hop < 0.45) {
+      for (const rock of this.rocks) blocks.push({ x: rock.x, z: rock.z, radius: rock.r, height: 0.55 })
+    }
+    for (const block of blocks) {
+      if (hop > block.height - 0.12) continue
+      if (Math.hypot(x - block.x, z - block.z) < block.radius + radius) return true
+    }
+    return false
   }
 
   private nearPad(): boolean {
@@ -1163,11 +1185,33 @@ export class SurfaceWorld {
     hull.traverse((child) => {
       const mesh = child as THREE.Mesh
       if (!mesh.isMesh || !mesh.visible) return
-      if (mesh.userData.nozzle || /flame|plume/i.test(mesh.name)) return
+      if (mesh.userData.nozzle || /flame|plume|bell/i.test(mesh.name)) return
       box.expandByObject(mesh)
     })
     if (box.isEmpty()) box.setFromObject(hull)
-    obj.position.y += this.heightAt(x, z) - box.min.y
+    obj.position.y += this.heightAt(x, z) - box.min.y + 0.05
+  }
+
+  /** Keep the lander on the pad every frame so egress cannot leave it hanging. */
+  private pinLander(): void {
+    const [lx, lz] = MARS_LANDING
+    this.lander.traverse((obj) => {
+      if (obj.userData.nozzle || /plume|flame/i.test(obj.name)) obj.visible = false
+    })
+    if (!this.campSeated) {
+      this.lander.position.set(lx, 0, lz)
+      this.lander.updateWorldMatrix(true, true)
+      const box = new THREE.Box3()
+      this.lander.traverse((child) => {
+        const mesh = child as THREE.Mesh
+        if (!mesh.isMesh || !mesh.visible) return
+        if (mesh.userData.nozzle || /flame|plume|bell/i.test(mesh.name)) return
+        box.expandByObject(mesh)
+      })
+      this.landerLift = box.isEmpty() ? 0.05 : Math.max(0.03, -box.min.y + 0.04)
+      this.campSeated = true
+    }
+    this.lander.position.set(lx, this.heightAt(lx, lz) + this.landerLift, lz)
   }
 
   private loadRover(): void {
@@ -1282,14 +1326,8 @@ export class SurfaceWorld {
   }
 
   private onKey = (event: KeyboardEvent) => {
-    const key = event.key.toLowerCase()
-    const name = key === ' ' ? ' ' : key
-    if (event.type === 'keyup') {
-      this.keys.delete(name)
-      return
-    }
-    this.keys.add(name)
-    if (event.repeat) return
+    const name = trackMove(this.keys, event)
+    if (event.type === 'keyup' || event.repeat) return
     if (name === ' ') event.preventDefault()
     if (name === 'c') this.cycleCam()
     if (name === 'p') this.togglePark()

@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { getSpec } from '../domain/catalog'
-import type { SpacecraftConfig } from '../domain/types'
+import { fitHardware } from './shipKit'
+import type { ComponentSpec, PropellantType, SpacecraftConfig } from '../domain/types'
 
 /**
  * Port of Alex Sanfilippo's ProceduralMeshGeneration spaceship.
@@ -149,10 +150,12 @@ function makeSkin(seed: number): { map: THREE.CanvasTexture; spec: THREE.CanvasT
   map.colorSpace = THREE.SRGBColorSpace
   map.anisotropy = 8
   map.needsUpdate = true
+  map.userData.keep = true
   const specMap = new THREE.CanvasTexture(spec)
   specMap.colorSpace = THREE.LinearSRGBColorSpace
   specMap.anisotropy = 4
   specMap.needsUpdate = true
+  specMap.userData.keep = true
   const made = { map, spec: specMap }
   skins.set(seed, made)
   return made
@@ -326,6 +329,17 @@ export interface ShipRecipe {
   nose?: 'point' | 'blunt' | 'spike'
   /** Part ids so the builder can slide the fuselage, wings, dish and engines. */
   bind: { hull?: string; wing?: string; dish?: string; fin?: string; engine?: string }
+  /** One real piece per fitted part. Empty on the title card, which uses a small showcase kit. */
+  fittings?: ShipFitting[]
+}
+
+export interface ShipFitting {
+  instanceId: string
+  specId: string
+  fill: number
+  role: 'tank' | 'engine' | 'acs' | 'solar' | 'battery' | 'nuclear' | 'antenna' | 'radio' | 'radiator' | 'blanket' | 'heater' | 'shield' | 'chute' | 'stage' | 'legs' | 'rover' | 'heli' | 'arm' | 'cache' | 'instrument' | 'frame'
+  magnitude: number
+  propellant: PropellantType
 }
 
 export function recipeFromCraft(config: SpacecraftConfig, missionId: string): ShipRecipe | null {
@@ -365,7 +379,7 @@ export function recipeFromCraft(config: SpacecraftConfig, missionId: string): Sh
   const rng = new Rng(seed)
   const profiles: Profile[] = ['needle', 'capsule', 'wedge', 'barge', 'bulb', 'lander']
   const profile = profiles[seed % profiles.length]
-  const sideChoices = profile === 'wedge' ? [3, 4, 5] : profile === 'barge' ? [4, 4, 6] : [5, 6, 7, 8, 10, 12]
+  const sideChoices = profile === 'wedge' || profile === 'barge' ? [6, 8] : [6, 8, 8, 10]
   const noses: ShipRecipe['nose'][] = profile === 'capsule' || profile === 'lander' ? ['blunt', 'blunt', 'point'] : profile === 'needle' ? ['spike', 'point'] : ['point', 'blunt', 'spike']
   return {
     seed,
@@ -373,8 +387,8 @@ export function recipeFromCraft(config: SpacecraftConfig, missionId: string): Sh
     segments: Math.max(3, Math.min(8, 3 + tanks + (profile === 'needle' ? 2 : 0) - (profile === 'lander' ? 1 : 0))),
     radius: (profile === 'needle' ? 0.32 : profile === 'lander' || profile === 'bulb' ? 0.62 : 0.46) + Math.sqrt(Math.max(dry, 12)) / 19 + tanks * 0.03,
     length: (profile === 'needle' ? 0.82 : profile === 'lander' ? 0.38 : 0.58) + Math.min(1.6, dry / 540) + tanks * 0.06,
-    stretchX: profile === 'wedge' || profile === 'barge' ? 1.15 + rng.next() * 0.55 : 0.78 + rng.next() * 0.5,
-    stretchZ: profile === 'barge' ? 0.62 + rng.next() * 0.22 : profile === 'wedge' ? 0.7 + rng.next() * 0.35 : 0.85 + rng.next() * 0.45,
+    stretchX: profile === 'wedge' || profile === 'barge' ? 1.05 + rng.next() * 0.2 : 0.92 + rng.next() * 0.16,
+    stretchZ: profile === 'barge' ? 0.78 + rng.next() * 0.12 : 0.9 + rng.next() * 0.16,
     nozzles: Math.max(0, engines),
     wings,
     dishes,
@@ -383,7 +397,64 @@ export function recipeFromCraft(config: SpacecraftConfig, missionId: string): Sh
     profile,
     nose: noses[Math.floor(rng.next() * noses.length)],
     bind,
+    fittings: fittingsFrom(fitted),
   }
+}
+
+function fittingsFrom(parts: SpacecraftConfig['parts']): ShipFitting[] {
+  const made: ShipFitting[] = []
+  for (const part of parts) {
+    if (!part.enabled) continue
+    const spec = getSpec(part.specId)
+    if (!spec) continue
+    const role = roleOf(spec)
+    if (!role) continue
+    made.push({
+      instanceId: part.instanceId,
+      specId: spec.id,
+      fill: part.fill,
+      role,
+      magnitude: magnitudeOf(spec, role),
+      propellant: spec.propellant,
+    })
+  }
+  return made
+}
+
+function roleOf(spec: ComponentSpec): ShipFitting['role'] | null {
+  if (spec.id.startsWith('bus')) return null
+  if (spec.id === 'frame') return 'frame'
+  if (spec.id === 'mli') return 'blanket'
+  if (spec.id === 'heaters') return 'heater'
+  if (spec.id === 'heatshield') return 'shield'
+  if (spec.id === 'chute') return 'chute'
+  if (spec.id === 'descent') return 'stage'
+  if (spec.id === 'legs') return 'legs'
+  if (spec.id.startsWith('rover')) return 'rover'
+  if (spec.id === 'heli') return 'heli'
+  if (spec.id === 'arm') return 'arm'
+  if (spec.id === 'cache') return 'cache'
+  if (spec.tankCapacityKg > 0) return 'tank'
+  if (spec.id === 'acs') return 'acs'
+  if (spec.thrustN > 0 && spec.feedsMainEngine) return 'engine'
+  if (spec.powerGenW > 0 && spec.powerScale === 'solar') return 'solar'
+  if (spec.powerScale === 'constant' && spec.powerGenW > 0) return 'nuclear'
+  if (spec.energyWh > 0) return 'battery'
+  if (spec.antennaGainDbi > 0) return 'antenna'
+  if (spec.id === 'transponder') return 'radio'
+  if (spec.radiatorM2 > 0) return 'radiator'
+  if (spec.instrument) return 'instrument'
+  return 'frame'
+}
+
+function magnitudeOf(spec: ComponentSpec, role: ShipFitting['role']): number {
+  if (role === 'tank') return spec.tankCapacityKg
+  if (role === 'engine' || role === 'acs') return spec.thrustN
+  if (role === 'solar' || role === 'nuclear') return spec.powerGenW
+  if (role === 'battery') return spec.energyWh
+  if (role === 'antenna') return spec.antennaGainDbi
+  if (role === 'radiator') return spec.radiatorM2
+  return spec.massKg
 }
 
 function shrinkXZ(ring: V3[], scale: number): V3[] {
@@ -391,7 +462,34 @@ function shrinkXZ(ring: V3[], scale: number): V3[] {
   return ring.map((p) => v(c.x + (p.x - c.x) * scale, p.y, c.z + (p.z - c.z) * scale))
 }
 
-/** Extra detail sits on the skin. The wall itself is already closed. */
+/** A wing or fin grown out of a hull panel, so it belongs to the shell instead of sitting beside it. */
+function panel(hull: Hull, quad: V3[], reach: number): void {
+  const [a, b, c, d] = quad
+  const outward = norm(cross(sub(b, a), sub(d, a)))
+  const shift = mul(outward, reach)
+  const tip = [a, b, c, d].map((p) => add(p, shift))
+  hull.quad(a, b, tip[1], tip[0], 1)
+  hull.quad(b, c, tip[2], tip[1], 1)
+  hull.quad(c, d, tip[3], tip[2], 1)
+  hull.quad(d, a, tip[0], tip[3], 1)
+  hull.quad(tip[0], tip[1], tip[2], tip[3], 3)
+}
+
+/** Closed engine bell on the aft face. */
+function addBell(hull: Hull, mouth: V3[], nozzles: V3[]): void {
+  const root = shrinkXZ(mouth, 0.55)
+  const outer = lift(shrinkXZ(mouth, 0.42), -0.55)
+  const inner = lift(shrinkXZ(mouth, 0.28), -0.48)
+  const throat = lift(shrinkXZ(mouth, 0.22), -0.08)
+  hull.stitch(root, outer, 2)
+  hull.stitch(outer, inner, 2)
+  hull.stitch(inner, throat, 4)
+  hull.cap(throat, 4, false)
+  const c = mean(inner)
+  nozzles.push(v(c.x, c.y - 0.04, c.z))
+}
+
+/** Raised plates, scoops and peaks. These cells are the dark carbon, foil and tile, not the pale base. */
 function greeble(hull: Hull, quad: V3[], rng: Rng, roll: number): void {
   const [a, b, c, d] = quad
   const center = mean(quad)
@@ -421,20 +519,12 @@ function greeble(hull: Hull, quad: V3[], rng: Rng, roll: number): void {
     hull.quad(lip[2], lip[3], scoop[3], scoop[2], 1)
     hull.quad(lip[3], lip[0], scoop[0], scoop[3], 1)
     hull.quad(scoop[0], scoop[1], scoop[2], scoop[3], 3)
-    return
   }
 }
 
-function panel(hull: Hull, quad: V3[], reach: number): void {
-  const [a, b, c, d] = quad
-  const outward = norm(cross(sub(b, a), sub(d, a)))
-  const shift = mul(outward, reach)
-  const tip = [a, b, c, d].map((p) => add(p, shift))
-  hull.quad(a, b, tip[1], tip[0], 1)
-  hull.quad(b, c, tip[2], tip[1], 1)
-  hull.quad(c, d, tip[3], tip[2], 1)
-  hull.quad(d, a, tip[0], tip[3], 1)
-  hull.quad(tip[0], tip[1], tip[2], tip[3], 3)
+/** Same plate, foil and tile atlas the hull uses. Shared maps, a fresh material. */
+export function hullSkin(seed = 4): THREE.MeshStandardMaterial {
+  return hullMaterial(seed)
 }
 
 function hullMaterial(seed: number): THREE.MeshStandardMaterial {
@@ -489,7 +579,8 @@ export function buildGeneratedShip(recipe: ShipRecipe): GeneratedShip {
   const wingBody = new Hull()
   const finBody = new Hull()
   const dishBody = new Hull()
-  const wobble = profile === 'wedge' ? 0.08 : 0.045
+  const bellPoints: V3[] = []
+  const wobble = 0.04
   const aft = polygon(recipe.sides, recipe.radius, recipe.stretchX, recipe.stretchZ, 0, rng, wobble)
   const rings: V3[][] = [aft]
   let ring = aft
@@ -513,8 +604,8 @@ export function buildGeneratedShip(recipe: ShipRecipe): GeneratedShip {
     for (let i = 0; i < recipe.sides; i += 1) {
       const quad = sideQuads[s * recipe.sides + i]
       hull.quad(quad[0], quad[1], quad[2], quad[3], 0)
-      const wingHere = recipe.wings > 0 && s === Math.min(1, recipe.segments - 1) && (i % pairs === 0)
-      const finHere = recipe.fins > 0 && s === recipe.segments - 1 && (i % pairs === Math.min(2, pairs - 1))
+      const wingHere = recipe.wings > 0 && s === Math.min(1, recipe.segments - 1) && i % pairs === 0
+      const finHere = recipe.fins > 0 && s === recipe.segments - 1 && i % pairs === Math.min(2, pairs - 1)
       if (wingHere) panel(wingBody, quad, recipe.radius * (profile === 'barge' || profile === 'wedge' ? 1.35 : 0.85) * (0.9 + recipe.wings * 0.32))
       else if (finHere) panel(finBody, quad, recipe.radius * (profile === 'needle' ? 0.28 : 0.48))
       else greeble(hull, quad, rng, rolls[i])
@@ -530,16 +621,14 @@ export function buildGeneratedShip(recipe: ShipRecipe): GeneratedShip {
   for (let i = 0; i < rings.length - 1; i += 1) {
     hull.stitch(shrinkXZ(rings[i], 0.82), shrinkXZ(rings[i + 1], 0.82), 4)
   }
-  hull.cap(shrinkXZ(aft, 0.82), 4, false)
-  hull.cap(shrinkXZ(noseRing, 0.82), 4, true)
+  hull.cap(shrinkXZ(aft, 0.82), 6, false)
+  hull.cap(shrinkXZ(noseRing, 0.82), 6, true)
   if (recipe.dishes > 0) {
-    const mast = scaleRing(lift(noseRing, recipe.length * 0.28), 0.4)
-    dishBody.stitch(noseRing, mast, 1)
-    dishBody.cap(mast, 3, false)
+    const mast = scaleRing(lift(noseRing, recipe.length * 0.22), 0.55)
+    dishBody.stitch(noseRing, mast, 2)
+    dishBody.cap(mast, 7, false)
   }
-
-  const nozzles: V3[] = []
-  if (recipe.nozzles > 0) addBell(hull, aft, nozzles)
+  if (recipe.nozzles > 0) addBell(hull, aft, bellPoints)
 
   const material = hullMaterial(recipe.seed)
   const mesh = piece(hull, material, 'hull')!
@@ -548,8 +637,8 @@ export function buildGeneratedShip(recipe: ShipRecipe): GeneratedShip {
   root.name = 'generated-ship'
   root.add(mesh)
   const wing = piece(wingBody, solarMaterial(recipe.seed), 'wings')
-  const fin = piece(finBody, material.clone(), 'fins')
-  const dish = piece(dishBody, material.clone(), 'dish')
+  const fin = piece(finBody, material, 'fins')
+  const dish = piece(dishBody, material, 'dish')
   if (wing) {
     mesh.add(wing)
     tagPart(wing, recipe.bind.wing)
@@ -562,111 +651,11 @@ export function buildGeneratedShip(recipe: ShipRecipe): GeneratedShip {
     mesh.add(dish)
     tagPart(dish, recipe.bind.dish)
   }
+  const placed = fitHardware(mesh, recipe, material)
+  const nozzles = bellPoints.length > 0
+    ? bellPoints.map((p) => new THREE.Vector3(p.x, p.y, p.z))
+    : placed.nozzles
 
-  let left: THREE.Object3D | null = null
-  let right: THREE.Object3D | null = null
-  if (recipe.nozzles >= 2) {
-    left = booster(recipe, -1)
-    right = booster(recipe, 1)
-    mesh.add(left, right)
-    tagPart(left, recipe.bind.engine)
-    tagPart(right, recipe.bind.engine)
-    nozzles.push(v(left.position.x, -0.2, 0), v(right.position.x, -0.2, 0))
-  }
-  decorate(mesh, recipe, material)
-
-  return { root, nozzles: nozzles.map((p) => new THREE.Vector3(p.x, p.y, p.z)), left, right }
+  return { root, nozzles, left: null, right: null }
 }
 
-/** Twelve kits on top of the six silhouettes, so two ships of the same family still read apart. */
-function decorate(parent: THREE.Object3D, recipe: ShipRecipe, material: THREE.Material): void {
-  const kit = recipe.seed % 12
-  const r = recipe.radius
-  const span = recipe.length * Math.max(2, recipe.segments)
-  const metal = (material as THREE.MeshStandardMaterial).clone()
-  metal.emissive = new THREE.Color('#6a7380')
-  metal.emissiveIntensity = 0.22
-  const bar = (from: THREE.Vector3, to: THREE.Vector3, thick: number) => {
-    const dir = to.clone().sub(from)
-    const len = dir.length()
-    if (len < 0.04) return
-    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(thick, thick, len, 6), metal)
-    mesh.position.copy(from).add(to).multiplyScalar(0.5)
-    mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize())
-    parent.add(mesh)
-  }
-  if (kit <= 1) {
-    for (const y of [span * 0.28, span * 0.55, span * 0.82]) {
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(r * 1.12, Math.max(0.03, r * 0.07), 8, 22), metal)
-      ring.rotation.x = Math.PI / 2
-      ring.position.y = y
-      parent.add(ring)
-    }
-  } else if (kit <= 4) {
-    for (const side of [-1, 1]) {
-      const pod = new THREE.Mesh(new THREE.CapsuleGeometry(r * 0.26, span * 0.42, 4, 8), metal)
-      pod.position.set(side * r * 1.65, span * 0.38, 0)
-      parent.add(pod)
-      bar(new THREE.Vector3(side * r * 0.9, span * 0.38, 0), new THREE.Vector3(side * r * 1.4, span * 0.38, 0), r * 0.05)
-    }
-  } else if (kit <= 6) {
-    for (const [x, z] of [[1, 1], [1, -1], [-1, 1], [-1, -1]] as const) {
-      bar(new THREE.Vector3(x * r, 0.15, z * r), new THREE.Vector3(x * r * 0.62, span, z * r * 0.62), r * 0.04)
-    }
-  } else if (kit <= 8) {
-    for (let i = 0; i < 5; i += 1) {
-      const a = (i / 5) * Math.PI * 2
-      const tank = new THREE.Mesh(new THREE.SphereGeometry(r * 0.3, 12, 8), metal)
-      tank.position.set(Math.cos(a) * r * 0.72, span * 0.46, Math.sin(a) * r * 0.72)
-      parent.add(tank)
-    }
-  } else if (kit <= 10) {
-    bar(new THREE.Vector3(0, span * 0.85, 0), new THREE.Vector3(r * 0.35, span + r * 1.3, 0), r * 0.045)
-    const dish = new THREE.Mesh(new THREE.CircleGeometry(r * 0.5, 18), metal)
-    dish.position.set(r * 0.35, span + r * 1.35, 0)
-    dish.rotation.x = -0.7
-    parent.add(dish)
-  } else {
-    for (let i = 0; i < 6; i += 1) {
-      const box = new THREE.Mesh(new THREE.BoxGeometry(r * 0.42, r * 0.2, r * 0.55), metal)
-      box.position.set((i % 2 === 0 ? 1 : -1) * r * 0.95, span * (0.12 + i * 0.13), (i % 3) * r * 0.15)
-      parent.add(box)
-    }
-  }
-}
-
-/** Closed engine bell on the aft face. The cabin stays sealed. */
-function addBell(hull: Hull, mouth: V3[], nozzles: V3[]): void {
-  const root = shrinkXZ(mouth, 0.55)
-  const outer = lift(shrinkXZ(mouth, 0.42), -0.55)
-  const inner = lift(shrinkXZ(mouth, 0.28), -0.48)
-  const throat = lift(shrinkXZ(mouth, 0.22), -0.08)
-  hull.stitch(root, outer, 2)
-  hull.stitch(outer, inner, 2)
-  hull.stitch(inner, throat, 4)
-  hull.cap(throat, 4, false)
-  const c = mean(inner)
-  nozzles.push(v(c.x, c.y - 0.04, c.z))
-}
-
-function booster(recipe: ShipRecipe, side: number): THREE.Group {
-  const rng = new Rng(recipe.seed + side * 17)
-  const hull = new Hull()
-  const radius = recipe.radius * 0.34
-  const ring = polygon(6, radius, 1, 1, 0, rng, 0)
-  const top = scaleRing(lift(ring, recipe.length * recipe.segments * 0.72), 0.55)
-  hull.stitch(ring, top, 0)
-  hull.cap(top, 1, false)
-  hull.cap(ring, 4, true)
-  addBell(hull, ring, [])
-  const mesh = new THREE.Mesh(hull.geometry(), hullMaterial(recipe.seed + 19))
-  mesh.castShadow = true
-  const group = new THREE.Group()
-  group.add(mesh)
-  group.position.x = side * (recipe.radius * recipe.stretchX + radius + 0.25)
-  const mark = new THREE.Object3D()
-  mark.name = 'booster-nozzle'
-  mark.position.set(0, -0.2, 0)
-  group.add(mark)
-  return group
-}

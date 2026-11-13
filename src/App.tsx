@@ -225,6 +225,7 @@ export function App() {
           <span>Budget</span>
           <i><b style={{ transform: `scaleX(${budgetRatio})` }} className={report.cost.marginUsd < 0 ? 'over' : ''} /></i>
           <div className="budget-nums"><em>{shortMoney(spent)}</em><em>{shortMoney(budget)}</em></div>
+          <span>Mass {Math.round(report.mass.totalKg)} / {Math.round(mission?.maxMassKg ?? 0)} kg · Δv {Math.round(report.propulsion.dvMps)} m/s</span>
         </div>
       )}
       {narrow && phase === 'design' && selectedInstanceId && (

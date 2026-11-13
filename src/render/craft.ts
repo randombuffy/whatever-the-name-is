@@ -92,11 +92,22 @@ export function buildCraft(config: SpacecraftConfig, dressed = false): THREE.Gro
     if (spec.id.startsWith('bus')) {
       const index = busCount
       busCount += 1
-      const bulk = Math.min(1.55, 0.46 + Math.cbrt(Math.max(8, spec.massKg)) * 0.16)
-      place(part, new THREE.Vector3(0, 0.16 * scale, 0.05 + index * 0.22), (group) => {
-        const plate = new THREE.Mesh(new THREE.BoxGeometry(0.22 * bulk, 0.035, 0.32 * bulk), material(ACCENT.structure, 0.2, 0.45))
-        plate.userData.role = 'hull'
-        addMesh(group, plate)
+      const bulk = Math.min(1.7, 0.85 + Math.cbrt(Math.max(8, spec.massKg)) * 0.12)
+      place(part, new THREE.Vector3(0, 0.05, index * 0.15), (group) => {
+        const hull = new THREE.Mesh(new THREE.BoxGeometry(0.72 * bulk, 0.38 * bulk, 1.35 * bulk), material(0x7ec8c2, 0.22, 0.38, 0x123834, 0.22))
+        hull.userData.role = 'hull'
+        addMesh(group, hull)
+        const nose = new THREE.Mesh(new THREE.BoxGeometry(0.48 * bulk, 0.28 * bulk, 0.42 * bulk), material(0x6eb8b4, 0.2, 0.4, 0x123834, 0.18))
+        nose.position.z = 0.82 * bulk
+        addMesh(group, nose)
+        const glass = new THREE.Mesh(new THREE.BoxGeometry(0.28 * bulk, 0.12 * bulk, 0.22 * bulk), material(0x1c3040, 0.7, 0.12, 0x2a6a88, 0.45))
+        glass.position.set(0, 0.16 * bulk, 0.9 * bulk)
+        addMesh(group, glass)
+        for (const side of [-1, 1]) {
+          const pod = new THREE.Mesh(new THREE.BoxGeometry(0.16 * bulk, 0.22 * bulk, 0.55 * bulk), material(0xe06a3a, 0.28, 0.42, 0x5a2010, 0.16))
+          pod.position.set(side * 0.42 * bulk, -0.02, -0.15 * bulk)
+          addMesh(group, pod)
+        }
       })
       continue
     }
@@ -123,10 +134,12 @@ export function buildCraft(config: SpacecraftConfig, dressed = false): THREE.Gro
       const length = Math.max(0.18, volume / (Math.PI * radius * radius) * 0.35)
       const center = tankCursor - length * 0.5
       tankCursor -= length + 0.1
-      const side = Math.max(0.16, radius * 1.65)
       place(part, new THREE.Vector3(0, 0, center), (group) => {
-        addMesh(group, new THREE.Mesh(new THREE.BoxGeometry(side, side, Math.max(0.2, length)), material(ACCENT.fuel, 0.28, 0.4)))
-        const band = new THREE.Mesh(new THREE.BoxGeometry(side * 1.04, side * 0.12, Math.max(0.08, length * 0.18)), material(0x6e6a62, 0.5, 0.35))
+        const tank = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, Math.max(0.22, length), 16), material(0xe2b84a, 0.32, 0.38, 0x4a3010, 0.12))
+        tank.rotation.x = Math.PI / 2
+        addMesh(group, tank)
+        const band = new THREE.Mesh(new THREE.CylinderGeometry(radius * 1.08, radius * 1.08, Math.max(0.06, length * 0.16), 16), material(0x6e6a62, 0.5, 0.35))
+        band.rotation.x = Math.PI / 2
         addMesh(group, band)
       })
       continue
@@ -138,12 +151,15 @@ export function buildCraft(config: SpacecraftConfig, dressed = false): THREE.Gro
       const bell = 0.12 + Math.log10(spec.thrustN + 10) * 0.08
       const x = (index - 0.5) * 0.28
       place(part, new THREE.Vector3(x, -0.02, tankCursor - bell), (group) => {
-        const nozzle = new THREE.Mesh(new THREE.BoxGeometry(bell * 1.15, bell * 1.15, bell * 2.6), material(0x3c4148, 0.62, 0.38))
+        const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(bell * 0.85, bell * 0.42, bell * 1.7, 12), material(0xd7dde4, 0.72, 0.28, 0x2a3340, 0.18))
+        nozzle.rotation.x = Math.PI / 2
         nozzle.userData.nozzle = true
         addMesh(group, nozzle)
-        const throat = new THREE.Mesh(new THREE.BoxGeometry(bell * 0.45, bell * 0.45, bell * 0.7), material(0xf7f7f5, 0.05, 0.48))
-        throat.position.z = -bell * 1.4
-        addMesh(group, throat)
+        const bellMesh = new THREE.Mesh(new THREE.CylinderGeometry(bell * 1.15, bell * 0.7, bell * 0.7, 12), material(0xe07a45, 0.45, 0.35, 0x6a2810, 0.28))
+        bellMesh.rotation.x = Math.PI / 2
+        bellMesh.position.z = -bell * 1.05
+        bellMesh.userData.nozzle = true
+        addMesh(group, bellMesh)
       })
       continue
     }
@@ -325,7 +341,7 @@ function material(color: number, metalness: number, roughness: number, emissive 
     metalness,
     roughness,
     emissive,
-    emissiveIntensity: emissiveIntensity > 0 ? 0.12 : 0,
+    emissiveIntensity,
   })
 }
 

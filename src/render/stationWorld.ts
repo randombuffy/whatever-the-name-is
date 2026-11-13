@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { trackMove } from '../input/moveKeys'
 import { attachOrbiter } from './launchStack'
 import { viewRatio } from './pixels'
 
@@ -332,8 +333,6 @@ export class StationWorld {
   }
 
   private onKey = (event: KeyboardEvent) => {
-    const key = event.key.toLowerCase()
-    if (event.type === 'keydown') this.keys.add(key === ' ' ? ' ' : key)
-    else this.keys.delete(key === ' ' ? ' ' : key)
+    trackMove(this.keys, event)
   }
 }

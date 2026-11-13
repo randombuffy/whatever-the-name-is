@@ -1,8 +1,8 @@
 import * as THREE from 'three'
 import { AU_M, MARS_ORBIT_AU } from '../domain/constants'
-import type { SpacecraftConfig } from '../domain/types'
 import { rebase } from '../domain/frames'
-import { SYSTEM_SCALE, sceneOf, transferState } from '../domain/transfer'
+import { sceneOf, SYSTEM_SCALE, transferState } from '../domain/transfer'
+import type { SpacecraftConfig } from '../domain/types'
 import { disposeCraft } from './craft'
 import { makeFlame, setFlame } from './exhaust'
 import { attachOrbiter } from './launchStack'
@@ -12,7 +12,7 @@ import { makeStarfield, tickStarfield } from './starfield'
 
 export type FlightCam = 'chase' | 'cockpit' | 'free' | 'side' | 'map' | 'ground'
 
-export const FLIGHT_CAMS: FlightCam[] = ['chase', 'cockpit', 'free', 'side', 'map', 'ground']
+export const FLIGHT_CAMS: FlightCam[] = ['side', 'chase', 'cockpit', 'free', 'map', 'ground']
 
 export interface CruiseStick {
   pitch: number
@@ -68,7 +68,8 @@ export class CruiseWorld {
   private dragging = false
   private lastX = 0
   private lastY = 0
-  private cam: FlightCam = 'chase'
+  private cam: FlightCam = 'side'
+  private zoom = 1
   private prograde = new THREE.Vector3(0, 0, 1)
   private readonly aim = new THREE.Vector3(0, 0, 1)
 
@@ -159,6 +160,7 @@ export class CruiseWorld {
     this.ship.add(this.payload, this.flame)
     this.dressSpace()
     canvas.addEventListener('pointerdown', this.onPointerDown)
+    canvas.addEventListener('wheel', this.onWheel, { passive: false })
     window.addEventListener('pointermove', this.onPointerMove)
     window.addEventListener('pointerup', this.onPointerUp)
   }
@@ -221,6 +223,7 @@ export class CruiseWorld {
 
   dispose(): void {
     this.canvas.removeEventListener('pointerdown', this.onPointerDown)
+    this.canvas.removeEventListener('wheel', this.onWheel)
     window.removeEventListener('pointermove', this.onPointerMove)
     window.removeEventListener('pointerup', this.onPointerUp)
     disposeCraft(this.payload)
@@ -248,6 +251,7 @@ export class CruiseWorld {
     this.fraction = pose.fraction
     this.paintBody(pose.missionId)
     this.earth.rotation.y += 0.004
+    this.dest.rotation.y += 0.002
     if (pose.lat !== undefined && pose.lon !== undefined) {
       const lat = (pose.lat * Math.PI) / 180
       const lon = (pose.lon * Math.PI) / 180
@@ -256,15 +260,15 @@ export class CruiseWorld {
       this.marker.position.set(Math.cos(lat) * Math.sin(lon) * radius, Math.sin(lat) * radius, Math.cos(lat) * Math.cos(lon) * radius)
     } else this.marker.visible = false
     const map = pose.stick.camera === 'map'
-    this.path.visible = map
+    this.path.visible = true
     this.orbits.visible = true
     this.sun.visible = true
     if (map) {
       const points: THREE.Vector3[] = []
-      for (let i = 0; i <= 48; i++) {
-        const sample = sceneOf(transferState(pose.missionId, pose.destAu, i / 48, pose.tSec).ship)
+      for (let i = 0; i <= 64; i += 1) {
+        const sample = sceneOf(transferState(pose.missionId, pose.destAu, i / 64, pose.tSec).ship)
         if (pose.missionId === 'lunar') {
-          points.push(new THREE.Vector3(earth.x + (dest.x - earth.x) * (i / 48), earth.y, earth.z + (dest.z - earth.z) * (i / 48)))
+          points.push(new THREE.Vector3(earth.x + (dest.x - earth.x) * (i / 64), earth.y, earth.z + (dest.z - earth.z) * (i / 64)))
         } else points.push(new THREE.Vector3(sample.x, sample.y, sample.z))
       }
       this.path.geometry.dispose()
@@ -277,10 +281,10 @@ export class CruiseWorld {
       this.earth.scale.setScalar(0.55)
       this.dest.scale.setScalar(0.32)
       this.ship.scale.setScalar(2.2)
-      this.earthOrbit.position.set(0, 0, 0)
-      this.marsOrbit.position.set(0, 0, 0)
       this.earthOrbit.scale.setScalar(AU_M * SYSTEM_SCALE)
-      this.marsOrbit.scale.setScalar(AU_M * SYSTEM_SCALE * MARS_ORBIT_AU)
+      this.marsOrbit.scale.setScalar(AU_M * SYSTEM_SCALE * (pose.missionId === 'lunar' ? 0.4 : MARS_ORBIT_AU))
+      aimRing(this.earthOrbit, this.sun.position, this.earth.position)
+      aimRing(this.marsOrbit, this.sun.position, this.dest.position)
       const leg = new THREE.Vector3(dest.x - ship.x, dest.y - ship.y, dest.z - ship.z)
       if (leg.lengthSq() > 1e-6) this.prograde.copy(leg).normalize()
       return
@@ -293,26 +297,26 @@ export class CruiseWorld {
     sunPos.setLength(820)
     this.sun.position.copy(sunPos)
     this.sun.scale.setScalar(1.7)
-    const fromShip = rebase(earth, ship)
     const toDest = rebase(dest, ship)
-    const behind = new THREE.Vector3(fromShip.x, fromShip.y, fromShip.z)
-    const ahead = new THREE.Vector3(toDest.x, toDest.y, toDest.z)
-    if (behind.length() < 0.001) behind.set(0, 0, -1)
-    if (ahead.length() < 0.001) ahead.set(0, 0, 1)
+    const dir = new THREE.Vector3(toDest.x, toDest.y, toDest.z)
+    if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1)
+    dir.normalize()
     const climb = Math.min(1, Math.max(0, pose.fraction))
     const leave = Math.pow(climb, 0.42)
     const arrive = Math.pow(climb, 2.35)
-    behind.setLength(32 + leave * 680)
-    ahead.setLength(560 - arrive * 500)
+    const behindDist = pose.missionId === 'lunar' ? 28 + leave * 180 : 32 + leave * 680
+    const aheadDist = pose.missionId === 'lunar' ? 220 - arrive * 170 : 560 - arrive * 500
+    this.earth.position.copy(dir).multiplyScalar(-behindDist)
+    this.dest.position.copy(dir).multiplyScalar(Math.max(36, aheadDist))
     this.earth.scale.setScalar(2.85 * (1 - leave * 0.93) + 0.08)
-    this.dest.scale.setScalar(0.055 + arrive * 0.72)
-    this.earth.position.copy(behind)
-    this.dest.position.copy(ahead)
-    this.earthOrbit.position.copy(this.sun.position)
-    this.marsOrbit.position.copy(this.sun.position)
-    this.earthOrbit.scale.setScalar(Math.max(12, this.earth.position.distanceTo(this.sun.position)))
-    this.marsOrbit.scale.setScalar(Math.max(18, this.dest.position.distanceTo(this.sun.position)))
-    if (ahead.lengthSq() > 1e-6) this.prograde.copy(ahead).normalize()
+    this.dest.scale.setScalar((pose.missionId === 'lunar' ? 0.12 : 0.055) + arrive * (pose.missionId === 'lunar' ? 1.1 : 0.72))
+    aimRing(this.earthOrbit, this.sun.position, this.earth.position)
+    aimRing(this.marsOrbit, this.sun.position, this.dest.position)
+    const points: THREE.Vector3[] = []
+    for (let i = 0; i <= 72; i += 1) points.push(this.earth.position.clone().lerp(this.dest.position, i / 72))
+    this.path.geometry.dispose()
+    this.path.geometry = new THREE.BufferGeometry().setFromPoints(points)
+    this.prograde.copy(dir)
   }
 
   private frame(mode: FlightCam): void {
@@ -331,7 +335,7 @@ export class CruiseWorld {
       return
     }
     if (mode === 'side' || mode === 'chase' || mode === 'free') {
-      const radius = mode === 'side' ? 18 : mode === 'free' ? 12 : 11
+      const radius = (mode === 'side' ? 22 : mode === 'free' ? 16 : 14) * this.zoom
       const flat = Math.cos(this.orbitPitch)
       this.camera.position.set(
         origin.x + radius * flat * Math.sin(this.orbitYaw),
@@ -342,18 +346,16 @@ export class CruiseWorld {
       return
     }
     if (mode === 'map') {
-      if (this.fraction > 0.9) {
-        this.camera.position.copy(this.dest.position).add(new THREE.Vector3(7, 4.2, 5))
-        this.camera.lookAt(this.dest.position)
-        return
-      }
-      const mid = this.earth.position.clone().add(this.dest.position).multiplyScalar(0.5)
-      const span = Math.max(18, this.earth.position.distanceTo(this.dest.position))
-      this.camera.position.copy(mid).add(new THREE.Vector3(span * 0.15, span * 0.42, span * 0.05))
-      this.camera.lookAt(mid)
+      const lift = 72 + this.fraction * 6
+      this.camera.position.set(16, lift, 18)
+      this.camera.lookAt(0, 0, 0)
       return
     }
-    this.camera.position.copy(this.earth.position).add(new THREE.Vector3(2.2, 4.5, 6))
+    const outward = origin.clone().sub(this.earth.position)
+    if (outward.lengthSq() < 1) outward.set(0, 0.3, 1)
+    outward.normalize()
+    const earthRadius = 8.6 * this.earth.scale.x
+    this.camera.position.copy(this.earth.position).addScaledVector(outward, earthRadius + 22).add(new THREE.Vector3(0, earthRadius * 0.18, 0))
     this.camera.lookAt(origin)
   }
 
@@ -404,7 +406,7 @@ export class CruiseWorld {
       seat(model, 16)
       const rig = new THREE.Group()
       rig.add(model)
-      rig.position.set(180, 36, -150)
+      rig.position.set(760, 180, -620)
       this.jupiterSpin = rig
       this.scene.add(rig)
     })
@@ -417,7 +419,7 @@ export class CruiseWorld {
     this.signature = signature
     disposeCraft(this.payload)
     this.payload.clear()
-    const length = 6.2
+    const length = 11
     attachOrbiter(this.payload, length, false, undefined, config, missionId)
   }
 
@@ -445,6 +447,22 @@ export class CruiseWorld {
   private onPointerUp = () => {
     this.dragging = false
   }
+
+  private onWheel = (event: WheelEvent) => {
+    event.preventDefault()
+    const next = this.zoom * (event.deltaY > 0 ? 1.06 : 0.94)
+    this.zoom = Math.max(0.62, Math.min(1.75, next))
+  }
+}
+
+/** The ring is a unit circle in XZ. Turn local +X toward the planet so the line passes through it. */
+function aimRing(ring: THREE.Object3D, sun: THREE.Vector3, planet: THREE.Vector3): void {
+  const to = planet.clone().sub(sun)
+  const radius = Math.max(8, to.length())
+  ring.position.copy(sun)
+  ring.scale.setScalar(radius)
+  if (to.lengthSq() < 1e-4) return
+  ring.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), to.normalize())
 }
 
 function orbitRing(radius: number, color: number): THREE.Line {

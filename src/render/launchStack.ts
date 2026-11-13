@@ -46,7 +46,7 @@ function mount(parent: THREE.Object3D, config: SpacecraftConfig | null | undefin
     : {
         seed: 11,
         sides: 8,
-        segments: 4,
+        segments: 5,
         radius: 0.9,
         length: 0.9,
         stretchX: 1,

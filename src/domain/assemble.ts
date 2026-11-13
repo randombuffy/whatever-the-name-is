@@ -6,10 +6,13 @@ import type { ComponentSpec, MissionDef, SpacecraftConfig, Subsystem } from './t
  * Seeded assembly in the spirit of Shipwright's name-to-ship generator.
  * Shipwright picked one authored hull. This picks a bus, engine, tank, power source,
  * antenna and the required instruments, then lets the engineering model judge them.
- * The seed is the call sign. The same call sign rebuilds the same parts.
+ * A variant of 0 keeps the call sign stable. Generate passes a new variant so the next
+ * click is a different legal kit, not the same ship again.
  */
-export function assembleFromCallSign(callSign: string, mission: MissionDef): SpacecraftConfig {
-  let rng = hashString(callSign.trim().toLowerCase() || mission.id) || 1
+export function assembleFromCallSign(callSign: string, mission: MissionDef, variant = 0): SpacecraftConfig {
+  const name = callSign.trim() || 'Unnamed'
+  const key = variant ? `${name.toLowerCase()}#${variant >>> 0}` : name.toLowerCase() || mission.id
+  let rng = hashString(key) || 1
   const take = (pool: ComponentSpec[]): ComponentSpec => {
     const roll = nextRandom(rng)
     rng = roll.state
@@ -29,8 +32,10 @@ export function assembleFromCallSign(callSign: string, mission: MissionDef): Spa
     const match = CATALOG.find((spec) => spec.instrument === instrument)
     if (match) ids.push(match.id)
   }
+  if (mission.id === 'mars' || /mars/i.test(mission.destination)) ids.push('heatshield', 'chute', 'legs')
   return {
-    name: callSign.trim() || 'Unnamed',
+    name,
+    hullSeed: variant >>> 0,
     parts: ids.map((specId, index) => ({
       instanceId: `${specId}-g${index}`,
       specId,

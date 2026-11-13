@@ -13,7 +13,7 @@ export interface WalkAstronaut {
 
 function pick(clips: THREE.AnimationClip[], ...names: string[]): THREE.AnimationClip | null {
   const want = names.map((name) => name.toLowerCase())
-  return clips.find((clip) => want.some((name) => clip.name.toLowerCase().includes(name))) ?? clips[0] ?? null
+  return clips.find((clip) => want.some((name) => clip.name.toLowerCase().includes(name))) ?? null
 }
 
 type SpecGloss = {
@@ -100,48 +100,29 @@ export function bindWalkAstronaut(gltf: GLTF, height = 1.85): WalkAstronaut {
     const action = mixer.clipAction(clip)
     action.enabled = true
     action.timeScale = name === 'walk' ? 5.3 : 4.2
-    if (name === 'wave') {
-      action.setLoop(THREE.LoopOnce, 1)
-      action.clampWhenFinished = true
-    } else {
-      action.setLoop(THREE.LoopRepeat, Infinity)
-    }
+    action.setLoop(THREE.LoopRepeat, Infinity)
     actions[name] = action
   }
   let current: AstronautClip = 'idle'
   let desired: AstronautClip = 'idle'
-  let idleFor = 0
   actions.idle?.play()
 
-  mixer.addEventListener('finished', (event) => {
-    if (event.action === actions.wave) {
-      idleFor = 0
-      fade('idle')
-    }
-  })
-
   function fade(next: AstronautClip): void {
-    if (next === current) return
-    const incoming = actions[next] ?? actions.idle
+    const clip = next === 'wave' ? 'idle' : next
+    if (clip === current) return
+    const incoming = actions[clip] ?? actions.idle
     const outgoing = actions[current]
     if (!incoming) return
     incoming.enabled = true
     incoming.reset().setEffectiveWeight(1).play()
     if (outgoing && outgoing !== incoming) outgoing.crossFadeTo(incoming, 0.18, false)
-    current = next
+    current = clip
   }
 
   return {
     root,
     tick(dt) {
-      let want = desired
-      if (want === 'idle') {
-        idleFor += dt
-        if (idleFor > 5 && current !== 'wave') want = 'wave'
-      } else {
-        idleFor = 0
-      }
-      fade(want)
+      fade(desired === 'wave' ? 'idle' : desired)
       mixer.update(dt)
     },
     setClip(clip) {

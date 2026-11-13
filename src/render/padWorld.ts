@@ -7,6 +7,7 @@ import { makeFlame, setFlame } from './exhaust'
 import { loopFile, playGroup } from '../ui/audio'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
 import { MARS_ORBIT_AU } from '../domain/constants'
+import { trackMove } from '../input/moveKeys'
 import { modelLoader, seatSphere } from './gltf'
 import { bindWalkAstronaut, type WalkAstronaut } from './walkAstronaut'
 import { useMission } from '../store/useMission'
@@ -198,7 +199,7 @@ export class PadWorld {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
     this.renderer.toneMappingExposure = 1.05
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
-    this.scene.fog = new THREE.Fog(0xc5d4e2, 160, 980)
+    this.scene.fog = new THREE.Fog(0x6a8454, 420, 1600)
     this.skyMesh = this.makeSky()
     this.scene.add(this.skyMesh)
     this.hemi = new THREE.HemisphereLight(0xc5d7ee, 0x6a624e, 0.72)
@@ -567,6 +568,7 @@ export class PadWorld {
     this.skyMat.uniforms.uLift.value = lift
     const cloudFade = 1 - Math.min(1, altitudeM / 28_000)
     if (this.cloudShell) {
+      this.cloudShell.visible = altitudeM > 1800
       const mat = this.cloudShell.material
       if (mat instanceof THREE.MeshBasicMaterial) mat.opacity = 0.9 * cloudFade
     }
@@ -603,11 +605,11 @@ export class PadWorld {
       fog.near = 4000 + clear * 18000
       fog.far = 16000 + clear * 28000
     } else {
-      const day = new THREE.Color(0xc5d4e2)
+      const day = new THREE.Color(0x6a8454)
       const dusk = new THREE.Color(0x1a1028)
       fog.color.copy(day).lerp(dusk, Math.min(1, lift))
-      fog.near = 160 + lift * 900
-      fog.far = 2400 + lift * 5000
+      fog.near = 420 + lift * 900
+      fog.far = 1600 + lift * 5000
     }
     this.camera.far = 12000 + Math.min(52000, altitudeM / 6)
     this.camera.updateProjectionMatrix()
@@ -760,7 +762,7 @@ export class PadWorld {
   private walk(dt: number): void {
     loopFile('truck', null, 0)
     const sprint = this.keys.has('shift')
-    const speed = sprint ? 17.5 : 8.7
+    const speed = sprint ? 22 : 12.5
     const forward = (this.keys.has('w') ? 1 : 0) - (this.keys.has('s') ? 1 : 0)
     const strafe = (this.keys.has('a') ? 1 : 0) - (this.keys.has('d') ? 1 : 0)
     const ahead = new THREE.Vector3(Math.sin(this.lookYaw), 0, Math.cos(this.lookYaw))
@@ -1312,9 +1314,9 @@ export class PadWorld {
   }
 
   private buildGround(): void {
-    const soil = surfaceTexture('concrete')
-    soil.map.repeat.set(36, 36)
-    soil.normal.repeat.set(36, 36)
+    const soil = surfaceTexture('grass')
+    soil.map.repeat.set(18, 18)
+    soil.normal.repeat.set(18, 18)
     soil.map.anisotropy = 8
     soil.normal.anisotropy = 8
     const earthR = 1400
@@ -1326,7 +1328,7 @@ export class PadWorld {
       pos.setZ(i, this.surfaceY(x, z))
     }
     geo.computeVertexNormals()
-    const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: soil.map, normalMap: soil.normal, roughness: 0.92, metalness: 0.04 }))
+    const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: soil.map, normalMap: soil.normal, roughness: 0.92, metalness: 0.02, side: THREE.FrontSide }))
     this.groundMesh = mesh
     const earthMap = new THREE.TextureLoader().load('/textures/earth/earth-color-2k.jpg')
     earthMap.colorSpace = THREE.SRGBColorSpace
@@ -1335,7 +1337,8 @@ export class PadWorld {
       new THREE.SphereGeometry(earthR, 64, 48),
       new THREE.MeshStandardMaterial({ map: earthMap, roughness: 1, metalness: 0 }),
     )
-    ball.position.y = -earthR
+    const bury = 260
+    ball.position.y = -earthR - bury
     this.scene.add(ball)
     const clouds = new THREE.TextureLoader().load('/textures/earth/clouds.png')
     clouds.colorSpace = THREE.SRGBColorSpace
@@ -1350,7 +1353,8 @@ export class PadWorld {
         opacity: 0.9,
       }),
     )
-    shell.position.y = -earthR
+    shell.position.y = -earthR - 260
+    shell.visible = false
     this.cloudShell = shell
     this.scene.add(shell)
     mesh.rotation.x = -Math.PI / 2
@@ -1398,11 +1402,12 @@ export class PadWorld {
   private terrain(x: number, z: number): number {
     const reach = Math.max(Math.abs(x) / 86, Math.abs(z) / 74)
     const mask = reach <= 1 ? 0 : Math.min(1, (reach - 1) / 0.45)
-    const hill = Math.sin(x * 0.031) * 5.5 + Math.cos(z * 0.027) * 4.2 + Math.sin((x * 0.7 + z) * 0.02) * 2.4
-    const ridge = Math.sin(x * 0.011 + z * 0.008) * 8.4 + Math.cos(x * 0.007 - z * 0.013) * 5.6
-    const rumple = Math.sin(x * 0.09) * Math.cos(z * 0.07) * 1.8 + Math.sin(x * 0.17 + z * 0.12) * 0.9
+    const hill = Math.sin(x * 0.018) * 16 + Math.cos(z * 0.014) * 13 + Math.sin((x * 0.7 + z) * 0.011) * 6
+    const ridge = Math.sin(x * 0.007 + z * 0.005) * 22 + Math.cos(x * 0.004 - z * 0.009) * 14
+    const valley = -Math.abs(Math.sin(x * 0.009 - z * 0.006)) * 9
+    const rumple = Math.sin(x * 0.09) * Math.cos(z * 0.07) * 1.4 + Math.sin(x * 0.17 + z * 0.12) * 0.7
     const coast = z < -78 ? (z + 78) * 0.12 : 0
-    return (hill + ridge * 0.55 + rumple) * mask * mask + coast
+    return (hill + ridge * 0.45 + valley + rumple) * mask * mask + coast
   }
 
   private buildComplex(): void {
@@ -2397,16 +2402,15 @@ export class PadWorld {
   }
 
   private onKey = (event: KeyboardEvent) => {
-    const key = event.key.toLowerCase()
+    const key = trackMove(this.keys, event)
     if (event.type === 'keydown') {
-      this.keys.add(key === ' ' ? ' ' : key)
       if (key === 'v' && !event.repeat && !this.driving && !this.crewStowed) this.firstPerson = !this.firstPerson
       if (key === 'f' && !event.repeat && this.onFoot) {
         if (this.driving) this.exitCar()
         else if (this.nearCar()) this.enterCar()
       }
       if (key === 'e' && !event.repeat && this.onFoot && !this.driving) this.useWorld()
-    } else this.keys.delete(key === ' ' ? ' ' : key)
+    }
   }
 }
 

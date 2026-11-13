@@ -88,7 +88,7 @@ function glyphShape(subsystem: string) {
       <>
         <rect x="14" y="18" width="28" height="22" fill="#e7e2d6" />
         <rect x="22" y="12" width="14" height="8" fill="#cfc8ba" />
-        <rect x="18" y="28" width="8" height="6" fill="#2c3138" />
+        <rect x="18" y="28" width="8" height="6" fill="#3d8ec4" />
       </>
     )
   }
@@ -96,7 +96,7 @@ function glyphShape(subsystem: string) {
     return (
       <>
         <rect x="26" y="10" width="12" height="16" fill="#d9d4ca" />
-        <path d="M22 26h20l6 22H16z" fill="#3e434a" />
+        <path d="M22 26h20l6 22H16z" fill="#e07a3d" />
       </>
     )
   }
@@ -111,8 +111,8 @@ function glyphShape(subsystem: string) {
   if (subsystem === 'power') {
     return (
       <>
-        <rect x="6" y="26" width="20" height="12" fill="#1c2838" stroke="#d5d0c6" />
-        <rect x="38" y="26" width="20" height="12" fill="#1c2838" stroke="#d5d0c6" />
+        <rect x="6" y="26" width="20" height="12" fill="#3c92c4" stroke="#e7f3fb" />
+        <rect x="38" y="26" width="20" height="12" fill="#3c92c4" stroke="#e7f3fb" />
         <rect x="26" y="28" width="12" height="8" fill="#e7e2d6" />
       </>
     )
@@ -129,7 +129,7 @@ function glyphShape(subsystem: string) {
     return (
       <>
         <rect x="16" y="20" width="26" height="18" fill="#e7e2d6" />
-        <circle cx="42" cy="29" r="5" fill="#1c2430" />
+        <circle cx="42" cy="29" r="5" fill="#3d8ec4" />
       </>
     )
   }

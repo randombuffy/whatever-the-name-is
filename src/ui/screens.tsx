@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  Aperture,
   ArrowDown,
   ArrowLeft,
   ArrowRight,
@@ -17,10 +16,8 @@ import {
   Droplets,
   Eye,
   EyeOff,
-  Flame,
   Gauge,
   Info,
-  LayoutGrid,
   List,
   Maximize2,
   Move3d,
@@ -35,8 +32,6 @@ import {
   RotateCcw,
   Route,
   Sparkles,
-  Sun,
-  Thermometer,
   Trash2,
   Weight,
   Zap,
@@ -53,21 +48,24 @@ import { useActiveMission, useMission } from '../store/useMission'
 import { graphicsLabel } from '../render/world'
 import { createAscent, stepAscent, ASCENT_TIME_SCALE, type AscentState } from '../domain/ascent'
 import { say, silence } from './voice'
-import { Dock, Glass, Meter, MissionTitle, PartGlyph, ScoreRing, Sheet, SpotButton } from './bits'
+import { Dock, Glass, Meter, MissionTitle, ScoreRing, Sheet, SpotButton } from './bits'
+import { PartPreview } from './partPreview'
 import { DestModel } from './DestStill'
 import { TitleBanner } from './TitleBanner'
 import { FAMILIES, SECTIONS, familyOf } from './families'
 
-const FILTERS: { id: Subsystem | 'all'; label: string; icon: typeof LayoutGrid }[] = [
-  { id: 'all', label: 'All parts', icon: LayoutGrid },
-  { id: 'structure', label: 'Structure', icon: Boxes },
-  { id: 'propulsion', label: 'Propulsion', icon: Flame },
-  { id: 'fuel', label: 'Fuel', icon: Droplets },
-  { id: 'power', label: 'Power', icon: Sun },
-  { id: 'communications', label: 'Communications', icon: Radio },
-  { id: 'science', label: 'Science', icon: Aperture },
-  { id: 'thermal', label: 'Thermal', icon: Thermometer },
+const FILTERS: { id: Subsystem | 'all'; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'structure', label: 'Bus' },
+  { id: 'propulsion', label: 'Engine' },
+  { id: 'fuel', label: 'Fuel' },
+  { id: 'power', label: 'Power' },
+  { id: 'communications', label: 'Radio' },
+  { id: 'science', label: 'Science' },
+  { id: 'thermal', label: 'Heat' },
 ]
+
+const EXTRA_PARTS = new Set(['magnetometer', 'particle', 'payload', 'soil', 'rock', 'radiation', 'arm', 'cache'])
 
 const SHORT: Record<string, string> = {
   lunar: 'Moon',
@@ -324,8 +322,12 @@ export function DesignScreen() {
   const resetOffset = useMission((state) => state.resetOffset)
   const togglePart = useMission((state) => state.togglePart)
   const generate = useMission((state) => state.generate)
-  const reshapeHull = useMission((state) => state.reshapeHull)
   const autoFix = useMission((state) => state.autoFix)
+  const undo = useMission((state) => state.undo)
+  const redo = useMission((state) => state.redo)
+  const arrange = useMission((state) => state.arrange)
+  const canUndo = useMission((state) => (state.craftPast?.length ?? 0) > 0)
+  const canRedo = useMission((state) => (state.craftFuture?.length ?? 0) > 0)
   const rename = useMission((state) => state.rename)
   const go = useMission((state) => state.go)
   const [filter, setFilter] = useState<Subsystem | 'all'>('all')
@@ -333,11 +335,23 @@ export function DesignScreen() {
   const [callSign, setCallSign] = useState(craft?.name ?? 'Surveyor')
   const [specId, setSpecId] = useState<string | null>(null)
   const [advanced, setAdvanced] = useState(false)
+  const [moreParts, setMoreParts] = useState(false)
   const [issuesOpen, setIssuesOpen] = useState(false)
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (document.activeElement?.tagName === 'INPUT') return
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
+        event.preventDefault()
+        if (event.shiftKey) useMission.getState().redo()
+        else useMission.getState().undo()
+        return
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') {
+        event.preventDefault()
+        useMission.getState().redo()
+        return
+      }
       const id = useMission.getState().selectedInstanceId
       if (!id) return
       const step = event.shiftKey ? 0.28 : 0.12
@@ -365,12 +379,21 @@ export function DesignScreen() {
       .filter((family): family is NonNullable<typeof family> => Boolean(family && show(family.subsystem))),
     singles: section.singleIds
       .map((id) => CATALOG.find((item) => item.id === id))
-      .filter((item): item is ComponentSpec => Boolean(item && show(item.subsystem))),
+      .filter((item): item is ComponentSpec => Boolean(item && show(item.subsystem) && (moreParts || !EXTRA_PARTS.has(item.id)))),
   })).filter((section) => section.families.length > 0 || section.singles.length > 0)
   const spec = CATALOG.find((item) => item.id === specId) ?? null
   const hard = report.issues.filter((issue) => issue.severity === 'hard').length
   const generation = report.power.constantGenerationW + report.power.generationAt1AuW / (mission.destinationAu ** 2)
   const selected = craft.parts.find((part) => part.instanceId === selectedInstanceId)
+  const fitOrSelect = (specId: string) => {
+    const fitted = craft.parts.find((part) => part.specId === specId && part.enabled) ?? craft.parts.find((part) => part.specId === specId)
+    if (fitted) {
+      if (!fitted.enabled) togglePart(fitted.instanceId)
+      selectInstance(fitted.instanceId)
+      return
+    }
+    addPart(specId)
+  }
 
   return (
     <>
@@ -378,14 +401,11 @@ export function DesignScreen() {
       <aside className="side left">
         <Glass className="stack-card">
           <div className="filters" role="toolbar" aria-label="Parts">
-            {FILTERS.map((item) => {
-              const Icon = item.icon
-              return (
-                <button key={item.id} type="button" aria-label={item.label} aria-pressed={filter === item.id} onClick={() => setFilter(item.id)}>
-                  <Icon size={15} />
-                </button>
-              )
-            })}
+            {FILTERS.map((item) => (
+              <button key={item.id} type="button" className="filter-chip" aria-pressed={filter === item.id} onClick={() => setFilter(item.id)}>
+                {item.label}
+              </button>
+            ))}
           </div>
           <div className="part-list">
             {sections.map((section) => (
@@ -396,11 +416,11 @@ export function DesignScreen() {
                   const item = CATALOG.find((entry) => entry.id === family.ids[index])
                   if (!item) return null
                   return (
-                    <div key={family.id} className={selectedId === item.id ? 'part-tile on' : 'part-tile'} onClick={() => selectPart(item.id)}>
-                      <PartGlyph subsystem={family.subsystem} />
+                    <div key={family.id} className={selectedId === item.id ? 'part-tile on' : 'part-tile'} onClick={() => fitOrSelect(item.id)}>
+                      <PartPreview specId={item.id} />
                       <span>
-                        <strong>{family.name}</strong>
-                        <em>{headline(item)} · {shortMoney(item.costUsd)}</em>
+                        <strong>{item.name}</strong>
+                        <em>{family.name} · {headline(item)} · {shortMoney(item.costUsd)}</em>
                       </span>
                       <button type="button" className="icon" aria-label={`About ${item.name}`} onClick={(event) => { event.stopPropagation(); setAdvanced(false); setSpecId(item.id) }}>
                         <Info size={12} />
@@ -421,8 +441,8 @@ export function DesignScreen() {
                   )
                 })}
                 {section.singles.map((item) => (
-                  <div key={item.id} className={selectedId === item.id ? 'part-tile on' : 'part-tile'} onClick={() => selectPart(item.id)}>
-                    <PartGlyph subsystem={item.subsystem} />
+                  <div key={item.id} className={selectedId === item.id ? 'part-tile on' : 'part-tile'} onClick={() => fitOrSelect(item.id)}>
+                    <PartPreview specId={item.id} />
                     <span>
                       <strong>{item.name}</strong>
                       <em>{headline(item)} · {shortMoney(item.costUsd)}</em>
@@ -437,6 +457,9 @@ export function DesignScreen() {
                 ))}
               </div>
             ))}
+            <button type="button" className="word slim more-parts" onClick={() => setMoreParts((value) => !value)}>
+              {moreParts ? 'Fewer parts' : 'More instruments'}
+            </button>
           </div>
         </Glass>
       </aside>
@@ -451,12 +474,16 @@ export function DesignScreen() {
                 rename(event.target.value)
               }}
             />
-            <button type="button" className="icon" aria-label="Generate from call sign" onClick={() => generate(callSign)}><Sparkles size={15} /></button>
-            <button type="button" className="word slim" onClick={reshapeHull}>Regenerate</button>
+            <button type="button" className="word slim generate" onClick={() => generate(callSign)}><Sparkles size={14} /> Generate</button>
             <button type="button" className="icon" aria-label={`${report.issues.length} constraints`} onClick={() => setIssuesOpen(true)}>
               {hard > 0 ? <CircleAlert size={15} /> : <CircleCheck size={15} />}
               {report.issues.length > 0 && <em className="count-pip">{report.issues.length}</em>}
             </button>
+          </div>
+          <div className="edit-row">
+            <button type="button" className="word slim" onClick={undo} disabled={!canUndo}>Undo</button>
+            <button type="button" className="word slim" onClick={redo} disabled={!canRedo}>Redo</button>
+            <button type="button" className="word slim" onClick={arrange}>Auto arrange</button>
           </div>
           <div className="scroll">
             <Meter icon={<Weight size={14} />} label="Mass" value={kg(report.mass.totalKg)} ratio={report.mass.totalKg / mission.maxMassKg} tone={report.mass.marginKg < 0 ? 'bad' : 'ok'} />
@@ -465,6 +492,11 @@ export function DesignScreen() {
             <Meter icon={<Radio size={14} />} label="Link" value={db(report.link.marginDb)} ratio={report.link.closes ? 1 : 0.35} tone={report.link.closes ? 'ok' : 'bad'} />
             <Meter icon={<span className="money-icon">$</span>} label="Cost" value={shortMoney(report.cost.totalUsd)} ratio={report.cost.totalUsd / mission.budgetUsd} tone={report.cost.marginUsd < 0 ? 'bad' : 'ok'} />
             <p className="muted">Dry {kg(report.mass.dryKg)} · Propellant {kg(report.mass.propellantKg)} · Payload {kg(report.mass.payloadKg)} · Isp {report.propulsion.byPropellant[0] ? `${Math.round(report.propulsion.byPropellant[0].ispS)} s` : '—'}</p>
+            <h2 className="section-label">This mission needs</h2>
+            {hard === 0 && <p className="ready">The required parts are aboard. Drag a part on the ship to place it, or remove it from the list.</p>}
+            {report.issues.filter((issue) => issue.severity === 'hard').slice(0, 4).map((issue) => (
+              <p key={issue.id} className="need"><strong>{issue.what}</strong> {issue.change}</p>
+            ))}
             <h2 className="section-label">Fitted</h2>
             {craft.parts.map((part) => {
               const fitted = CATALOG.find((item) => item.id === part.specId)
@@ -472,7 +504,7 @@ export function DesignScreen() {
               const family = familyOf(part.specId)
               return (
                 <div key={part.instanceId} className={selectedInstanceId === part.instanceId ? 'part-tile on' : 'part-tile'} onClick={() => selectInstance(part.instanceId)}>
-                  <PartGlyph subsystem={fitted.subsystem} />
+                  <PartPreview specId={fitted.id} />
                   <span>
                     <strong>{family?.name ?? fitted.name}</strong>
                     <em>{headline(fitted)} · {shortMoney(fitted.costUsd)}</em>
@@ -530,12 +562,12 @@ export function DesignScreen() {
         </Glass>
       </aside>
       <div className="plan-launch">
-        <p>Budget {shortMoney(report.cost.totalUsd)} / {shortMoney(mission.budgetUsd)} · {hard > 0 ? `${hard} holds` : 'Clear to plan'}</p>
+        <p>Mass {kg(report.mass.totalKg)} / {kg(mission.maxMassKg)} · {shortMoney(report.cost.totalUsd)} / {shortMoney(mission.budgetUsd)} · {hard > 0 ? `${hard} holds` : 'Clear to plan'}</p>
         <button type="button" className="word" onClick={() => go('plan')}><Route size={16} /> Plan the flight</button>
       </div>
       {spec && (
         <Sheet title={spec.name} onClose={() => setSpecId(null)}>
-          <div className="spec-hero"><PartGlyph subsystem={spec.subsystem} /></div>
+          <div className="spec-hero"><PartPreview specId={spec.id} large /></div>
           <p>{spec.summary}</p>
           <button type="button" className="word" onClick={() => setAdvanced((value) => !value)}>{advanced ? 'Plain' : 'Numbers'}</button>
           {advanced && (
@@ -767,7 +799,7 @@ export function LaunchScreen({ onCharge, onAscent }: { charge: number; onCharge:
       setFlying(true)
       return undefined
     }
-    const id = window.setTimeout(() => setCount((value) => (value === null ? value : value - 1)), 1000)
+    const id = window.setTimeout(() => setCount((value) => (value === null ? value : value - 1)), 1800)
     return () => window.clearTimeout(id)
   }, [count, flying, onCharge, audio])
 
@@ -1037,6 +1069,8 @@ export function DebriefScreen() {
   const outcome = useMission((state) => state.outcome)
   const go = useMission((state) => state.go)
   const history = useMission((state) => state.history)
+  const field = useMission((state) => state.field)
+  const resumeSurface = useMission((state) => state.resumeSurface)
   const [notes, setNotes] = useState(false)
   if (!outcome) return null
   const title = outcome.success ? 'Complete' : outcome.partial ? 'Partial' : 'Stopped'
@@ -1061,6 +1095,9 @@ export function DebriefScreen() {
           </div>
         )}
         <div className="row-actions">
+          {field && (
+            <button type="button" className="word" onClick={resumeSurface}>Continue</button>
+          )}
           <button type="button" className="word" onClick={() => go('design')}><RotateCcw size={16} /> Revise</button>
           <button type="button" className="word slim" onClick={() => void navigator.clipboard?.writeText(summaryOf(outcome))}>Copy</button>
           <button type="button" className="icon" aria-label="Missions" onClick={() => go('select')}><Compass size={16} /></button>

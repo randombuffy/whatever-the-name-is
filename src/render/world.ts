@@ -86,6 +86,7 @@ export class MissionWorld {
   private pad: THREE.Mesh
   private gizmo = new THREE.Group()
   private engineLight: THREE.PointLight
+  private designLamp!: THREE.DirectionalLight
   private yaw = 0.12
   private pitch = 0.16
   private distance = 6.6
@@ -123,7 +124,9 @@ export class MissionWorld {
     sun.position.set(28, 14, 18)
     const fill = new THREE.DirectionalLight(0x6a8cc4, 0.55)
     fill.position.set(-12, -3, -8)
-    this.scene.add(sun, fill)
+    this.designLamp = new THREE.DirectionalLight(0xfff8ee, 0)
+    this.designLamp.position.set(6, 10, 8)
+    this.scene.add(sun, fill, this.designLamp)
     this.engineLight = new THREE.PointLight(0xffb26b, 0, 8, 2)
     this.scene.add(this.engineLight)
 
@@ -242,6 +245,7 @@ export class MissionWorld {
       this.asteroid.rotation.x += dt * 0.04
       this.jupiter.rotation.y += dt * 0.06
     }
+    this.designLamp.intensity = view.mode === 'design' ? 2.6 : 0
     this.syncCraft(view)
     this.applyOffsets(view)
     this.attachGizmo(view)
@@ -530,9 +534,9 @@ export class MissionWorld {
       return
     }
     if (view.mode === 'design') {
-      this.craft.scale.setScalar(1)
-      this.craft.position.set(0, 0, 0)
-      this.craft.rotation.set(0, 0, 0)
+      this.craft.scale.setScalar(1.15)
+      this.craft.position.set(0, 0.2, 0)
+      this.craft.rotation.set(0.2, 0.6, 0)
       return
     }
     this.craft.scale.setScalar(view.mode === 'destination' ? 0.55 : 0.5)
@@ -644,9 +648,9 @@ export class MissionWorld {
 
     if (view.mode === 'design' && this.framed !== 'design-side') {
       this.framed = 'design-side'
-      this.distance = 22
-      this.pitch = 0.12
-      this.yaw = 1.15
+      this.distance = 14
+      this.pitch = 0.22
+      this.yaw = 0.9
     } else if (view.mode !== 'design') this.framed = view.mode
     const extra = view.mode === 'menu' ? 3.4 : view.mode === 'destination' ? 2.4 : 0
     const orbitR = view.mode === 'destination' ? Math.max(8.4, this.distance + extra) : Math.max(2.4, this.distance + extra)

@@ -10,12 +10,10 @@ import { modelLoader, seatSphere } from './gltf'
 import { viewRatio } from './pixels'
 import { makeStarfield, tickStarfield } from './starfield'
 
-/** How high the ship is drawn. Twenty kilometres is a high pass over the crater; the last metres sit on the gear. */
+/** One smooth curve from orbit to the gear. No step at 2 km, so the ship does not lurch. */
 function visualAlt(meters: number): number {
   if (meters <= 0) return 0
-  if (meters < 40) return meters * 0.35
-  if (meters < 800) return 14 + (meters - 40) * 0.22
-  return Math.min(720, 181 + (meters - 800) * 0.026)
+  return 980 * (1 - Math.exp(-meters / 2200))
 }
 
 export interface DescentBody {
@@ -99,7 +97,7 @@ function terrainMesh(airless: boolean): THREE.Mesh {
 export class DescentWorld {
   private renderer: THREE.WebGLRenderer
   private scene = new THREE.Scene()
-  private camera = new THREE.PerspectiveCamera(62, 1, 0.1, 8000)
+  private camera = new THREE.PerspectiveCamera(62, 1, 0.4, 24000)
   private canvas: HTMLCanvasElement
   private ship = new THREE.Group()
   private flame: THREE.Mesh
@@ -146,10 +144,13 @@ export class DescentWorld {
   private globeR = 520
   private stars: THREE.Group | null = null
   private marsGround: MarsGround | null = null
+  private blendCam = 0
+  private approachEye = new THREE.Vector3(-22, 9, -38)
+  private approachAim = new THREE.Vector3(0, 2, 90)
   private trackX = 0
   private trackZ = 40
   private vx = 1600
-  private heading = Math.PI
+  private heading = 0
 
   constructor(canvas: HTMLCanvasElement, craft: SpacecraftConfig, body: DescentBody, difficulty: number, missionId = 'mars', siteId = 'jezero') {
     this.canvas = canvas
@@ -199,12 +200,7 @@ export class DescentWorld {
       })
     }
     const mars = missionId === 'mars' || missionId === 'custom'
-    if (mars) {
-      this.marsGround = buildMarsGround(siteId)
-      this.marsGround.root.visible = false
-      this.marsGround.sky.visible = false
-      this.scene.add(this.marsGround.root, this.marsGround.sky)
-    } else {
+    if (!mars) {
       const terrain = landUrl(missionId)
       if (terrain) {
         loadTerrain(terrain, 1400, this.scene, (mesh) => {
@@ -257,9 +253,15 @@ export class DescentWorld {
     this.flame.visible = false
     this.chute.visible = false
     if (this.stars) tickStarfield(this.stars, dt, this.camera)
+    if ((this.missionId === 'mars' || this.missionId === 'custom') && !this.marsGround && (this.beat !== 'approach' || this.beatT > 2)) {
+      this.marsGround = buildMarsGround(this.siteId, true)
+      this.marsGround.root.visible = false
+      this.marsGround.sky.visible = false
+      this.scene.add(this.marsGround.root, this.marsGround.sky)
+    }
     const coming = this.beat === 'approach'
-    const low = this.beat !== 'approach' && this.altitude < 28_000
-    this.planet.visible = !low
+    const low = !coming && this.altitude <= 10_000
+    this.planet.visible = coming
     if (this.relief) this.relief.visible = low
     if (this.marsGround) {
       this.marsGround.root.visible = low
@@ -270,31 +272,39 @@ export class DescentWorld {
         this.marsGround.follow(this.camera)
       } else {
         this.scene.fog = null
-        this.scene.background = new THREE.Color(0x1a0c08)
+        this.scene.background = new THREE.Color(0x050308)
       }
-      if (this.stars) this.stars.visible = !low || this.altitude > 9000
+      if (this.stars) this.stars.visible = !low || this.altitude > 7000
     }
-    this.ship.scale.setScalar(coming ? 2.2 : 1)
+    const landed = Boolean(this.done) || this.altitude < 12
+    const span = landed ? 0.36 : this.altitude > 20_000 ? 1.35 : this.altitude > 10_000 ? 0.95 : this.altitude > 2500 ? 0.5 : 0.4
+    this.ship.scale.setScalar(span)
+    if (landed || this.altitude > 2800) this.rig?.flames.forEach((plume) => { plume.visible = false })
+    const body = 18 * span
     if (coming) {
-      const dist = this.globeR * 2.6
-      const flat = Math.cos(0.35)
-      this.camera.position.set(
-        Math.sin(this.orbitYaw) * flat * dist,
-        this.globeR * 0.55,
-        Math.cos(this.orbitYaw) * flat * dist,
-      )
-      this.camera.lookAt(0, -this.globeR * 0.15, 0)
+      this.camera.position.copy(this.approachEye)
+      this.camera.lookAt(this.approachAim)
     } else {
-      const high = this.altitude > 1200
-      const dist = high ? 150 : this.view === 'chase' ? 28 : this.view === 'ground' ? 40 : 46
-      const pitch = high ? 0.62 : this.orbitPitch
+      if (this.blendCam < 1) this.blendCam = Math.min(1, this.blendCam + dt * 0.35)
+      const close = Math.max(body * 2.35, landed ? 16 : 22)
+      const dist = close * (this.view === 'side' ? 1.15 : this.view === 'ground' ? 0.92 : 1)
+      const high = Math.min(1, this.altitude / 8000)
+      const pitch = landed ? 0.42 : this.orbitPitch * (1 - high) + 0.32 * high
       const flat = Math.cos(pitch)
-      this.camera.position.set(
+      const orbitEye = new THREE.Vector3(
         this.ship.position.x + Math.sin(this.orbitYaw) * flat * dist,
-        this.ship.position.y + Math.sin(pitch) * dist * (high ? 0.72 : 0.42) + (high ? 24 : 6),
+        this.ship.position.y + Math.sin(pitch) * dist * 0.55 + body * 0.12,
         this.ship.position.z + Math.cos(this.orbitYaw) * flat * dist,
       )
-      this.camera.lookAt(this.ship.position.x, this.ship.position.y - (high ? 90 : 0), this.ship.position.z)
+      const orbitAim = new THREE.Vector3(this.ship.position.x, this.ship.position.y + body * 0.28, this.ship.position.z)
+      if (this.blendCam < 1) {
+        this.camera.position.lerpVectors(this.approachEye, orbitEye, this.blendCam)
+        const aim = this.approachAim.clone().lerp(orbitAim, this.blendCam)
+        this.camera.lookAt(aim)
+      } else {
+        this.camera.position.copy(orbitEye)
+        this.camera.lookAt(orbitAim)
+      }
     }
     this.renderer.render(this.scene, this.camera)
     const limits = this.limits()
@@ -434,13 +444,51 @@ export class DescentWorld {
   }
 
   private surfaceY(x: number, z: number): number {
-    if (this.marsGround) return this.marsGround.height(x, z)
+    if (this.marsGround) return this.altitude < 120 ? this.marsGround.stand(x, z) : this.marsGround.height(x, z)
     if (this.heightGrid) return heightFromGrid(this.heightGrid, x, z)
     return 0
   }
 
+  /**
+   * Mars is flown down the corridor onto the divert ellipse.
+   * Sink is held to the altitude, so the last kilometres are a descent, not a drop.
+   */
+  private guidedMars(dt: number): void {
+    if (this.altitude < 9000 && this.altitude > 2800) {
+      this.chuteOpen = true
+      this.beat = 'chute'
+    }
+    if (this.altitude <= 2800) this.beat = 'burn'
+    else if (this.altitude >= 9000) this.beat = 'entry'
+    const target = this.altitude > 8000 ? 36
+      : this.altitude > 3000 ? 14
+      : this.altitude > 800 ? 4.5
+      : this.altitude > 80 ? 1.6
+      : 0.55
+    const blend = 1 - Math.exp(-dt * 0.55)
+    this.sink += (target - this.sink) * blend
+    this.vx += ((this.altitude > 8000 ? 18 : this.altitude > 2500 ? 4 : 0) - this.vx) * blend
+    this.throttle = this.altitude < 2500 && this.altitude > 6 ? Math.min(0.8, 0.22 + this.sink / 18) : 0
+    this.heading = 0
+    this.altitude -= this.sink * dt
+    const pull = 1 - Math.exp(-dt * 0.06)
+    this.trackX += (MARS_LANDING[0] - this.trackX) * pull
+    this.trackZ += (MARS_LANDING[1] - this.trackZ) * pull
+    this.heat = this.altitude > 8000 ? Math.min(0.2, this.heat + dt * 0.01) : this.heat * 0.99
+    if (this.altitude > 3) return
+    this.altitude = 0
+    this.sink = 0.6
+    this.trackX = MARS_LANDING[0]
+    this.trackZ = MARS_LANDING[1]
+    this.done = 'down'
+  }
+
   /** Drag, lift and gravity. Pace only stretches the clock. The path is not a keyframe. */
   private flyForces(dt: number): void {
+    if (!this.airless && (this.missionId === 'mars' || this.missionId === 'custom')) {
+      this.guidedMars(dt)
+      return
+    }
     const g = Math.max(0.2, this.body.gravity)
     const rho = this.airless ? 0 : exponentialDensity(this.body.surfaceRho, this.altitude, this.body.scaleHeightM)
     const speed = Math.hypot(this.vx, this.sink)
@@ -498,50 +546,57 @@ export class DescentWorld {
     const ease = (value: number) => value * value * (3 - 2 * value)
     if (this.beat === 'approach') {
       this.beatT += dt
-      const p = Math.min(1, this.beatT / 7)
+      const p = Math.min(1, this.beatT / 11)
       const k = ease(p)
-      this.altitude = 125000 + (22000 - 125000) * k
-      this.sink = 900 - k * 620
-      this.vx = 900 + k * 700
-      this.throttle = 0.15
-      this.heat = this.airless ? 0 : k * 0.08
-      this.orbitYaw += dt * 0.35
-      this.orbitPitch = 0.42
-      const orbit = this.globeR + 90 + (1 - k) * 160
-      const yaw = this.orbitYaw
-      this.ship.position.set(Math.sin(yaw) * orbit * 0.35, orbit - this.globeR, Math.cos(yaw) * orbit * 0.35)
-      this.ship.lookAt(0, -this.globeR * 0.2, 0)
+      this.altitude = 80_000 + (10_000 - 80_000) * k
+      this.sink = 90 - k * 54
+      this.vx = 28 - k * 10
+      this.throttle = 0
+      this.heat = 0
+      this.heading = 0
+      this.orbitYaw = Math.PI
+      this.orbitPitch = 0.28
+      this.ship.position.set(0, 0, 0)
+      this.ship.rotation.set(0.05, 0, 0)
+      const dist = this.globeR + 24 + (1 - k) * 520
+      this.planet.position.set(0, -this.globeR * 0.22, dist)
+      this.approachEye.set(-18, 8, -32)
+      this.approachAim.set(0, 1.5, dist * 0.42)
       if (p >= 1) {
         this.beat = 'entry'
         this.beatT = 0
-        this.altitude = this.airless ? 4000 : 22000
-        this.sink = this.airless ? 70 : 240
-        this.vx = this.airless ? 40 : 1500
-        this.heading = Math.PI
+        this.blendCam = 0
+        this.altitude = this.airless ? 4000 : 10_000
+        this.sink = this.airless ? 40 : 36
+        this.vx = this.airless ? 12 : 18
+        this.heading = 0
         this.trackX = MARS_LANDING[0]
         this.trackZ = MARS_LANDING[1]
+        this.planet.position.set(0, -this.globeR, 0)
       }
     } else {
       this.beatT += dt
       this.flyForces(dt)
-      if (!this.done && this.beatT > 150) {
-        this.altitude = 0
-        this.done = 'hard'
-      }
     }
     if (this.beat !== 'approach') {
       const ground = this.surfaceY(this.trackX, this.trackZ)
-      const lift = this.done ? 0 : visualAlt(this.altitude)
+      const lift = this.done ? 0.55 : this.marsGround ? Math.min(420, this.altitude * 0.042) : visualAlt(this.altitude)
       this.ship.position.set(this.trackX, ground + lift, this.trackZ)
-      const nose = this.altitude < 30 || this.done ? 0 : Math.atan2(this.sink, Math.max(8, this.vx))
-      this.ship.rotation.set(nose * (this.altitude < 200 ? 0.25 : 0.85), this.heading, 0)
+      const lean = Math.atan2(this.sink, Math.max(14, this.vx))
+      const straighten = this.altitude < 2200 ? Math.max(0, (this.altitude - 500) / 1700) : 1
+      const nose = this.done || this.altitude < 500 ? 0 : lean * 0.28 * straighten
+      this.ship.rotation.set(nose, this.heading, 0)
+      if (this.blendCam === 0) {
+        this.approachEye.set(this.ship.position.x - 18, this.ship.position.y + 8, this.ship.position.z - 32)
+        this.approachAim.set(this.ship.position.x, this.ship.position.y + 2, this.ship.position.z + 48)
+      }
     }
     if (this.heatGlow) {
       const mat = this.heatGlow.material as THREE.MeshBasicMaterial
       mat.opacity = this.beat === 'entry' && !this.airless ? this.heat * 0.42 : 0
       this.heatGlow.visible = mat.opacity > 0.02
     }
-    const lit = this.throttle > 0.05 && this.beat !== 'chute' ? this.throttle : 0
+    const lit = this.altitude < 2500 && this.altitude > 8 && !this.done && this.throttle > 0.05 ? this.throttle : 0
     this.rig?.flames.forEach((plume) => {
       const mesh = plume as THREE.Mesh
       mesh.visible = lit > 0.04
@@ -578,7 +633,7 @@ export class DescentWorld {
     if (signature === this.craftSignature) return
     this.craftSignature = signature
     this.ship.clear()
-    this.rig = attachOrbiter(this.ship, 8.4, true, undefined, config, this.missionId)
+    this.rig = attachOrbiter(this.ship, 18, true, undefined, config, this.missionId)
     const glow = new THREE.Mesh(
       new THREE.SphereGeometry(3.8, 24, 16),
       new THREE.MeshBasicMaterial({ color: 0xffb37a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),

@@ -67,6 +67,7 @@ function dropDearestOptional(craft: SpacecraftConfig, mission: MissionDef): Spac
     const spec = getSpec(part.specId)
     if (!spec) continue
     if (spec.id.startsWith('bus') || spec.id === 'transponder' || spec.id === 'acs') continue
+    if (spec.id === 'legs' || spec.id === 'heatshield' || spec.id === 'chute' || spec.id === 'descent' || spec.id.startsWith('rover') || spec.id === 'heli') continue
     if (spec.instrument && required.has(spec.instrument)) continue
     if (spec.costUsd > cost) {
       cost = spec.costUsd
@@ -127,23 +128,6 @@ const SOLVED: Record<string, { ids: string[]; tankFill?: number }> = {
   asteroid: { ids: ['bus-12u', 'biprop-450', 'tank-500', 'acs', 'panel-600', 'battery-200', 'transponder', 'antenna-hga', 'camera', 'spectrometer', 'heaters', 'radiator-s'] },
 }
 
-function fromIds(name: string, ids: string[], tankFill = 1, hullSeed?: number): SpacecraftConfig {
-  return {
-    name,
-    hullSeed,
-    parts: ids.map((specId, index) => {
-      const spec = getSpec(specId)
-      return {
-        instanceId: `fix-${specId}-${index}`,
-        specId,
-        fill: specId.startsWith('tank') ? tankFill : 1,
-        enabled: true,
-        mount: spec?.mount ?? 'bus',
-      }
-    }),
-  }
-}
-
 function walk(craft: SpacecraftConfig, mission: MissionDef, plan: MissionPlan): SpacecraftConfig {
   let next = clone(craft)
   for (let stepIndex = 0; stepIndex < 32; stepIndex += 1) {
@@ -167,12 +151,21 @@ function walk(craft: SpacecraftConfig, mission: MissionDef, plan: MissionPlan): 
 }
 
 /** Walk the hard issues and apply one compatible catalog change at a time. The hull seed stays. */
+function adopt(craft: SpacecraftConfig, ids: string[], tankFill = 1): SpacecraftConfig {
+  let next = craft
+  const want = new Map<string, number>()
+  for (const specId of ids) want.set(specId, (want.get(specId) ?? 0) + 1)
+  for (const [specId, count] of want) {
+    const have = next.parts.filter((part) => part.specId === specId).length
+    for (let n = have; n < count; n += 1) next = withPart(next, specId, specId.startsWith('tank') ? tankFill : 1, false)
+  }
+  return next
+}
+
 export function repairCraft(craft: SpacecraftConfig, mission: MissionDef, plan: MissionPlan): SpacecraftConfig {
   const keep = (next: SpacecraftConfig): SpacecraftConfig => ({ ...next, hullSeed: craft.hullSeed, name: craft.name })
   const walked = walk(craft, mission, plan)
   if (evaluate(walked, mission, plan).issues.every((issue) => issue.severity !== 'hard')) return keep(walked)
   const solved = SOLVED[mission.id] ?? SOLVED.lunar
-  const kit = keep(fromIds(craft.name, solved.ids, solved.tankFill ?? 1, craft.hullSeed))
-  if (evaluate(kit, mission, plan).issues.every((issue) => issue.severity !== 'hard')) return kit
-  return keep(walk(kit, mission, plan))
+  return keep(walk(adopt(craft, solved.ids, solved.tankFill ?? 1), mission, plan))
 }

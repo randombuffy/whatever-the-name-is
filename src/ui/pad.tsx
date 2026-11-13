@@ -13,6 +13,7 @@ import { createEngineTone } from './tone'
 import { loopFile, playGroup, playJump, playLand, playStep, setBed, setScoreBoost, sting } from './audio'
 import { Mix } from './mix'
 import { DestModel, DestStill, destStillUrl } from './DestStill'
+import { trackMove } from '../input/moveKeys'
 import { resetVoice, say, sayOnce, silence } from './voice'
 
 const CHECKS = ['Flight computer', 'Guidance', 'Power', 'Thermal', 'Communications', 'Propulsion', 'Tanks', 'Weather', 'Payload', 'Hold']
@@ -24,7 +25,7 @@ function weatherLine(day: number): string {
 }
 
 const EMPTY: PadContact = {
-  prompt: 'WASD walk. Shift sprint. Space jump. V camera. Click to look.',
+  prompt: 'WASD or arrows to walk. Shift sprint. Space jump. V camera. Click to look.',
   place: 'Launch complex',
   action: null,
   heading: 0,
@@ -80,7 +81,7 @@ export function PadScreen() {
     if (count === null || count <= 0) return undefined
     playGroup('UIAlert_MusicTone', 0.1)
     say(`${CHECKS[10 - count] ?? 'Commit'}. ${count}`, useMission.getState().audio, 0.92)
-    const id = window.setTimeout(() => setCount((value) => (value === null ? value : value - 1)), 1000)
+    const id = window.setTimeout(() => setCount((value) => (value === null ? value : value - 1)), 1800)
     return () => window.clearTimeout(id)
   }, [count])
 
@@ -259,9 +260,7 @@ export function PadScreen() {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      const key = event.key.toLowerCase()
-      if (event.type === 'keydown') keys.current.add(key)
-      else keys.current.delete(key)
+      const key = trackMove(keys.current, event)
       if (event.type !== 'keydown' || event.repeat) return
       if (key === 'escape' && countRef.current !== null && !ascent.current) {
         setCount(null)

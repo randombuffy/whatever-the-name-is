@@ -24,12 +24,15 @@ export interface CampSolid {
   x: number
   z: number
   radius: number
+  height: number
 }
 
 export interface MarsGround {
   root: THREE.Group
   sky: THREE.Mesh
   height: (x: number, z: number) => number
+  /** Height of the triangle under this point, so feet sit on the mesh you see. */
+  stand: (x: number, z: number) => number
   /** Peach exponential haze. Call once when this ground owns the scene. */
   dress: (scene: THREE.Scene) => void
   /** Thinner while the ship is still high, so the ground stays readable from 10–20 km. */
@@ -39,6 +42,17 @@ export interface MarsGround {
   setPieces: (ids: string[]) => void
   solid: () => CampSolid[]
   dispose: () => void
+}
+
+/** The far tile is built 12 m under the detail square. Lift it so both tiles are one surface. */
+function seatFarFlush(geometry: THREE.BufferGeometry): void {
+  const pos = geometry.attributes.position
+  for (let i = 0; i < pos.count; i += 1) {
+    const inside = Math.max(Math.abs(pos.getX(i)), Math.abs(pos.getZ(i))) < 168
+    pos.setY(i, pos.getY(i) + (inside ? 11.96 : 0.31))
+  }
+  pos.needsUpdate = true
+  geometry.computeVertexNormals()
 }
 
 function padHeight(raw: (x: number, z: number) => number, x: number, z: number): number {
@@ -86,9 +100,9 @@ function scatterRocks(terrain: Terrain): RockInstance[][] {
       ry: rand() * Math.PI * 2, rx: (rand() - 0.5) * 0.4, shade: 0.72 + rand() * 0.38,
     })
   }
-  for (let i = 0; i < 1500 * rockDensity; i += 1) {
+  for (let i = 0; i < 220 * rockDensity; i += 1) {
     const a = rand() * Math.PI * 2
-    const r = 4 + Math.sqrt(rand()) * 85
+    const r = 8 + Math.sqrt(rand()) * 380
     place(Math.cos(a) * r, Math.sin(a) * r, 0.06 + rand() ** 3 * 0.32, 0.55)
   }
   for (const crater of terrain.craters) {
@@ -100,9 +114,9 @@ function scatterRocks(terrain: Terrain): RockInstance[][] {
       place(crater.x + Math.cos(a) * r, crater.z + Math.sin(a) * r, 0.2 + rand() ** 2 * crater.r * 0.09)
     }
   }
-  for (let i = 0; i < 260 * rockDensity; i += 1) {
+  for (let i = 0; i < 80 * rockDensity; i += 1) {
     const a = rand() * Math.PI * 2
-    const r = 14 + rand() * 150
+    const r = 16 + rand() * 420
     place(Math.cos(a) * r, Math.sin(a) * r, 0.25 + rand() ** 3.2 * 1.6)
   }
   for (let i = 0; i < 46; i += 1) {
@@ -182,30 +196,77 @@ interface CampPiece {
   x: number
   z: number
   radius: number
+  height: number
   object: THREE.Object3D
+}
+
+let plateMap: THREE.CanvasTexture | null = null
+
+/** Riveted, dusted plate. One map, tinted per module, so the camp is not flat colour. */
+function plateTexture(): THREE.CanvasTexture {
+  if (plateMap) return plateMap
+  const size = 256
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
+  if (ctx) {
+    ctx.fillStyle = '#e4e0d6'
+    ctx.fillRect(0, 0, size, size)
+    ctx.strokeStyle = '#b7b1a4'
+    ctx.lineWidth = 3
+    for (let y = 0; y < size; y += 64) {
+      ctx.beginPath()
+      ctx.moveTo(0, y)
+      ctx.lineTo(size, y)
+      ctx.stroke()
+    }
+    for (let x = 0; x < size; x += 64) {
+      ctx.beginPath()
+      ctx.moveTo(x, 0)
+      ctx.lineTo(x, size)
+      ctx.stroke()
+    }
+    ctx.fillStyle = '#9a9388'
+    for (let y = 8; y < size; y += 64) {
+      for (let x = 8; x < size; x += 64) ctx.fillRect(x, y, 4, 4)
+    }
+    ctx.fillStyle = 'rgba(120, 78, 52, 0.18)'
+    for (let i = 0; i < 40; i += 1) {
+      ctx.fillRect((i * 47) % size, (i * 29) % size, 18 + (i % 5) * 6, 2)
+    }
+  }
+  const map = new THREE.CanvasTexture(canvas)
+  map.colorSpace = THREE.SRGBColorSpace
+  map.wrapS = THREE.RepeatWrapping
+  map.wrapT = THREE.RepeatWrapping
+  map.anisotropy = 8
+  plateMap = map
+  return map
 }
 
 function colony(parent: THREE.Group, height: (x: number, z: number) => number): Map<string, CampPiece> {
   const pieces = new Map<string, CampPiece>()
-  const hold = (id: string, mesh: THREE.Object3D, x: number, z: number, radius: number) => {
+  const hold = (id: string, mesh: THREE.Object3D, x: number, z: number, radius: number, tall = 1.4) => {
     mesh.visible = false
-    mesh.position.set(x, height(x, z), z)
+    mesh.position.set(x, height(x, z) + 0.08, z)
     parent.add(mesh)
-    pieces.set(id, { id, x, z, radius, object: mesh })
+    pieces.set(id, { id, x, z, radius, height: tall, object: mesh })
   }
-  const hull = new THREE.MeshStandardMaterial({ color: '#dcd9d0', metalness: 0.15, roughness: 0.75 })
-  const metal = new THREE.MeshStandardMaterial({ color: '#aeb3b3', metalness: 0.55, roughness: 0.42 })
-  const pale = new THREE.MeshStandardMaterial({ color: '#c9c5bb', metalness: 0.25, roughness: 0.6 })
-  const cell = new THREE.MeshStandardMaterial({ color: '#173a55', metalness: 0.6, roughness: 0.32, emissive: '#0f2c40', emissiveIntensity: 0.3 })
-  const rib = new THREE.MeshStandardMaterial({ color: '#9ab3bd', metalness: 0.5, roughness: 0.4 })
-  const glass = new THREE.MeshPhysicalMaterial({ color: '#d6e8e2', roughness: 0.16, metalness: 0.05, transparent: true, opacity: 0.32, side: THREE.DoubleSide })
-  const soil = new THREE.MeshStandardMaterial({ color: '#8d6b53', roughness: 1 })
-  const bag = new THREE.MeshStandardMaterial({ color: '#a08066', roughness: 1 })
-  const leaf = new THREE.MeshStandardMaterial({ color: '#6f9a58', roughness: 0.9 })
-  const tank = new THREE.MeshStandardMaterial({ color: '#c3c3ba', metalness: 0.42, roughness: 0.5 })
+  const skin = plateTexture()
+  const hull = new THREE.MeshStandardMaterial({ map: skin, color: '#d7d2c6', metalness: 0.22, roughness: 0.62 })
+  const metal = new THREE.MeshStandardMaterial({ map: skin, color: '#c5ccc8', metalness: 0.62, roughness: 0.38 })
+  const pale = new THREE.MeshStandardMaterial({ map: skin, color: '#ddd6c8', metalness: 0.28, roughness: 0.5 })
+  const cell = new THREE.MeshStandardMaterial({ map: skin, color: '#1d4e73', metalness: 0.55, roughness: 0.34, emissive: '#123044', emissiveIntensity: 0.28 })
+  const rib = new THREE.MeshStandardMaterial({ map: skin, color: '#d5e2e4', metalness: 0.48, roughness: 0.36 })
+  const glass = new THREE.MeshPhysicalMaterial({ color: '#d6e8e2', roughness: 0.12, metalness: 0.04, transparent: true, opacity: 0.38, side: THREE.DoubleSide })
+  const soil = new THREE.MeshStandardMaterial({ map: skin, color: '#a56d45', roughness: 0.96, metalness: 0.02 })
+  const bag = new THREE.MeshStandardMaterial({ map: skin, color: '#b58968', roughness: 0.9 })
+  const leaf = new THREE.MeshStandardMaterial({ map: skin, color: '#6f9a58', roughness: 0.82 })
+  const tank = new THREE.MeshStandardMaterial({ map: skin, color: '#d9d6cc', metalness: 0.48, roughness: 0.4 })
   const fluid = new THREE.MeshStandardMaterial({ color: '#4ca8b0', emissive: '#1d6670', emissiveIntensity: 0.65, roughness: 0.3 })
-  const box = new THREE.MeshStandardMaterial({ color: '#b9b8b0', metalness: 0.34, roughness: 0.62 })
-  const pack = new THREE.MeshStandardMaterial({ color: '#8d9aa0', metalness: 0.52, roughness: 0.45 })
+  const box = new THREE.MeshStandardMaterial({ map: skin, color: '#cfc8ba', metalness: 0.32, roughness: 0.55 })
+  const pack = new THREE.MeshStandardMaterial({ map: skin, color: '#9aa8ab', metalness: 0.5, roughness: 0.42 })
   const hab = new THREE.Group()
   const body = new THREE.Mesh(new THREE.CapsuleGeometry(1, 2.5, 8, 24), hull)
   body.rotation.z = Math.PI / 2
@@ -229,11 +290,8 @@ function colony(parent: THREE.Group, height: (x: number, z: number) => number): 
   hatch.position.set(2.35, 0.95, 0)
   hatch.castShadow = true
   hab.add(hatch)
-  const lamp = new THREE.PointLight('#ffd8a8', 1.2, 6)
-  lamp.position.set(0, 1.2, 1.6)
-  hab.add(lamp)
-  hold('habitat-plain', hab, CAMP[0], CAMP[1], 2.8)
-  hold('habitat-ridge', hab.clone(true), HAB_PADS.outcrop[0], HAB_PADS.outcrop[1], 2.8)
+  hold('habitat-plain', hab, CAMP[0], CAMP[1], 3.6, 2.4)
+  hold('habitat-ridge', hab.clone(true), HAB_PADS.outcrop[0], HAB_PADS.outcrop[1], 3.6, 2.4)
 
   SOLAR_SLOTS.forEach(([sx, sz], index) => {
     const array = new THREE.Group()
@@ -254,7 +312,7 @@ function colony(parent: THREE.Group, height: (x: number, z: number) => number): 
         array.add(ribMesh)
       }
     }
-    hold(`solar-${index}`, array, sx, sz, 2.3)
+    hold(`solar-${index}`, array, sx, sz, 2.8, 1.15)
   })
 
   const life = new THREE.Group()
@@ -270,7 +328,7 @@ function colony(parent: THREE.Group, height: (x: number, z: number) => number): 
     led.position.set(x, 0.7, 0.6)
     life.add(led)
   }
-  hold('life', life, CAMP[0] - 5.8, CAMP[1] - 3.6, 1.35)
+  hold('life', life, CAMP[0] - 5.8, CAMP[1] - 3.6, 1.9, 1.2)
 
   const water = new THREE.Group()
   for (const [x, z] of [[-0.55, 0], [0.55, -0.2]] as const) {
@@ -282,7 +340,7 @@ function colony(parent: THREE.Group, height: (x: number, z: number) => number): 
     gauge.position.set(x, 0.5, z + 0.42)
     water.add(gauge)
   }
-  hold('water', water, CAMP[0] + 5.8, CAMP[1] - 3.4, 1.25)
+  hold('water', water, CAMP[0] + 5.8, CAMP[1] - 3.4, 1.7, 1.4)
 
   const battery = new THREE.Group()
   for (let i = 0; i < 3; i += 1) {
@@ -294,7 +352,7 @@ function colony(parent: THREE.Group, height: (x: number, z: number) => number): 
     bar.position.set((i - 1) * 0.57, 0.38, 0.39)
     battery.add(bar)
   }
-  hold('battery', battery, CAMP[0] - 6.2, CAMP[1] + 3.6, 1.2)
+  hold('battery', battery, CAMP[0] - 6.2, CAMP[1] + 3.6, 1.7, 1.05)
 
   const green = new THREE.Group()
   const wall = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.55, 1.2, 36), glass)
@@ -311,10 +369,7 @@ function colony(parent: THREE.Group, height: (x: number, z: number) => number): 
     plant.position.set(x, 0.42, z)
     green.add(plant)
   }
-  const grow = new THREE.PointLight('#f2b9da', 1.4, 6)
-  grow.position.y = 1.7
-  green.add(grow)
-  hold('greenhouse', green, CAMP[0] + 6.2, CAMP[1] + 5.2, 1.85)
+  hold('greenhouse', green, CAMP[0] + 6.2, CAMP[1] + 5.2, 2.3, 1.9)
 
   const berm = new THREE.Group()
   for (let i = 0; i < 18; i += 1) {
@@ -331,7 +386,7 @@ function colony(parent: THREE.Group, height: (x: number, z: number) => number): 
     sack.rotation.y = -Math.atan2(3.3 * Math.cos(t), -4.9 * Math.sin(t))
     berm.add(sack)
   }
-  hold('berm', berm, CAMP[0], CAMP[1], 0)
+  hold('berm', berm, CAMP[0], CAMP[1], 0, 1.1)
 
   const fission = new THREE.Group()
   const core = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.6, 2.4, 20), pale)
@@ -349,7 +404,7 @@ function colony(parent: THREE.Group, height: (x: number, z: number) => number): 
   const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), new THREE.MeshBasicMaterial({ color: '#9fe3b6' }))
   beacon.position.y = 3.7
   fission.add(beacon)
-  hold('fission', fission, FISSION[0], FISSION[1], 1.7)
+  hold('fission', fission, FISSION[0], FISSION[1], 2.4, 2.8)
 
   const mark = new THREE.Mesh(
     new THREE.RingGeometry(2.1, 2.3, 48),
@@ -357,7 +412,7 @@ function colony(parent: THREE.Group, height: (x: number, z: number) => number): 
   )
   mark.rotation.x = -Math.PI / 2
   mark.position.y = 0.06
-  hold('marker', mark, RESOURCE_TARGET[0], RESOURCE_TARGET[1], 0)
+  hold('marker', mark, RESOURCE_TARGET[0], RESOURCE_TARGET[1], 0, 0.2)
   return pieces
 }
 
@@ -365,7 +420,7 @@ function colony(parent: THREE.Group, height: (x: number, z: number) => number): 
  * Mars 2100 ground, exactly: the site heightfield, Mastcam vertex colours, grain,
  * the rock scatter, the peach sky, and the built settlement. Our ship is not part of this.
  */
-export function buildMarsGround(siteId: string): MarsGround {
+export function buildMarsGround(siteId: string, drop = false): MarsGround {
   const id = marsProfile(siteId)
   const site = SITES.find((row) => row.id === id) ?? SITES[0]
   const terrain = createTerrain(site)
@@ -374,12 +429,17 @@ export function buildMarsGround(siteId: string): MarsGround {
   const root = new THREE.Group()
   root.name = 'mars-ground'
   const detail = createDetailTextures()
-  const nearGeo = buildTerrainGeometry(terrain, 336, 256, false)
-  const farGeo = buildTerrainGeometry(terrain, 9000, 340, true)
+  const nearGeo = buildTerrainGeometry(terrain, 336, drop ? 96 : 120, false)
+  const farGeo = buildTerrainGeometry(terrain, drop ? 2800 : 1400, drop ? 48 : 40, true)
+  seatFarFlush(farGeo)
   const nearMap = detail.colorMap.clone()
-  nearMap.repeat.set(44, 44)
+  nearMap.repeat.set(36, 36)
   const nearNormal = detail.normalMap.clone()
-  nearNormal.repeat.set(44, 44)
+  nearNormal.repeat.set(36, 36)
+  const farMap = detail.colorMap.clone()
+  farMap.repeat.set(48, 48)
+  const farNormal = detail.normalMap.clone()
+  farNormal.repeat.set(48, 48)
   const nearMat = new THREE.MeshStandardMaterial({
     vertexColors: true,
     map: nearMap,
@@ -388,18 +448,48 @@ export function buildMarsGround(siteId: string): MarsGround {
     roughness: 0.97,
     metalness: 0,
   })
-  const farMap = detail.colorMap.clone()
-  farMap.repeat.set(380, 380)
   const farMat = new THREE.MeshStandardMaterial({
     vertexColors: true,
     map: farMap,
-    roughness: 1,
+    normalMap: farNormal,
+    normalScale: new THREE.Vector2(0.55, 0.55),
+    roughness: 0.97,
     metalness: 0,
   })
   const near = new THREE.Mesh(nearGeo, nearMat)
-  near.receiveShadow = true
+  near.name = 'mars-skin'
   const far = new THREE.Mesh(farGeo, farMat)
+  far.name = 'mars-skin'
   root.add(near, far)
+  if (drop) {
+    const skirt = new THREE.Mesh(
+      new THREE.CircleGeometry(9000, 32),
+      new THREE.MeshStandardMaterial({ color: 0x8d6248, roughness: 1, metalness: 0 }),
+    )
+    skirt.rotation.x = -Math.PI / 2
+    skirt.position.y = height(0, 0) - 1.5
+    skirt.name = 'mars-skirt'
+    root.add(skirt)
+  }
+  const groundRay = new THREE.Raycaster()
+  const groundDown = new THREE.Vector3(0, -1, 0)
+  const standCache = new Map<number, number>()
+  const stand = (x: number, z: number) => {
+    const key = (Math.round(x * 4) + 50000) * 100000 + (Math.round(z * 4) + 50000)
+    const cached = standCache.get(key)
+    if (cached !== undefined) return cached
+    let y = height(x, z)
+    if (Math.max(Math.abs(x), Math.abs(z)) < 165) {
+      groundRay.set(new THREE.Vector3(x, 400, z), groundDown)
+      groundRay.far = 800
+      const hit = groundRay.intersectObject(near, false)[0]
+      if (hit) y = hit.point.y
+    }
+    y += 0.05
+    if (standCache.size > 2800) standCache.clear()
+    standCache.set(key, y)
+    return y
+  }
 
   const geometries = [3, 7, 11, 19, 23].map((seed, i) => createRockGeometry(seed, i < 2 ? 2 : 1))
   const lists = scatterRocks(terrain)
@@ -414,8 +504,6 @@ export function buildMarsGround(siteId: string): MarsGround {
   lists.forEach((list, variant) => {
     if (list.length === 0) return
     const mesh = new THREE.InstancedMesh(geometries[variant], rockMat, list.length)
-    mesh.castShadow = true
-    mesh.receiveShadow = true
     list.forEach((rock, i) => {
       euler.set(rock.rx, rock.ry, rock.rx * 0.6)
       quaternion.setFromEuler(euler)
@@ -433,7 +521,11 @@ export function buildMarsGround(siteId: string): MarsGround {
     root.add(mesh)
     rockMeshes.push(mesh)
   })
-  const pieces = colony(root, raw)
+  const pieces = drop ? new Map<string, CampPiece>() : colony(root, raw)
+  if (!drop) {
+    root.updateWorldMatrix(true, true)
+    for (const piece of pieces.values()) piece.object.position.set(piece.x, stand(piece.x, piece.z) + 0.04, piece.z)
+  }
   const cableMat = new THREE.MeshStandardMaterial({ color: '#2f2a27', roughness: 0.8 })
   const cables: THREE.Mesh[] = []
   const sky = marsSky()
@@ -454,7 +546,7 @@ export function buildMarsGround(siteId: string): MarsGround {
         if (!piece) continue
         piece.x = hab[0] + off[0]
         piece.z = hab[1] + off[1]
-        piece.object.position.set(piece.x, raw(piece.x, piece.z), piece.z)
+        piece.object.position.set(piece.x, stand(piece.x, piece.z) + 0.04, piece.z)
       }
     }
     for (const piece of pieces.values()) {
@@ -484,17 +576,22 @@ export function buildMarsGround(siteId: string): MarsGround {
         const f = i / steps
         const x = piece.x + (hab[0] - piece.x) * f + Math.sin(f * Math.PI) * 0.6
         const z = piece.z + (hab[1] - piece.z) * f
-        points.push(new THREE.Vector3(x, raw(x, z) + 0.05, z))
+        points.push(new THREE.Vector3(x, stand(x, z) + 0.14, z))
       }
       const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), steps * 2, 0.045, 5, false), cableMat)
       root.add(tube)
       cables.push(tube)
+    }
+    for (const piece of pieces.values()) {
+      if (!piece.object.visible) continue
+      piece.object.position.y = stand(piece.x, piece.z) + 0.04
     }
   }
   return {
     root,
     sky,
     height,
+    stand,
     dress: (scene) => {
       scene.fog = fog
       scene.background = new THREE.Color('#8a6a58')
@@ -510,7 +607,7 @@ export function buildMarsGround(siteId: string): MarsGround {
     },
     setPieces,
     solid: () => [...pieces.values()].filter((piece) => piece.object.visible && piece.radius > 0).map((piece) => ({
-      id: piece.id, x: piece.x, z: piece.z, radius: piece.radius,
+      id: piece.id, x: piece.x, z: piece.z, radius: piece.radius, height: piece.height,
     })),
     dispose: () => {
       nearGeo.dispose()
@@ -520,6 +617,7 @@ export function buildMarsGround(siteId: string): MarsGround {
       nearMap.dispose()
       nearNormal.dispose()
       farMap.dispose()
+      farNormal.dispose()
       detail.colorMap.dispose()
       detail.normalMap.dispose()
       geometries.forEach((geo) => geo.dispose())

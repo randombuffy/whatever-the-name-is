@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowRight, Camera, Crosshair, Fan, Flag, House, Lock, Radio, Sun, Video } from 'lucide-react'
+import { ArrowRight, Camera, Crosshair, Fan, Flag, House, Lock, Plus, Radio, Sun, Video } from 'lucide-react'
 import { fieldSamples, siteOf } from '../domain/campaign'
 import type { CampPhase, CampSave } from '../domain/save'
 import { getSpec } from '../domain/catalog'
@@ -198,7 +198,7 @@ export function LandingScreen() {
               bankSurface(hud.phase === 'hard' ? -12 : 8, hud.prompt)
               go('surface')
             } else finish()
-          }}>{hud.phase === 'crash' ? 'Debrief' : 'Down'}</button>
+          }}>{hud.phase === 'crash' ? 'Debrief' : 'Get down'}</button>
         )}
         {hud && hud.phase !== 'fly' && hud.phase !== 'crash' && (
           <span className="key-hint"><kbd>F</kbd><span>Get down</span></span>
@@ -224,7 +224,6 @@ export function SurfaceScreen() {
   const mount = useRef<HTMLDivElement>(null)
   const worldRef = useRef<SurfaceWorld | null>(null)
   const [hud, setHud] = useState<SurfaceReadout | null>(null)
-  const [confirmed, setConfirmed] = useState(true)
   const marsSurface = mission?.id === 'mars' || mission?.id === 'custom'
   const [camp, setCamp] = useState<CampSave>(() => readCamp())
   const campRef = useRef(camp)
@@ -301,12 +300,10 @@ export function SurfaceScreen() {
       frame = requestAnimationFrame(loop)
     }
     frame = requestAnimationFrame(loop)
-    const confirmedTimer = window.setTimeout(() => setConfirmed(false), 5000)
     const observer = new ResizeObserver(() => world.resize())
     observer.observe(host)
     return () => {
       cancelAnimationFrame(frame)
-      window.clearTimeout(confirmedTimer)
       observer.disconnect()
       useMission.getState().noteField({ ...world.snapshot(), camp: campRef.current })
       world.dispose()
@@ -325,6 +322,8 @@ export function SurfaceScreen() {
     if (!hud) return
     const filed = worldRef.current?.report()
     if (!filed) return
+    const snap = worldRef.current?.snapshot()
+    if (snap) useMission.getState().noteField({ ...snap, camp })
     bankSurface(filed.points, filed.note, filed.bits)
     finish()
   }
@@ -332,26 +331,24 @@ export function SurfaceScreen() {
   const world = worldRef.current
   return (
     <div className="field-stage" ref={mount}>
-      {confirmed && (mission?.id === 'mars' || mission?.id === 'custom') && (
-        <div className="landing-confirmed" role="status">
-          <b>Landing confirmed</b>
-          <span>Surface operations initialized</span>
-        </div>
-      )}
       {hud?.mode === 'eva' && <div className="crosshair" />}
       <div className="deck">
         {marsSurface && <CampBar camp={camp} onChange={setCamp} />}
-        <div className="deck-top">
+        <div className="deck-top surface-top">
           <div className="group">
             <button type="button" aria-label="Camera" onClick={() => world?.cycleCam()}><Video size={16} /></button>
             {hud?.hasRover && <button type="button" aria-label="Park" aria-pressed={hud.parked} onClick={() => world?.togglePark()}><Lock size={16} /></button>}
             {hud?.hasRover && <button type="button" aria-label="Route" aria-pressed={hud.assist} onClick={() => world?.toggleAssist()}><Crosshair size={16} /></button>}
-            {hud?.hasRover && <button type="button" className="word slim" aria-label={hud.mode === 'eva' ? 'Board the rover' : 'Get down'} aria-pressed={hud.mode === 'eva'} onClick={() => world?.toggleEgress()}>{hud.mode === 'drive' ? 'Down' : 'Board'} <kbd>F</kbd></button>}
+            {hud?.hasRover && (
+              <button type="button" className="board-key" aria-label={hud.mode === 'eva' ? 'Board the rover' : 'Get down'} aria-pressed={hud.mode === 'eva'} onClick={() => world?.toggleEgress()}>
+                {hud.mode === 'drive' ? 'Down' : 'Board'}<kbd>F</kbd>
+              </button>
+            )}
             {hud?.hasHeli && <button type="button" aria-label="Helicopter" aria-pressed={hud.mode === 'scout'} onClick={() => world?.toggleScout()}><Fan size={16} /></button>}
             <button type="button" aria-label="Next sol" onClick={() => world?.nextSol()}><Sun size={16} /></button>
             <Mix />
           </div>
-          <b className="deck-clock">{hud?.prompt || siteLabel(hud)}</b>
+          <p className="deck-note">{hud?.prompt || siteLabel(hud)}</p>
           {hud?.crisis === 'power' && (
             <div className="group">
               <button type="button" className="word slim" onClick={() => {
@@ -486,12 +483,18 @@ function advanceSol(camp: CampSave): CampSave {
 }
 
 function CampBar({ camp, onChange }: { camp: CampSave; onChange: (next: CampSave) => void }) {
-  const ready = campReady(camp)
-  const goNext = () => {
-    if (!ready || camp.phase === 'report') return
-    const phase = NEXT_CAMP[camp.phase]
-    const pieces = phase === 'life' && !camp.pieces.includes('marker') ? [...camp.pieces, 'marker'] : camp.pieces
-    onChange({ ...camp, phase, pieces })
+  const commit = (next: CampSave) => {
+    if (next.phase === 'survival' && next.sol >= 4) {
+      onChange({ ...next, phase: 'report' })
+      return
+    }
+    if (!campReady(next) || next.phase === 'report' || next.phase === 'survival') {
+      onChange(next)
+      return
+    }
+    const phase = NEXT_CAMP[next.phase]
+    const pieces = phase === 'life' && !next.pieces.includes('marker') ? [...next.pieces, 'marker'] : next.pieces
+    onChange({ ...next, phase, pieces })
   }
   return (
     <div className="camp-bar">
@@ -502,56 +505,86 @@ function CampBar({ camp, onChange }: { camp: CampSave; onChange: (next: CampSave
           return <li key={id} className={state}>{label}</li>
         })}
       </ol>
-      <div className="group">
-        {camp.phase === 'landing' && <button type="button" className="word" onClick={goNext}>Begin the outpost</button>}
+      <div className="camp-cards">
+        {camp.phase === 'landing' && (
+          <CampCard title="Outpost" detail="Open the build, then place the habitat." preview="outpost" on={false} onAdd={() => commit({ ...camp, phase: 'habitat' })} />
+        )}
         {camp.phase === 'habitat' && (
           <>
-            <button type="button" aria-pressed={hasPiece(camp, 'habitat-plain')} onClick={() => onChange(pickHabitat(camp, 'habitat-plain'))}>Plain pad</button>
-            <button type="button" aria-pressed={hasPiece(camp, 'habitat-ridge')} onClick={() => onChange(pickHabitat(camp, 'habitat-ridge'))}>Ridge pad</button>
+            <CampCard title="Plain habitat" detail="A cabin on the flat ground." preview="habitat" on={hasPiece(camp, 'habitat-plain')} onAdd={() => commit(pickHabitat(camp, 'habitat-plain'))} />
+            <CampCard title="Ridge habitat" detail="The same cabin against the ridge." preview="habitat" on={hasPiece(camp, 'habitat-ridge')} onAdd={() => commit(pickHabitat(camp, 'habitat-ridge'))} />
           </>
         )}
         {camp.phase === 'life' && (
           <>
-            <button type="button" aria-pressed={hasPiece(camp, 'life')} onClick={() => onChange(putPiece(camp, 'life', !hasPiece(camp, 'life')))}>Life support</button>
-            <button type="button" aria-pressed={hasPiece(camp, 'water')} onClick={() => onChange(putPiece(camp, 'water', !hasPiece(camp, 'water')))}>Water</button>
+            <CampCard title="Life support" detail="Air for the cabin." preview="life" on={hasPiece(camp, 'life')} onAdd={() => commit(putPiece(camp, 'life', true))} />
+            <CampCard title="Water" detail="The tank beside the cabin." preview="water" on={hasPiece(camp, 'water')} onAdd={() => commit(putPiece(camp, 'water', true))} />
           </>
         )}
         {camp.phase === 'power' && (
           <>
-            <button type="button" onClick={() => onChange(addArray(camp))}>Solar array</button>
-            <button type="button" aria-pressed={hasPiece(camp, 'battery')} onClick={() => onChange(putPiece(camp, 'battery', !hasPiece(camp, 'battery')))}>Battery</button>
-            <button type="button" aria-pressed={hasPiece(camp, 'fission')} onClick={() => onChange(putPiece(camp, 'fission', !hasPiece(camp, 'fission')))}>Reactor</button>
+            <CampCard title="Battery" detail="Stores what the arrays make. Add this before the source if you want it." preview="battery" on={hasPiece(camp, 'battery')} onAdd={() => commit(putPiece(camp, 'battery', true))} />
+            <CampCard title="Solar array" detail="A wing of panels. This step can move on once one source is down." preview="solar" on={camp.pieces.some((id) => id.startsWith('solar-'))} onAdd={() => commit(addArray(camp))} />
+            <CampCard title="Reactor" detail="Power that does not care about dust." preview="reactor" on={hasPiece(camp, 'fission')} onAdd={() => commit(putPiece(camp, 'fission', true))} />
           </>
         )}
         {camp.phase === 'food' && (
           <>
-            <button type="button" aria-pressed={hasPiece(camp, 'food-stored')} onClick={() => onChange(putPiece({ ...camp, pieces: camp.pieces.filter((id) => id !== 'greenhouse' && id !== 'greenhouse-hybrid') }, 'food-stored', true))}>Stored food</button>
-            <button type="button" aria-pressed={hasPiece(camp, 'greenhouse')} onClick={() => onChange(putPiece({ ...camp, pieces: camp.pieces.filter((id) => id !== 'food-stored' && id !== 'greenhouse-hybrid') }, 'greenhouse', true))}>Greenhouse</button>
-            <button type="button" aria-pressed={hasPiece(camp, 'greenhouse-hybrid')} onClick={() => onChange(putPiece({ ...camp, pieces: camp.pieces.filter((id) => id !== 'food-stored' && id !== 'greenhouse') }, 'greenhouse-hybrid', true))}>Hybrid</button>
+            <CampCard title="Stored food" detail="Rations. No greenhouse." preview="food" on={hasPiece(camp, 'food-stored')} onAdd={() => commit(putPiece({ ...camp, pieces: camp.pieces.filter((id) => id !== 'greenhouse' && id !== 'greenhouse-hybrid') }, 'food-stored', true))} />
+            <CampCard title="Greenhouse" detail="A planted bay." preview="greenhouse" on={hasPiece(camp, 'greenhouse')} onAdd={() => commit(putPiece({ ...camp, pieces: camp.pieces.filter((id) => id !== 'food-stored' && id !== 'greenhouse-hybrid') }, 'greenhouse', true))} />
+            <CampCard title="Hybrid" detail="Rations plus a smaller bay." preview="greenhouse" on={hasPiece(camp, 'greenhouse-hybrid')} onAdd={() => commit(putPiece({ ...camp, pieces: camp.pieces.filter((id) => id !== 'food-stored' && id !== 'greenhouse') }, 'greenhouse-hybrid', true))} />
           </>
         )}
         {camp.phase === 'survival' && (
           <>
-            <span className="camp-stores">Sol {camp.sol} · air {camp.air} · water {camp.water} · food {camp.food} · power {camp.power}</span>
-            {camp.sol >= 2 && !camp.storm && (
-              <>
-                <button type="button" onClick={() => onChange({ ...camp, storm: 'shelter' })}>Shelter</button>
-                <button type="button" onClick={() => onChange({ ...camp, storm: 'clean' })}>Clean the arrays</button>
-              </>
-            )}
-            <button type="button" aria-pressed={hasPiece(camp, 'berm')} onClick={() => onChange(putPiece(camp, 'berm', !hasPiece(camp, 'berm')))}>Berm</button>
-            <button type="button" onClick={() => onChange(advanceSol(camp))} disabled={camp.sol >= 4}>Next sol</button>
+            <CampCard title="Berm" detail="A ridge of soil against the flare." preview="berm" on={hasPiece(camp, 'berm')} onAdd={() => commit(putPiece(camp, 'berm', true))} />
+            <CampCard title="Next sol" detail={`Sol ${camp.sol}. Air ${camp.air}, water ${camp.water}, food ${camp.food}, power ${camp.power}.`} preview="sol" on={camp.sol >= 4} onAdd={() => commit(advanceSol(camp))} />
+            {camp.sol >= 2 && !camp.storm && <CampCard title="Shelter" detail="Ride the storm inside." preview="berm" on={false} onAdd={() => onChange({ ...camp, storm: 'shelter' })} />}
+            {camp.sol >= 2 && !camp.storm && <CampCard title="Clean the arrays" detail="Clear the dust. Costs the sol outside." preview="solar" on={false} onAdd={() => onChange({ ...camp, storm: 'clean' })} />}
           </>
         )}
         {camp.phase === 'report' && (
-          <span className="camp-stores">Sol {camp.sol} filed. Air {camp.air}, water {camp.water}, food {camp.food}, power {camp.power}. Transmit the return when you are ready.</span>
-        )}
-        {camp.phase !== 'landing' && camp.phase !== 'report' && (
-          <button type="button" className="word" onClick={goNext} disabled={!ready}>Continue</button>
+          <p className="camp-stores">Sol {camp.sol} filed. Air {camp.air}, water {camp.water}, food {camp.food}, power {camp.power}. Transmit the return when you are ready.</p>
         )}
       </div>
     </div>
   )
+}
+
+function CampCard({ title, detail, preview, on, onAdd }: { title: string; detail: string; preview: string; on: boolean; onAdd: () => void }) {
+  return (
+    <div className={on ? 'camp-card on' : 'camp-card'}>
+      <CampPreview kind={preview} />
+      <span>
+        <strong>{title}</strong>
+        <em>{detail}</em>
+      </span>
+      <button type="button" className="icon plus" aria-label={`Add ${title}`} onClick={onAdd}><Plus size={14} /></button>
+    </div>
+  )
+}
+
+function CampPreview({ kind }: { kind: string }) {
+  const body = kind === 'habitat' || kind === 'outpost'
+    ? <><rect x="18" y="22" width="52" height="22" fill="#e7d7c4" /><polygon points="14,22 44,8 74,22" fill="#c47a4a" /><rect x="38" y="30" width="12" height="14" fill="#8a5a3c" /></>
+    : kind === 'life'
+      ? <><rect x="16" y="16" width="22" height="26" rx="4" fill="#d7e4ea" /><rect x="42" y="20" width="28" height="8" fill="#7ec8c4" /><rect x="42" y="32" width="28" height="8" fill="#c9a227" /></>
+      : kind === 'water'
+        ? <><rect x="34" y="10" width="20" height="32" rx="8" fill="#8ec8e4" /><rect x="34" y="24" width="20" height="6" fill="#e7eef2" /></>
+        : kind === 'solar'
+          ? <><rect x="8" y="18" width="30" height="16" fill="#3c92c4" stroke="#e7f3fb" /><rect x="50" y="18" width="30" height="16" fill="#3c92c4" stroke="#e7f3fb" /><rect x="38" y="22" width="12" height="8" fill="#e7e2d6" /></>
+          : kind === 'battery'
+            ? <rect x="24" y="14" width="40" height="24" rx="3" fill="#f4f1ea" />
+            : kind === 'reactor'
+              ? <><rect x="34" y="12" width="20" height="28" fill="#e2c56a" /><rect x="22" y="16" width="8" height="20" fill="#f7f4ee" /><rect x="58" y="16" width="8" height="20" fill="#f7f4ee" /></>
+              : kind === 'greenhouse'
+                ? <><polygon points="16,34 44,12 72,34" fill="#8fbf7a" /><rect x="28" y="34" width="32" height="8" fill="#e7d7c4" /></>
+                : kind === 'food'
+                  ? <><rect x="22" y="16" width="18" height="22" fill="#e7d2b0" /><rect x="46" y="16" width="18" height="22" fill="#c47a4a" /></>
+                  : kind === 'berm'
+                    ? <polygon points="8,38 28,16 48,38 68,20 84,38" fill="#c4a07a" />
+                    : <><circle cx="44" cy="26" r="12" fill="#e2b84a" /><rect x="42" y="8" width="4" height="8" fill="#f4f1ea" /></>
+  return <svg className="camp-preview" viewBox="0 0 88 52" aria-hidden>{body}</svg>
 }
 
 function siteLabel(hud: SurfaceReadout | null): string {

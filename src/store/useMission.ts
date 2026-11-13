@@ -89,6 +89,11 @@ interface MissionStore {
   selectInstance: (instanceId: string | null) => void
   nudgePart: (instanceId: string, dx: number, dy: number, dz: number) => void
   resetOffset: (instanceId: string) => void
+  undo: () => void
+  redo: () => void
+  arrange: () => void
+  craftPast: SpacecraftConfig[]
+  craftFuture: SpacecraftConfig[]
   generate: (callSign: string) => void
   reshapeHull: () => void
   autoFix: () => void
@@ -104,6 +109,7 @@ interface MissionStore {
   decide: (optionId: string) => void
   toggleSystem: (specId: string) => void
   finish: () => void
+  resumeSurface: () => void
   setAudio: (audio: boolean) => void
   setVolume: (volume: number) => void
   bankSurface: (points: number, note: string, bits?: number) => void
@@ -116,6 +122,17 @@ interface MissionStore {
 
 function clampOffset(value: number): number {
   return Math.max(-2.4, Math.min(2.4, value))
+}
+
+function commitCraft(
+  get: () => MissionStore,
+  set: (partial: Partial<MissionStore>) => void,
+  craft: SpacecraftConfig,
+  extra: Partial<MissionStore> = {},
+) {
+  const current = get().craft
+  const past = current ? [...(get().craftPast ?? []), structuredClone(current)].slice(-30) : (get().craftPast ?? [])
+  set({ ...extra, craft, craftPast: past, craftFuture: [] })
 }
 
 function missionFrom(missionId: string | null, custom: MissionDef | null): MissionDef | undefined {
@@ -190,7 +207,7 @@ export const useMission = create<MissionStore>()(
       history: [],
       paused: false,
       rate: 300_000,
-      camera: 'chase',
+      camera: 'wide',
       selectedId: null,
       selectedInstanceId: null,
       custom: null,
@@ -207,6 +224,8 @@ export const useMission = create<MissionStore>()(
       rewinds: 0,
       badges: [],
       checkpoints: [],
+      craftPast: [],
+      craftFuture: [],
       launchReady: false,
       launchRequest: false,
       saves: [],
@@ -381,20 +400,15 @@ export const useMission = create<MissionStore>()(
         const spec = getSpec(specId)
         if (!craft || !spec) return
         const instanceId = `${specId}-${crypto.randomUUID()}`
-        set({
-          craft: {
-            ...craft,
-            parts: [...craft.parts, { instanceId, specId, fill: 1, enabled: true, mount: spec.mount }],
-          },
-          selectedId: specId,
-          selectedInstanceId: instanceId,
-        })
+        commitCraft(get, set, {
+          ...craft,
+          parts: [...craft.parts, { instanceId, specId, fill: 1, enabled: true, mount: spec.mount }],
+        }, { selectedId: specId, selectedInstanceId: instanceId })
       },
       removePart: (instanceId) => {
         const craft = get().craft
         if (!craft) return
-        set({
-          craft: { ...craft, parts: craft.parts.filter((part) => part.instanceId !== instanceId) },
+        commitCraft(get, set, { ...craft, parts: craft.parts.filter((part) => part.instanceId !== instanceId) }, {
           selectedInstanceId: get().selectedInstanceId === instanceId ? null : get().selectedInstanceId,
         })
       },
@@ -411,24 +425,19 @@ export const useMission = create<MissionStore>()(
       togglePart: (instanceId) => {
         const craft = get().craft
         if (!craft) return
-        set({
-          craft: {
-            ...craft,
-            parts: craft.parts.map((part) => (part.instanceId === instanceId ? { ...part, enabled: !part.enabled } : part)),
-          },
+        commitCraft(get, set, {
+          ...craft,
+          parts: craft.parts.map((part) => (part.instanceId === instanceId ? { ...part, enabled: !part.enabled } : part)),
         })
       },
       setSpec: (instanceId, specId) => {
         const craft = get().craft
         const spec = getSpec(specId)
         if (!craft || !spec) return
-        set({
-          selectedId: specId,
-          craft: {
-            ...craft,
-            parts: craft.parts.map((part) => (part.instanceId === instanceId ? { ...part, specId, mount: spec.mount } : part)),
-          },
-        })
+        commitCraft(get, set, {
+          ...craft,
+          parts: craft.parts.map((part) => (part.instanceId === instanceId ? { ...part, specId, mount: spec.mount } : part)),
+        }, { selectedId: specId })
       },
       selectPart: (specId) => {
         if (!specId) {
@@ -449,50 +458,82 @@ export const useMission = create<MissionStore>()(
       nudgePart: (instanceId, dx, dy, dz) => {
         const craft = get().craft
         if (!craft) return
-        set({
-          craft: {
-            ...craft,
-            parts: craft.parts.map((part) => {
-              if (part.instanceId !== instanceId) return part
-              const origin = part.offset ?? { x: 0, y: 0, z: 0 }
-              return {
-                ...part,
-                offset: {
-                  x: clampOffset(origin.x + dx),
-                  y: clampOffset(origin.y + dy),
-                  z: clampOffset(origin.z + dz),
-                },
-              }
-            }),
-          },
+        commitCraft(get, set, {
+          ...craft,
+          parts: craft.parts.map((part) => {
+            if (part.instanceId !== instanceId) return part
+            const origin = part.offset ?? { x: 0, y: 0, z: 0 }
+            return {
+              ...part,
+              offset: {
+                x: clampOffset(origin.x + dx),
+                y: clampOffset(origin.y + dy),
+                z: clampOffset(origin.z + dz),
+              },
+            }
+          }),
         })
       },
       resetOffset: (instanceId) => {
         const craft = get().craft
         if (!craft) return
+        commitCraft(get, set, {
+          ...craft,
+          parts: craft.parts.map((part) => (part.instanceId === instanceId ? { ...part, offset: { x: 0, y: 0, z: 0 } } : part)),
+        })
+      },
+      undo: () => {
+        const craft = get().craft
+        const craftPast = get().craftPast ?? []
+        const craftFuture = get().craftFuture ?? []
+        if (!craft || craftPast.length === 0) return
+        const previous = craftPast[craftPast.length - 1]
         set({
-          craft: {
-            ...craft,
-            parts: craft.parts.map((part) => (part.instanceId === instanceId ? { ...part, offset: { x: 0, y: 0, z: 0 } } : part)),
-          },
+          craft: previous,
+          craftPast: craftPast.slice(0, -1),
+          craftFuture: [...craftFuture, structuredClone(craft)].slice(-30),
+          selectedInstanceId: null,
+        })
+      },
+      redo: () => {
+        const craft = get().craft
+        const craftPast = get().craftPast ?? []
+        const craftFuture = get().craftFuture ?? []
+        if (!craft || craftFuture.length === 0) return
+        const next = craftFuture[craftFuture.length - 1]
+        set({
+          craft: next,
+          craftFuture: craftFuture.slice(0, -1),
+          craftPast: [...craftPast, structuredClone(craft)].slice(-30),
+          selectedInstanceId: null,
+        })
+      },
+      arrange: () => {
+        const craft = get().craft
+        if (!craft) return
+        commitCraft(get, set, {
+          ...craft,
+          parts: craft.parts.map((part) => ({ ...part, offset: { x: 0, y: 0, z: 0 } })),
         })
       },
       generate: (callSign) => {
         const state = get()
         const mission = missionFrom(state.missionId, state.custom)
         if (!mission) return
-        set({ craft: assembleFromCallSign(callSign, mission), selectedInstanceId: null })
+        const prev = state.craft?.hullSeed ?? 1
+        const variant = (Math.imul(prev || 1, 1664525) + 1013904223 + Math.floor(Math.random() * 99991)) >>> 0 || 1
+        commitCraft(get, set, assembleFromCallSign(callSign, mission, variant), { selectedInstanceId: null })
       },
       reshapeHull: () => {
         const craft = get().craft
         if (!craft) return
-        set({ craft: { ...craft, hullSeed: ((craft.hullSeed ?? 1) * 1103515245 + 12345) >>> 0 }, selectedInstanceId: null })
+        commitCraft(get, set, { ...craft, hullSeed: ((craft.hullSeed ?? 1) * 1103515245 + 12345) >>> 0 }, { selectedInstanceId: null })
       },
       autoFix: () => {
         const state = get()
         const mission = missionFrom(state.missionId, state.custom)
         if (!state.craft || !mission || !state.plan) return
-        set({ craft: repairCraft(state.craft, mission, state.plan), selectedInstanceId: null })
+        commitCraft(get, set, repairCraft(state.craft, mission, state.plan), { selectedInstanceId: null })
       },
       setPlan: (patch) => {
         const plan = get().plan
@@ -506,7 +547,7 @@ export const useMission = create<MissionStore>()(
         const sim = createSim(craft, mission, plan)
         const departure: Checkpoint = { id: 'departure', tSec: 0, label: 'Departure', sim: structuredClone(sim) }
         const rate = Math.min(WARP_MAX, Math.max(1, get().rate))
-        set({ sim, phase: 'flight', paused: false, rate, outcome: null, camera: 'chase', checkpoints: [departure], field: null, descent: null, touchdown: null, rewinds: 0 })
+        set({ sim, phase: 'flight', paused: false, rate, outcome: null, camera: 'wide', checkpoints: [departure], field: null, descent: null, touchdown: null, rewinds: 0 })
       },
       resumeFlight: () => {
         const { sim, missionId } = get()
@@ -591,10 +632,14 @@ export const useMission = create<MissionStore>()(
           surfaceBits: 0,
           campaignNote: '',
           touchdown: null,
-          field: null,
           descent: null,
           badges: nextBadges,
         })
+      },
+      resumeSurface: () => {
+        const field = get().field
+        if (!field || !get().missionId) return
+        set({ phase: 'surface', outcome: null, paused: false })
       },
       bankSurface: (points, note, bits = 0) => set({ surfaceScience: points, campaignNote: note, surfaceBits: bits }),
       noteTouchdown: (grade, heat, offset) => set({ touchdown: { grade, heat, offset } }),
