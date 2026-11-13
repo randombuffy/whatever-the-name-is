@@ -1364,4 +1364,25 @@ button.key-banner {
 .card-foot .tech-text { flex: 1; }
 .world-card .tech-title-brief { margin-bottom: -8px; }
 .part-list::-webkit-scrollbar, .scroll::-webkit-scrollbar, .sheet::-webkit-scrollbar { width: 8px; }
-.part-list::-webkit-scrollbar-thumb, .scroll::-webkit-scrollbar-thumb, .sheet::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.16); border-radiu
+.part-list::-webkit-scrollbar-thumb, .scroll::-webkit-scrollbar-thumb, .sheet::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.16); border-radius: 99px; }
+
+@media (max-width: 900px) {
+  .side.left, .side.right { width: auto; left: 12px; right: 12px; }
+  .side.left { top: 72px; bottom: auto; max-height: 36vh; }
+  .side.right { top: auto; bottom: 12px; max-height: 34vh; }
+  .side .stack-card, .side .hero-card { max-height: 34vh; }
+  .world-card { bottom: 168px; width: calc(100vw - 24px); }
+  .budget-float { top: 64px; width: min(360px, calc(100vw - 24px)); }
+  .decision { left: 12px; right: 12px; width: auto; transform: none; top: auto; bottom: 78px; }
+  .flight-ui .side.right { bottom: 128px; max-height: 28vh; }
+  .ticker-wrap { display: none; }
+  .launch-stage { align-items: end; padding-bottom: 18px; }
+  .float-top { align-items: flex-start; }
+}
+
+.boot-error {
+  margin: 24px;
+  white-space: pre-wrap;
+  color: #f3efe4;
+  font: 13px/1.45 ui-monospace, monospace;
+}

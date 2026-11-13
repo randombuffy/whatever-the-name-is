@@ -11,7 +11,6 @@ export function globeUrl(missionId: string): string | null {
 
 /** Photographed landing terrain. The thin axis of each file is the relief. */
 export function landUrl(missionId: string): string | null {
-  if (missionId === 'lunar') return '/3d/moon_land/scene.gltf'
   if (missionId === 'europa') return '/3d/europa_land/scene.gltf'
   if (missionId === 'mars' || missionId === 'custom') return '/3d/mars_land/scene.gltf'
   return null

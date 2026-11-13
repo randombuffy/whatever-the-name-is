@@ -56,6 +56,7 @@ export function LandingScreen() {
   const settled = useRef<'down' | 'hard' | 'crash' | null>(null)
   const handed = useRef(false)
   const confirmUntil = useRef(0)
+  const handoff = useRef(0)
 
   useEffect(() => {
     const host = mount.current
@@ -105,7 +106,7 @@ export function LandingScreen() {
       if (confirmUntil.current && performance.now() > confirmUntil.current) setShowConfirmed(false)
       if (!handed.current && (readout.phase === 'down' || readout.phase === 'hard')) {
         handed.current = true
-        window.setTimeout(() => {
+        handoff.current = window.setTimeout(() => {
           useMission.getState().noteTouchdown(readout.phase === 'hard' ? 'hard' : 'soft', readout.heat, readout.offset)
           bankSurface(readout.phase === 'hard' ? -12 : 8, readout.prompt)
           go('surface')
@@ -134,6 +135,7 @@ export function LandingScreen() {
     observer.observe(host)
     return () => {
       cancelAnimationFrame(frame)
+      window.clearTimeout(handoff.current)
       observer.disconnect()
       window.removeEventListener('keydown', onKey)
       world.dispose()
@@ -407,4 +409,147 @@ const NEXT_CAMP: Record<CampPhase, CampPhase> = {
 }
 
 function readCamp(): CampSave {
-  const sav
+  const saved = useMission.getState().field?.camp
+  if (!saved) return { phase: 'landing', pieces: [], sol: 0, air: 92, water: 80, food: 64, power: 48, storm: null }
+  return saved
+}
+
+function hasPiece(camp: CampSave, id: string): boolean {
+  return camp.pieces.includes(id)
+}
+
+function campReady(camp: CampSave): boolean {
+  switch (camp.phase) {
+    case 'landing': return true
+    case 'habitat': return hasPiece(camp, 'habitat-plain') || hasPiece(camp, 'habitat-ridge')
+    case 'life': return hasPiece(camp, 'life') && hasPiece(camp, 'water')
+    case 'power': return camp.pieces.some((id) => id.startsWith('solar-') || id === 'fission')
+    case 'food': return hasPiece(camp, 'food-stored') || hasPiece(camp, 'greenhouse') || hasPiece(camp, 'greenhouse-hybrid')
+    case 'survival': return camp.sol >= 4
+    case 'report': return true
+  }
+}
+
+function putPiece(camp: CampSave, id: string, on: boolean): CampSave {
+  const pieces = camp.pieces.filter((item) => item !== id)
+  if (on) pieces.push(id)
+  return { ...camp, pieces }
+}
+
+function pickHabitat(camp: CampSave, id: 'habitat-plain' | 'habitat-ridge'): CampSave {
+  const pieces = camp.pieces.filter((item) => item !== 'habitat-plain' && item !== 'habitat-ridge')
+  pieces.push(id)
+  return { ...camp, pieces }
+}
+
+function addArray(camp: CampSave): CampSave {
+  const count = camp.pieces.filter((id) => id.startsWith('solar-')).length
+  if (count >= 4) return camp
+  return putPiece(camp, `solar-${count}`, true)
+}
+
+function clampStore(value: number): number {
+  return Math.max(0, Math.min(100, Math.round(value)))
+}
+
+function advanceSol(camp: CampSave): CampSave {
+  const arrays = camp.pieces.filter((id) => id.startsWith('solar-')).length
+  const made = Math.min(100, arrays * 22 + (hasPiece(camp, 'fission') ? 46 : 0))
+  const dust = camp.storm === 'clean' ? 0.9 : camp.storm === 'shelter' ? 0.6 : 1
+  const green = hasPiece(camp, 'greenhouse') || hasPiece(camp, 'greenhouse-hybrid')
+  return {
+    ...camp,
+    sol: camp.sol + 1,
+    power: clampStore(camp.power * 0.4 + made * dust * 0.6 - 8),
+    food: clampStore(camp.food - (green ? 5 : 16)),
+    water: clampStore(camp.water - (hasPiece(camp, 'water') ? 6 : 18)),
+    air: clampStore(camp.air - (hasPiece(camp, 'life') ? 4 : 14)),
+  }
+}
+
+function CampBar({ camp, onChange }: { camp: CampSave; onChange: (next: CampSave) => void }) {
+  const ready = campReady(camp)
+  const goNext = () => {
+    if (!ready || camp.phase === 'report') return
+    const phase = NEXT_CAMP[camp.phase]
+    const pieces = phase === 'life' && !camp.pieces.includes('marker') ? [...camp.pieces, 'marker'] : camp.pieces
+    onChange({ ...camp, phase, pieces })
+  }
+  return (
+    <div className="camp-bar">
+      <ol>
+        {CAMP_PHASES.map(([id, label], index) => {
+          const current = CAMP_PHASES.findIndex((row) => row[0] === camp.phase)
+          const state = index < current ? 'is-done' : index === current ? 'is-current' : ''
+          return <li key={id} className={state}>{label}</li>
+        })}
+      </ol>
+      <div className="group">
+        {camp.phase === 'landing' && <button type="button" className="word" onClick={goNext}>Begin the outpost</button>}
+        {camp.phase === 'habitat' && (
+          <>
+            <button type="button" aria-pressed={hasPiece(camp, 'habitat-plain')} onClick={() => onChange(pickHabitat(camp, 'habitat-plain'))}>Plain pad</button>
+            <button type="button" aria-pressed={hasPiece(camp, 'habitat-ridge')} onClick={() => onChange(pickHabitat(camp, 'habitat-ridge'))}>Ridge pad</button>
+          </>
+        )}
+        {camp.phase === 'life' && (
+          <>
+            <button type="button" aria-pressed={hasPiece(camp, 'life')} onClick={() => onChange(putPiece(camp, 'life', !hasPiece(camp, 'life')))}>Life support</button>
+            <button type="button" aria-pressed={hasPiece(camp, 'water')} onClick={() => onChange(putPiece(camp, 'water', !hasPiece(camp, 'water')))}>Water</button>
+          </>
+        )}
+        {camp.phase === 'power' && (
+          <>
+            <button type="button" onClick={() => onChange(addArray(camp))}>Solar array</button>
+            <button type="button" aria-pressed={hasPiece(camp, 'battery')} onClick={() => onChange(putPiece(camp, 'battery', !hasPiece(camp, 'battery')))}>Battery</button>
+            <button type="button" aria-pressed={hasPiece(camp, 'fission')} onClick={() => onChange(putPiece(camp, 'fission', !hasPiece(camp, 'fission')))}>Reactor</button>
+          </>
+        )}
+        {camp.phase === 'food' && (
+          <>
+            <button type="button" aria-pressed={hasPiece(camp, 'food-stored')} onClick={() => onChange(putPiece({ ...camp, pieces: camp.pieces.filter((id) => id !== 'greenhouse' && id !== 'greenhouse-hybrid') }, 'food-stored', true))}>Stored food</button>
+            <button type="button" aria-pressed={hasPiece(camp, 'greenhouse')} onClick={() => onChange(putPiece({ ...camp, pieces: camp.pieces.filter((id) => id !== 'food-stored' && id !== 'greenhouse-hybrid') }, 'greenhouse', true))}>Greenhouse</button>
+            <button type="button" aria-pressed={hasPiece(camp, 'greenhouse-hybrid')} onClick={() => onChange(putPiece({ ...camp, pieces: camp.pieces.filter((id) => id !== 'food-stored' && id !== 'greenhouse') }, 'greenhouse-hybrid', true))}>Hybrid</button>
+          </>
+        )}
+        {camp.phase === 'survival' && (
+          <>
+            <span className="camp-stores">Sol {camp.sol} · air {camp.air} · water {camp.water} · food {camp.food} · power {camp.power}</span>
+            {camp.sol >= 2 && !camp.storm && (
+              <>
+                <button type="button" onClick={() => onChange({ ...camp, storm: 'shelter' })}>Shelter</button>
+                <button type="button" onClick={() => onChange({ ...camp, storm: 'clean' })}>Clean the arrays</button>
+              </>
+            )}
+            <button type="button" aria-pressed={hasPiece(camp, 'berm')} onClick={() => onChange(putPiece(camp, 'berm', !hasPiece(camp, 'berm')))}>Berm</button>
+            <button type="button" onClick={() => onChange(advanceSol(camp))} disabled={camp.sol >= 4}>Next sol</button>
+          </>
+        )}
+        {camp.phase === 'report' && (
+          <span className="camp-stores">Sol {camp.sol} filed. Air {camp.air}, water {camp.water}, food {camp.food}, power {camp.power}. Transmit the return when you are ready.</span>
+        )}
+        {camp.phase !== 'landing' && camp.phase !== 'report' && (
+          <button type="button" className="word" onClick={goNext} disabled={!ready}>Continue</button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function siteLabel(hud: SurfaceReadout | null): string {
+  if (!hud) return ''
+  if (hud.held > 0) return hud.label
+  if (hud.mode === 'scout') return 'Scout'
+  if (hud.assist && hud.target) return hud.target
+  if (hud.mode === 'eva') return 'Walk'
+  return 'Rover'
+}
+
+function Read({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="meter" title={label}>
+      <span>{label}</span>
+      <b>{value}</b>
+    </div>
+  )
+}

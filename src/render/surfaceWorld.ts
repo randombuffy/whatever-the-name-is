@@ -876,6 +876,7 @@ export class SurfaceWorld {
   private groundMesh: THREE.Object3D | null = null
   private heightGrid: HeightGrid | null = null
   private marsGround: MarsGround | null = null
+  private campSeated = false
   private lastHeight = 0
 
   private heightAt(x: number, z: number): number {
@@ -1241,4 +1242,9 @@ export class SurfaceWorld {
     if (name === 'e') this.sample()
     if (name === 'v') this.capture()
     if (name === 't') this.transmit()
-    i
+    if (name === 'x') this.cycleHold()
+    if (name === 'r') this.nextSol()
+    if (name === 'h') this.toggleScout()
+    if (name === 'q') this.cycleTarget()
+  }
+}

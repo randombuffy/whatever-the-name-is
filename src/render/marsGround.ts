@@ -177,11 +177,6 @@ function marsSky(): THREE.Mesh {
   return mesh
 }
 
-function seat(parent: THREE.Group, mesh: THREE.Object3D, x: number, z: number, height: (x: number, z: number) => number): void {
-  mesh.position.set(x, height(x, z), z)
-  parent.add(mesh)
-}
-
 interface CampPiece {
   id: string
   x: number
