@@ -932,6 +932,23 @@ input[type="range"]::-moz-range-thumb {
   letter-spacing: 0.04em;
   color: #f4f1ea;
 }
+.fix-bar {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transform: translateX(-50%);
+  padding: 8px 10px 8px 16px;
+  border-radius: 999px;
+  background: rgba(8, 8, 8, 0.88);
+  color: #f4f1ea;
+  pointer-events: auto;
+}
+.fix-bar span { font: 500 13px var(--mono); letter-spacing: 0.04em; }
+.deck-choice button small { display: block; max-width: 280px; font-size: 11px; font-weight: 400; opacity: 0.72; }
 .landing-confirmed {
   position: absolute;
   z-index: 6;

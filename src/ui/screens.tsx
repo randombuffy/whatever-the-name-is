@@ -374,6 +374,7 @@ export function DesignScreen() {
 
   return (
     <>
+      <FixBar show={hard > 0} onFix={autoFix} />
       <aside className="side left">
         <Glass className="stack-card">
           <div className="filters" role="toolbar" aria-label="Parts">
@@ -563,6 +564,16 @@ export function DesignScreen() {
   )
 }
 
+function FixBar({ show, onFix }: { show: boolean; onFix: () => void }) {
+  if (!show) return null
+  return (
+    <div className="fix-bar">
+      <span>This craft cannot fly yet.</span>
+      <button type="button" className="word autofix" onClick={onFix}><Sparkles size={14} /> Auto-fix</button>
+    </div>
+  )
+}
+
 function IssueRow({ issue }: { issue: EngineeringIssue }) {
   return (
     <div className="issue-row">
@@ -591,6 +602,7 @@ export function PlanScreen() {
   const notes = report.issues.filter((issue) => issue.severity === 'hard')
   return (
     <>
+      <FixBar show={notes.length > 0} onFix={autoFix} />
       <aside className="side left">
         <Glass className="pad-card">
           <div className="choice-row">

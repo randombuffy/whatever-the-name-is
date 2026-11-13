@@ -68,7 +68,7 @@ export class CruiseWorld {
   private dragging = false
   private lastX = 0
   private lastY = 0
-  private cam: FlightCam = 'side'
+  private cam: FlightCam = 'chase'
   private prograde = new THREE.Vector3(0, 0, 1)
   private readonly aim = new THREE.Vector3(0, 0, 1)
 
@@ -331,7 +331,7 @@ export class CruiseWorld {
       return
     }
     if (mode === 'side' || mode === 'chase' || mode === 'free') {
-      const radius = mode === 'side' ? 42 : mode === 'free' ? 28 : 34
+      const radius = mode === 'side' ? 18 : mode === 'free' ? 12 : 11
       const flat = Math.cos(this.orbitPitch)
       this.camera.position.set(
         origin.x + radius * flat * Math.sin(this.orbitYaw),

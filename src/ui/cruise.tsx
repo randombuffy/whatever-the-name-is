@@ -89,7 +89,7 @@ export function CruiseScreen() {
   const checkpoints = useMission((state) => state.checkpoints)
   const restoreCheckpoint = useMission((state) => state.restoreCheckpoint)
 
-  const [camera, setCamera] = useState<FlightCam>('side')
+  const [camera, setCamera] = useState<FlightCam>('chase')
   const [throttle, setThrottle] = useState(1)
   const [engines, setEngines] = useState(true)
   const [stable, setStable] = useState(true)
@@ -532,14 +532,20 @@ export function CruiseScreen() {
             </div>
           </div>
         )}
+        {sim.extraArrivalDv > 0 && !sim.decision && (
+          <div className="deck-choice">
+            <strong>Drift accepted</strong>
+            <div><span>Capture now needs an extra {Math.round(sim.extraArrivalDv)} m/s. Science is reduced.</span></div>
+          </div>
+        )}
         {sim.decision && (
           <div className="deck-choice">
             <strong title={sim.decision.detail}>{sim.decision.title}</strong>
             <div>
               {sim.decision.options.map((option, index) => (
-                <button key={option.id} type="button" onClick={() => decide(option.id)}>
+                <button key={option.id} type="button" title={option.detail} onClick={() => decide(option.id)}>
                   <em>{index + 1}</em>
-                  {option.label}
+                  <span>{option.label}<small>{option.detail}</small></span>
                 </button>
               ))}
             </div>

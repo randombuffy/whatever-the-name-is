@@ -49,4 +49,14 @@ Vite serves http://localhost:5173/. `npm test` runs the engineering checks. `npm
 
 Copy `.env.example` to `.env` if you want your own key from https://api.nasa.gov/. Without one, the game still runs.
 
+## The challenge, as this game runs it
+
+The Space Apps brief for this submission is a mission you design and then survive. The Mars notes in that brief are in the flight, not as a second simulator beside it.
+
+Entry speaks the Mars 2020 order from the altitude the ship is actually at: cruise stage off, de-spin, balance masses, entry interface, guidance, heading alignment, straighten up and fly right, parachute, heat shield, terrain match, backshell, throttle down, wheels, touchdown and flyaway. The forces under that are drag, lift, gravity, the chute, and thrust. The words are the callouts. They are not a second animation.
+
+On the surface the deck shows battery, wheel condition, whether the link is open, and the sol. Dust cuts the charge. Night heaters draw power when the rover is not on a constant source. A sharp hit tears the wheels down and the rover slows. Under 15% the rover stops and asks: keep exploring, and it freezes for a −50, or sleep and keep the battery. On a blackout sol it asks: blast the signal through the hill and spend a fifth of the battery for nothing, or wait for the orbiter and take +30 when the pass arrives. Light time is why those are choices at all. You do not drive the rover from Earth in real time.
+
+Correct the path spends 30 m/s of propellant on a Mars cruise. Accept the drift leaves the error in, cuts the science, and adds 70 m/s to capture. The coast shows that debt until arrival starts. Auto-fix sits on the top bar of design and plan whenever a hard hold is open, because a button buried in a side sheet is how a ship gets launched broken.
+
 This is a hackathon submission. Third-party terms are in `THIRD_PARTY.md`. NASA imagery remains NASA's. A played trajectory is not an official product.

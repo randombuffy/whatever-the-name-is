@@ -352,12 +352,30 @@ export function SurfaceScreen() {
             <Mix />
           </div>
           <b className="deck-clock">{hud?.prompt || siteLabel(hud)}</b>
+          {hud?.crisis === 'power' && (
+            <div className="group">
+              <button type="button" className="word slim" onClick={() => {
+                if (worldRef.current?.chooseCrisis('push') === 'dead') bankSurface(-50, 'Kept exploring under 15%. The rover froze.')
+              }}>Keep exploring</button>
+              <button type="button" className="word slim" onClick={() => worldRef.current?.chooseCrisis('sleep')}>Deep sleep</button>
+            </div>
+          )}
+          {hud?.crisis === 'comm' && (
+            <div className="group">
+              <button type="button" className="word slim" onClick={() => worldRef.current?.chooseCrisis('blast')}>Transmit now</button>
+              <button type="button" className="word slim" onClick={() => {
+                if (worldRef.current?.chooseCrisis('wait') === 'relay') bankSurface(30, 'Waited for the orbiter. The relay took the data.')
+              }}>Wait for the orbiter</button>
+            </div>
+          )}
         </div>
         <div className="deck-bottom">
           <div className="cluster">
             <Read label="Speed (m/s)" value={hud ? hud.speed.toFixed(1) : '0'} />
             <Read label="Grade (°)" value={hud ? hud.slopeDeg.toFixed(0) : '0'} />
-            <Read label="Charge (%)" value={hud ? String(Math.round(hud.energy)) : '0'} />
+            <Read label="Battery (%)" value={hud ? String(Math.round(hud.energy)) : '0'} />
+            <Read label="Wheels (%)" value={hud ? String(Math.round(hud.wheels)) : '100'} />
+            <Read label="Link" value={hud ? (hud.link ? 'Open' : 'Dark') : '—'} />
             <Read label="Air (%)" value={hud ? String(Math.round(hud.oxygen)) : '0'} />
             <Read label="Sol" value={hud ? String(hud.sol) : '1'} />
             <Read label="Dust" value={hud ? hud.dust.toFixed(2) : '0'} />

@@ -408,12 +408,29 @@ export class DescentWorld {
   }
 
   private line(): string {
+    if (!this.airless && (this.missionId === 'mars' || this.missionId === 'custom')) return this.edlLine()
     if (this.beat === 'approach') return 'Coming around the planet. The entry corridor is ahead.'
     if (this.beat === 'entry') return this.airless ? 'Powered entry. No air to lean on.' : 'Heat shield forward. Hold the entry.'
     if (this.beat === 'chute') return 'Parachute. The heat shield is falling clear.'
     if (this.beat === 'burn' && !this.path) return 'Still descending. Divert to clear ground, or hold course for the target.'
     if (this.beat === 'burn') return this.path === 'hold' ? 'Holding the target. Fly the engines down.' : 'Diverting. Fly the engines down.'
     return 'Flying the entry.'
+  }
+
+  /** The Mars 2020 order, spoken from the altitude the forces are actually at. */
+  private edlLine(): string {
+    if (this.done) return 'Touchdown. Cables cut. The descent stage flies away.'
+    if (this.beat === 'approach') return 'Cruise stage still on. The planet is ahead.'
+    if (this.altitude > 20000) return 'Cruise stage off. De-spin. The ship stops the roll and faces the entry.'
+    if (this.altitude > 14000) return 'Balance masses ejected. Entry interface. The air is taking the speed and the shield is taking the heat.'
+    if (this.altitude > 9000) return 'Guidance on. Thrusters hold the corridor.'
+    if (this.altitude > 5500) return 'Heading alignment. Straighten up and fly right. Angle of attack to zero.'
+    if (this.altitude > 2400) return this.chuteOpen
+      ? 'Parachute open. Heat shield separating. Cameras are matching the ground.'
+      : 'Parachute deploy is next. The shield stays on until the chute is flying.'
+    if (this.altitude > 700) return 'Terrain match has a clear patch. Backshell separating. The rocket pack is free.'
+    if (this.altitude > 30) return 'Engines coming down toward a slow walk. Wheels deploying.'
+    return 'Touchdown. Cables cut. The descent stage flies away.'
   }
 
   private surfaceY(x: number, z: number): number {

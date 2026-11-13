@@ -30,16 +30,16 @@ const skins = new Map<number, { map: THREE.CanvasTexture; spec: THREE.CanvasText
 
 const PALETTES: { hull: string; dark: string; foil: string; accent: string; tile: string }[] = [
   { hull: '#e6e2d8', dark: '#2a3036', foil: '#c9a227', accent: '#1f4e79', tile: '#f4f1ea' },
-  { hull: '#1a1e24', dark: '#0b0d10', foil: '#b87333', accent: '#c45a3c', tile: '#d7cfc4' },
+  { hull: '#3a4250', dark: '#5c6570', foil: '#b87333', accent: '#c45a3c', tile: '#d7cfc4' },
   { hull: '#c5d0c4', dark: '#2c332c', foil: '#d8c48a', accent: '#2f6f62', tile: '#eef2ea' },
   { hull: '#8aa0c2', dark: '#1c2838', foil: '#eee6d4', accent: '#d4a017', tile: '#f7f4ee' },
   { hull: '#6e3030', dark: '#241010', foil: '#c4b8a8', accent: '#e8dcc8', tile: '#f0e6dc' },
-  { hull: '#2c3a2c', dark: '#101410', foil: '#8a9a6e', accent: '#f0ead8', tile: '#dce8d4' },
+  { hull: '#3e5240', dark: '#5a6a58', foil: '#8a9a6e', accent: '#f0ead8', tile: '#dce8d4' },
   { hull: '#d8cfc2', dark: '#3c342c', foil: '#5e82a8', accent: '#9a3b2f', tile: '#f3eee6' },
-  { hull: '#3a3a44', dark: '#121218', foil: '#e8e0d0', accent: '#5a8fbf', tile: '#eceaf0' },
+  { hull: '#4a4a58', dark: '#6a6a78', foil: '#e8e0d0', accent: '#5a8fbf', tile: '#eceaf0' },
   { hull: '#f2efe8', dark: '#22262c', foil: '#9a3b2f', accent: '#1f4e79', tile: '#ffffff' },
-  { hull: '#4a3828', dark: '#1a120c', foil: '#d4c4a0', accent: '#6a8f4e', tile: '#e8dcc8' },
-  { hull: '#203040', dark: '#0c1218', foil: '#7ec8d8', accent: '#e07a3d', tile: '#dce6ee' },
+  { hull: '#6a5040', dark: '#8a7060', foil: '#d4c4a0', accent: '#6a8f4e', tile: '#e8dcc8' },
+  { hull: '#3a5068', dark: '#6a8498', foil: '#7ec8d8', accent: '#e07a3d', tile: '#dce6ee' },
   { hull: '#c8b4d4', dark: '#2a2230', foil: '#f0d878', accent: '#4a3080', tile: '#f4eef8' },
 ]
 
@@ -109,8 +109,16 @@ function makeSkin(seed: number): { map: THREE.CanvasTexture; spec: THREE.CanvasT
           ctx.fillRect(x + rng.next() * cell, y + rng.next() * cell, 6, 4)
         }
       } else if (slot.kind === 'carbon') {
-        ctx.fillStyle = 'rgba(0,0,0,0.28)'
-        for (let n = 0; n < 220; n += 1) ctx.fillRect(x + rng.next() * cell, y + rng.next() * cell, 3, 8)
+        ctx.strokeStyle = 'rgba(255,255,255,0.22)'
+        ctx.lineWidth = 1
+        for (let n = 0; n < 14; n += 1) {
+          ctx.beginPath()
+          ctx.moveTo(x, y + (n / 14) * cell)
+          ctx.lineTo(x + cell, y + ((n + 3) / 14) * cell)
+          ctx.stroke()
+        }
+        ctx.fillStyle = 'rgba(255,255,255,0.16)'
+        for (let n = 0; n < 80; n += 1) ctx.fillRect(x + rng.next() * cell, y + rng.next() * cell, 10, 3)
       } else if (slot.kind === 'foil') {
         const glow = ctx.createLinearGradient(x, y, x + cell, y + cell)
         glow.addColorStop(0, shade(slot.fill, 40))
@@ -565,8 +573,66 @@ export function buildGeneratedShip(recipe: ShipRecipe): GeneratedShip {
     tagPart(right, recipe.bind.engine)
     nozzles.push(v(left.position.x, -0.2, 0), v(right.position.x, -0.2, 0))
   }
+  decorate(mesh, recipe, material)
 
   return { root, nozzles: nozzles.map((p) => new THREE.Vector3(p.x, p.y, p.z)), left, right }
+}
+
+/** Twelve kits on top of the six silhouettes, so two ships of the same family still read apart. */
+function decorate(parent: THREE.Object3D, recipe: ShipRecipe, material: THREE.Material): void {
+  const kit = recipe.seed % 12
+  const r = recipe.radius
+  const span = recipe.length * Math.max(2, recipe.segments)
+  const metal = (material as THREE.MeshStandardMaterial).clone()
+  metal.emissive = new THREE.Color('#6a7380')
+  metal.emissiveIntensity = 0.22
+  const bar = (from: THREE.Vector3, to: THREE.Vector3, thick: number) => {
+    const dir = to.clone().sub(from)
+    const len = dir.length()
+    if (len < 0.04) return
+    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(thick, thick, len, 6), metal)
+    mesh.position.copy(from).add(to).multiplyScalar(0.5)
+    mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize())
+    parent.add(mesh)
+  }
+  if (kit <= 1) {
+    for (const y of [span * 0.28, span * 0.55, span * 0.82]) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(r * 1.12, Math.max(0.03, r * 0.07), 8, 22), metal)
+      ring.rotation.x = Math.PI / 2
+      ring.position.y = y
+      parent.add(ring)
+    }
+  } else if (kit <= 4) {
+    for (const side of [-1, 1]) {
+      const pod = new THREE.Mesh(new THREE.CapsuleGeometry(r * 0.26, span * 0.42, 4, 8), metal)
+      pod.position.set(side * r * 1.65, span * 0.38, 0)
+      parent.add(pod)
+      bar(new THREE.Vector3(side * r * 0.9, span * 0.38, 0), new THREE.Vector3(side * r * 1.4, span * 0.38, 0), r * 0.05)
+    }
+  } else if (kit <= 6) {
+    for (const [x, z] of [[1, 1], [1, -1], [-1, 1], [-1, -1]] as const) {
+      bar(new THREE.Vector3(x * r, 0.15, z * r), new THREE.Vector3(x * r * 0.62, span, z * r * 0.62), r * 0.04)
+    }
+  } else if (kit <= 8) {
+    for (let i = 0; i < 5; i += 1) {
+      const a = (i / 5) * Math.PI * 2
+      const tank = new THREE.Mesh(new THREE.SphereGeometry(r * 0.3, 12, 8), metal)
+      tank.position.set(Math.cos(a) * r * 0.72, span * 0.46, Math.sin(a) * r * 0.72)
+      parent.add(tank)
+    }
+  } else if (kit <= 10) {
+    bar(new THREE.Vector3(0, span * 0.85, 0), new THREE.Vector3(r * 0.35, span + r * 1.3, 0), r * 0.045)
+    const dish = new THREE.Mesh(new THREE.CircleGeometry(r * 0.5, 18), metal)
+    dish.position.set(r * 0.35, span + r * 1.35, 0)
+    dish.rotation.x = -0.7
+    parent.add(dish)
+  } else {
+    for (let i = 0; i < 6; i += 1) {
+      const box = new THREE.Mesh(new THREE.BoxGeometry(r * 0.42, r * 0.2, r * 0.55), metal)
+      box.position.set((i % 2 === 0 ? 1 : -1) * r * 0.95, span * (0.12 + i * 0.13), (i % 3) * r * 0.15)
+      parent.add(box)
+    }
+  }
 }
 
 /** Closed engine bell on the aft face. The cabin stays sealed. */

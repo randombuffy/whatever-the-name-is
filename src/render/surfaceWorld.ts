@@ -57,6 +57,9 @@ export interface SurfaceReadout {
   target: string
   hasRover: boolean
   hasHeli: boolean
+  wheels: number
+  crisis: '' | 'power' | 'comm'
+  lost: boolean
 }
 
 const CHUNK = 36
@@ -136,6 +139,11 @@ export class SurfaceWorld {
   private notice = ''
   private noticeFor = 0
   private energy = 100
+  private wheels = 100
+  private crisis: '' | 'power' | 'comm' = ''
+  private lost = false
+  private linkForce = false
+  private commSol = -1
   private oxygen = 100
   private sol = 1
   private lookYaw = 0.4
@@ -290,6 +298,35 @@ export class SurfaceWorld {
     this.camera.aspect = width / height
     this.camera.updateProjectionMatrix()
     this.renderer.setSize(width, height)
+  }
+
+  chooseCrisis(choice: 'sleep' | 'push' | 'wait' | 'blast'): string {
+    if (this.crisis === 'power' && choice === 'sleep') {
+      this.energy = Math.max(this.energy, 32)
+      this.crisis = ''
+      this.say('Deep sleep. Only the heaters stay on. The sol waits.')
+      return 'sleep'
+    }
+    if (this.crisis === 'power' && choice === 'push') {
+      this.energy = 0
+      this.lost = true
+      this.crisis = ''
+      this.say('Kept driving. The rover died in the cold.')
+      return 'dead'
+    }
+    if (this.crisis === 'comm' && choice === 'wait') {
+      this.crisis = ''
+      this.linkForce = true
+      this.say('Waiting for the orbiter. The pass takes the recorder.')
+      return 'relay'
+    }
+    if (this.crisis === 'comm' && choice === 'blast') {
+      this.energy = Math.max(0, this.energy - 20)
+      this.crisis = ''
+      this.say('The hill ate the signal. A fifth of the battery is gone and nothing was sent.')
+      return 'miss'
+    }
+    return ''
   }
 
   cycleCam(): void {
@@ -589,7 +626,8 @@ export class SurfaceWorld {
       steer = Math.max(-1, Math.min(1, diff * 1.6))
       if (Math.hypot(target.x - this.drive.x, target.z - this.drive.z) > 3.2) throttle = 0.7
     }
-    if (this.energy <= 0) throttle = 0
+    if (this.energy <= 0 || this.crisis || this.lost) throttle = 0
+    throttle *= Math.max(0.25, this.wheels / 100)
     const next = stepDrive(this.drive, {
       throttle,
       steer,
@@ -605,6 +643,7 @@ export class SurfaceWorld {
     if (this.hits(next.x, next.z, 1.25)) {
       this.drive = { ...this.drive, speed: this.drive.speed * -0.25 }
       this.bump = 0.7
+      if (Math.abs(this.drive.speed) > 0.4) this.wheels = Math.max(12, this.wheels - 7)
     } else {
       this.odometer += Math.abs(next.speed) * dt
       this.drive = next
@@ -677,7 +716,18 @@ export class SurfaceWorld {
     const sun = 1 - sky.dust
     const charging = this.mode !== 'scout' && (this.setup.steady || moving < 0.08)
     if (charging) this.energy += dt * (this.setup.steady ? 4.5 * Math.max(0.45, sun) : 3.2 * sun)
+    if (this.setup.air && !this.setup.steady && this.crisis !== 'power') this.energy -= dt * 0.4
     this.energy = Math.max(0, Math.min(100, this.energy))
+    if (this.setup.air && this.mode === 'drive' && !this.lost && !this.crisis && this.energy < 15 && this.energy > 0) {
+      this.crisis = 'power'
+      this.say('Battery under 15%. Dust and the night heaters. Push on and the rover freezes. Sleep and it lives.')
+    }
+    if (this.setup.air && !sky.comms && this.commSol !== this.sol && !this.crisis && !this.lost) {
+      this.commSol = this.sol
+      this.crisis = 'comm'
+      this.linkForce = false
+      this.say('No line to Earth. The relay orbiter is not overhead.')
+    }
     if (this.cueFor > 0) this.cueFor = Math.max(0, this.cueFor - dt)
     else this.cue = ''
     if (this.noticeFor > 0) this.noticeFor = Math.max(0, this.noticeFor - dt)
@@ -789,7 +839,10 @@ export class SurfaceWorld {
     const sky = this.condition()
     const walking = this.keys.has('w') || this.keys.has('a') || this.keys.has('s') || this.keys.has('d')
     let prompt = ''
-    if (!this.introDone) prompt = this.setup.siteId === 'jezero'
+    if (this.lost) prompt = 'The rover froze. The mission on the surface is over.'
+    else if (this.crisis === 'power') prompt = 'Battery under 15%. Sleep, or push and lose the rover.'
+    else if (this.crisis === 'comm') prompt = 'No relay. Wait for the orbiter, or burn power on a blind send.'
+    else if (!this.introDone) prompt = this.setup.siteId === 'jezero'
       ? 'On Jezero crater. WASD walk. F boards the rover. E picks a sample.'
       : 'On the surface. WASD walk. F boards the rover. E picks a sample.'
     else if (this.notice) prompt = this.notice
@@ -813,7 +866,7 @@ export class SurfaceWorld {
       sol: this.sol,
       held: held.length,
       sent: this.notes.length - held.length,
-      link: sky.comms,
+      link: sky.comms || this.linkForce,
       label: chosen ? chosen.name : sky.label,
       zoom: Math.round(this.fov),
       cue: this.cue,
@@ -826,6 +879,9 @@ export class SurfaceWorld {
       target: target?.name ?? '',
       hasRover: this.setup.roverMassKg !== null,
       hasHeli: this.setup.heli && this.setup.air,
+      wheels: this.wheels,
+      crisis: this.crisis,
+      lost: this.lost,
     }
   }
 
