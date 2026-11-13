@@ -184,7 +184,62 @@ describe('mission validation', () => {
       const fixed = repairCraft(starterCraft(id), mission, plan)
       const hard = evaluate(fixed, mission, plan).issues.filter((issue) => issue.severity === 'hard')
       expect(hard.map((issue) => `${id}:${issue.id}`)).toEqual([])
+      // Verify all parts are centralized
+      for (const part of fixed.parts) {
+        expect(part.offset).toEqual({ x: 0, y: 0, z: 0 })
+      }
     }
+  })
+
+  it('auto-fix completely repairs, centralizes and aerodynamically arranges a scrambled spacecraft', () => {
+    const mission = getMission('mars')!
+    const plan = defaultPlan(mission)
+    const messyCraft: SpacecraftConfig = {
+      name: 'MessyShuttle',
+      hullSeed: 42,
+      parts: [
+        { instanceId: 'b1', specId: 'bus-12u', fill: 1, enabled: true, mount: 'forward', offset: { x: 1.5, y: -0.8, z: 0.2 } },
+        { instanceId: 'b2', specId: 'bus-deep', fill: 1, enabled: true, mount: 'aft', offset: { x: -2.0, y: 1.1, z: -0.5 } },
+        { instanceId: 't1', specId: 'tank-xe-120', fill: 1, enabled: true, mount: 'port', offset: { x: 0.9, y: 0.3, z: 1.2 } },
+        { instanceId: 'e1', specId: 'cold-gas', fill: 1, enabled: true, mount: 'zenith', offset: { x: -0.4, y: 2.0, z: -1.0 } },
+        { instanceId: 'a1', specId: 'antenna-lga', fill: 1, enabled: true, mount: 'aft', offset: { x: 3.0, y: 0.0, z: 0.0 } },
+      ],
+    }
+
+    const fixed = repairCraft(messyCraft, mission, plan)
+    const report = evaluate(fixed, mission, plan)
+
+    expect(report.flyable).toBe(true)
+    expect(report.hardCount).toBe(0)
+    expect(report.mass.totalKg).toBeLessThanOrEqual(mission.maxMassKg)
+
+    // Centralization verification
+    for (const part of fixed.parts) {
+      expect(part.offset).toEqual({ x: 0, y: 0, z: 0 })
+    }
+
+    // Aerodynamic and physical mounts verification
+    const engine = fixed.parts.find((p) => p.specId === 'biprop-450')
+    expect(engine?.mount).toBe('aft')
+
+    const tank = fixed.parts.find((p) => p.specId === 'tank-1500')
+    expect(tank?.mount).toBe('aft')
+
+    const antenna = fixed.parts.find((p) => p.specId === 'antenna-hga')
+    expect(antenna?.mount).toBe('zenith')
+
+    const camera = fixed.parts.find((p) => p.specId === 'camera')
+    expect(camera?.mount).toBe('forward')
+
+    const spectrometer = fixed.parts.find((p) => p.specId === 'spectrometer')
+    expect(spectrometer?.mount).toBe('forward')
+
+    const acs = fixed.parts.find((p) => p.specId === 'acs')
+    expect(acs?.mount).toBe('nadir')
+
+    // Preserves name and seed
+    expect(fixed.name).toBe('MessyShuttle')
+    expect(fixed.hullSeed).toBe(42)
   })
 })
 
