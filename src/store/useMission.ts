@@ -11,6 +11,7 @@ import { outcomeOf } from '../domain/score'
 import { applyDecision, createSim, stepSim } from '../domain/simulate'
 import { WARP_MAX } from '../domain/time'
 import { migrateLegacyStorage, STORAGE_MAIN } from '../domain/brand'
+import { defaultCrew, parseCrew, parseCrewSize, type CrewSeat, type CrewSize } from '../domain/crew'
 import type { ManoeuvreNode, MissionDef, MissionOutcome, MissionPlan, SimState, SpacecraftConfig } from '../domain/types'
 
 migrateLegacyStorage()
@@ -73,6 +74,12 @@ interface MissionStore {
   ascentFuelFrac: number
   difficulty: 'cadet' | 'specialist' | 'commander'
   setDifficulty: (difficulty: 'cadet' | 'specialist' | 'commander') => void
+  crewSize: CrewSize
+  crew: CrewSeat[]
+  setCrewSize: (size: CrewSize) => void
+  setCrewName: (index: number, name: string) => void
+  toggleCrewReady: (index: number) => void
+  resetCrewReady: () => void
   saves: MissionSave[]
   chooseMission: (id: string) => void
   assignMission: (id: string) => void
@@ -261,6 +268,18 @@ export const useMission = create<MissionStore>()(
       ascentFuelFrac: 1,
       difficulty: 'specialist',
       setDifficulty: (difficulty) => set({ difficulty }),
+      crewSize: 1,
+      crew: defaultCrew(1),
+      setCrewSize: (size) => set({ crewSize: size, crew: defaultCrew(size) }),
+      setCrewName: (index, name) => set({
+        crew: get().crew.map((seat, i) => i === index ? { ...seat, name: name.trim().slice(0, 24) || seat.name } : seat),
+      }),
+      toggleCrewReady: (index) => set({
+        crew: get().crew.map((seat, i) => i === index ? { ...seat, ready: !seat.ready } : seat),
+      }),
+      resetCrewReady: () => set({
+        crew: get().crew.map((seat) => ({ ...seat, ready: get().crewSize === 1 })),
+      }),
       saves: [],
       chooseMission: (id) => {
         const mission = getMission(id)
@@ -355,6 +374,7 @@ export const useMission = create<MissionStore>()(
           field: null,
           descent: null,
           touchdown: null,
+          crew: get().crew.map((seat) => ({ ...seat, ready: get().crewSize === 1 })),
         })
       },
       loadSave: (id) => {
@@ -639,7 +659,7 @@ export const useMission = create<MissionStore>()(
         set({ sim: { ...sim, disabled } })
       },
       finish: () => {
-        const { sim, craft, missionId, plan, history, custom, difficulty, surfaceScience, surfaceBits, campaignNote, touchdown, rewinds, checkpoints, badges } = get()
+        const { sim, craft, missionId, plan, history, custom, difficulty, crew, surfaceScience, surfaceBits, campaignNote, touchdown, rewinds, checkpoints, badges } = get()
         const mission = missionFrom(missionId, custom, difficulty)
         if (!sim || !craft || !mission || !plan) return
         const scored = { ...sim, sciencePoints: sim.sciencePoints + surfaceScience, dataReturnedBits: sim.dataReturnedBits + surfaceBits }
@@ -668,6 +688,10 @@ export const useMission = create<MissionStore>()(
         outcome.rewinds = rewinds
         outcome.achievements = earned
         outcome.timeline = checkpoints.map((mark) => ({ tSec: mark.tSec, label: mark.label }))
+        outcome.crew = crew.map((seat) => ({ role: seat.role, name: seat.name }))
+        if (crew.length > 1) {
+          outcome.strengths = [`Crew of ${crew.length}: ${crew.map((seat) => seat.name).join(', ')}.`, ...outcome.strengths]
+        }
         const nextBadges = [...new Set([...badges, ...earned.map((badge) => badge.id)])]
         set({
           outcome,
@@ -738,6 +762,8 @@ export const useMission = create<MissionStore>()(
         launchReady: state.launchReady,
         ascentFuelFrac: state.ascentFuelFrac,
         difficulty: state.difficulty,
+        crewSize: state.crewSize,
+        crew: state.crew,
         saves: state.saves,
       }),
       merge: (persisted, current) => {
@@ -789,6 +815,8 @@ export const useMission = create<MissionStore>()(
           launchReady: saved.launchReady === true,
           ascentFuelFrac: typeof saved.ascentFuelFrac === 'number' ? Math.min(1, Math.max(0.02, saved.ascentFuelFrac)) : 1,
           difficulty: (saved.difficulty === 'cadet' || saved.difficulty === 'commander') ? saved.difficulty : 'specialist',
+          crewSize: parseCrewSize(saved.crewSize),
+          crew: parseCrew(saved.crew, parseCrewSize(saved.crewSize)),
           soundChosen: saved.soundChosen === true,
           audio: saved.soundChosen === true ? saved.audio !== false : true,
         }

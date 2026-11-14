@@ -8,6 +8,7 @@ import type { EngineeringIssue } from '../domain/types'
 import { PadWorld, type AscentView, type PadAction, type PadContact } from '../render/padWorld'
 import { MissionTitle } from './bits'
 import { assetCount, watchAssets } from '../render/gltf'
+import { crewReady } from '../domain/crew'
 import { useActiveMission, useMission } from '../store/useMission'
 import { createEngineTone } from './tone'
 import { loopFile, playGroup, playJump, playLand, playStep, setBed, setScoreBoost, sting } from './audio'
@@ -42,6 +43,8 @@ export function PadScreen() {
   const chooseMission = useMission((state) => state.chooseMission)
   const launchReady = useMission((state) => state.launchReady)
   const launchRequest = useMission((state) => state.launchRequest)
+  const crew = useMission((state) => state.crew)
+  const crewSize = useMission((state) => state.crewSize)
   const clearLaunchRequest = useMission((state) => state.clearLaunchRequest)
   const commit = useMission((state) => state.commitLaunch)
   const [hud, setHud] = useState<PadContact>(EMPTY)
@@ -252,6 +255,10 @@ export function PadScreen() {
       say('No go. Clear the engineering holds first.', state.audio)
       return
     }
+    if (state.crewSize > 1 && !crewReady(state.crew)) {
+      say('No go. Every seat signs the stack first.', state.audio)
+      return
+    }
     useMission.getState().armLaunch()
     setHold(null)
     setMissionsOpen(false)
@@ -322,6 +329,9 @@ export function PadScreen() {
         {missionsOpen && count === null && <Keys prompt="E — Close" />}
         {mission && launchReady && <span>Cleared</span>}
         {mission && <span>{mission.name}</span>}
+        {crewSize > 1 && (
+          <span>{crewReady(crew) ? 'Crew signed' : 'Crew must sign'}</span>
+        )}
         {count === null && (
           <span className="hud-row">
             <Mix />

@@ -42,6 +42,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { CATALOG, getSpec } from '../domain/catalog'
+import { CREW_ROLES, crewReady, type CrewSize } from '../domain/crew'
 import { OBJECTIVES, kitCoverage, objectiveKit, objectiveOf, siteOf, sitesFor, suggestedSite, windowExtraDv } from '../domain/campaign'
 import { bits, clock, db, kelvin, kg, money, mps, percent, watts } from '../domain/format'
 import { lunarTransfer, marsTransfer, solarTransfer } from '../domain/orbit'
@@ -177,6 +178,103 @@ const DIFFICULTY_BLURB = {
   commander: 'OWLT comms lag · −10% budget · heavy storms',
 } as const
 
+export function CrewPanel() {
+  const crewSize = useMission((state) => state.crewSize)
+  const crew = useMission((state) => state.crew)
+  const setCrewSize = useMission((state) => state.setCrewSize)
+  const setCrewName = useMission((state) => state.setCrewName)
+  return (
+    <div className="crew-panel">
+      <div className="diff-panel-head">
+        <b>Flight crew</b>
+        <span>{crewSize === 1 ? 'Solo. You cover every desk.' : `${crewSize} seats. Pass the machine; each role owns a trade-off.`}</span>
+      </div>
+      <div className="crew-size" role="group" aria-label="Crew size">
+        {([1, 2, 3, 4] as CrewSize[]).map((size) => (
+          <button key={size} type="button" aria-pressed={crewSize === size} onClick={() => setCrewSize(size)}>
+            {size === 1 ? 'Solo' : `${size}`}
+          </button>
+        ))}
+      </div>
+      {crewSize > 1 && (
+        <ol className="crew-seats">
+          {crew.map((seat, index) => {
+            const role = CREW_ROLES.find((row) => row.id === seat.role)
+            return (
+              <li key={seat.role}>
+                <label>
+                  <b>{role?.title}</b>
+                  <span>{role?.duty}</span>
+                  <input
+                    type="text"
+                    maxLength={24}
+                    value={seat.name}
+                    aria-label={`${role?.title} name`}
+                    onChange={(event) => setCrewName(index, event.target.value)}
+                  />
+                </label>
+              </li>
+            )
+          })}
+        </ol>
+      )}
+    </div>
+  )
+}
+
+export function CrewBar() {
+  const crew = useMission((state) => state.crew)
+  const crewSize = useMission((state) => state.crewSize)
+  const toggleCrewReady = useMission((state) => state.toggleCrewReady)
+  const phase = useMission((state) => state.phase)
+  if (crewSize < 2) return null
+  const focus = phase === 'plan' ? 'commander' : phase === 'flight' || phase === 'landing' ? 'capcom' : 'engineer'
+  return (
+    <div className="crew-bar" role="group" aria-label="Flight crew">
+      {crew.map((seat, index) => {
+        const role = CREW_ROLES.find((row) => row.id === seat.role)
+        const lead = seat.role === focus || (focus === 'engineer' && seat.role === 'scientist' && phase === 'design')
+        return (
+          <button
+            key={seat.role}
+            type="button"
+            className={`crew-chip${lead ? ' is-lead' : ''}${seat.ready ? ' is-ready' : ''}`}
+            aria-pressed={seat.ready}
+            title={role?.duty}
+            onClick={() => toggleCrewReady(index)}
+          >
+            <em>{role?.title}</em>
+            <span>{seat.name}</span>
+            <small>{seat.ready ? 'Signed' : 'Stand by'}</small>
+          </button>
+        )
+      })}
+      <span className="crew-status">{crewReady(crew) ? 'Stack signed' : 'Every seat signs before countdown'}</span>
+    </div>
+  )
+}
+
+export function RankBoard({ compact = false }: { compact?: boolean }) {
+  const history = useMission((state) => state.history)
+  if (history.length === 0) return null
+  const ranked = [...history].sort((a, b) => b.score - a.score).slice(0, compact ? 3 : 8)
+  return (
+    <div className={`rank-board${compact ? ' is-compact' : ''}`}>
+      <b>Mission ranking</b>
+      <ol>
+        {ranked.map((flight, index) => (
+          <li key={`${flight.finishedAt}-${flight.craftName}`}>
+            <span>{index + 1}</span>
+            <strong>{flight.craftName}</strong>
+            <em>{flight.score}</em>
+            <small>{flight.siteName ?? flight.missionId} · {flight.gradeRank ?? '—'}</small>
+          </li>
+        ))}
+      </ol>
+    </div>
+  )
+}
+
 export function DifficultyPanel({ compact = false }: { compact?: boolean }) {
   const difficulty = useMission((state) => state.difficulty)
   const setDifficulty = useMission((state) => state.setDifficulty)
@@ -210,6 +308,7 @@ export function SelectScreen({ onLaunch }: { onLaunch?: () => void }) {
   const startFresh = useMission((state) => state.startFresh)
   const loadSave = useMission((state) => state.loadSave)
   const snapshotSave = useMission((state) => state.snapshotSave)
+  const createCustom = useMission((state) => state.createCustom)
   const saves = useMission((state) => state.saves)
   const [loadOpen, setLoadOpen] = useState(false)
   return (
@@ -217,8 +316,10 @@ export function SelectScreen({ onLaunch }: { onLaunch?: () => void }) {
       <TitleBanner />
       <div className="title-gate">
         <MissionTitle text="AeroAestro" variant="hero" />
-        <p>The rocket is on the pad. You start on the grounds, on foot.</p>
+        <p>Design the spacecraft, fly the same numbers, and see every trade-off land on the pad.</p>
         <DifficultyPanel />
+        <CrewPanel />
+        <RankBoard compact />
         <div className="title-actions">
           <button type="button" className="word" onClick={() => { startFresh(); onLaunch?.() }}>
             <svg className="btn-mark" viewBox="0 0 16 16" aria-hidden="true">
@@ -231,6 +332,14 @@ export function SelectScreen({ onLaunch }: { onLaunch?: () => void }) {
             Launch mission
           </button>
           <button type="button" className="word slim" onClick={() => { snapshotSave(); setLoadOpen(true) }}>Load mission</button>
+          <button
+            type="button"
+            className="word slim"
+            title="Open mass and budget limits without a scripted campaign"
+            onClick={() => { createCustom('mars', 'Sandbox', 3200, 5e8); onLaunch?.() }}
+          >
+            Sandbox
+          </button>
         </div>
       </div>
       {loadOpen && (
@@ -1311,6 +1420,17 @@ export function DebriefScreen() {
           </div>
         </div>
 
+        {outcome.crew && outcome.crew.length > 1 && (
+          <div className="crew-report">
+            <b>Flight crew</b>
+            <ul>
+              {outcome.crew.map((seat) => (
+                <li key={seat.role}><em>{seat.role}</em> {seat.name}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <RankBoard />
         <div className="debrief-objectives-box">
           <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', fontWeight: 600 }}>
             Mission Objectives Status

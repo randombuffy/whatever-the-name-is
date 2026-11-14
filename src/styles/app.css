@@ -981,6 +981,88 @@ input[type="range"]::-moz-range-thumb {
   color: rgba(226, 232, 240, 0.82);
   max-width: 36ch;
 }
+.crew-panel, .rank-board {
+  width: min(420px, calc(100vw - 32px));
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #111111;
+  border-radius: 12px;
+  text-align: left;
+}
+.crew-size {
+  display: flex;
+  gap: 4px;
+}
+.crew-size button {
+  flex: 1;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: #1a1a1a;
+  color: #f4f1ea;
+  cursor: pointer;
+}
+.crew-size button[aria-pressed="true"] { background: #f4f1ea; color: #111111; }
+.crew-seats {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+.crew-seats label { display: grid; gap: 2px; }
+.crew-seats b { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
+.crew-seats span { font-size: 11px; color: rgba(218, 218, 218, 0.68); }
+.crew-seats input {
+  height: 32px;
+  border: 1px solid rgba(244, 241, 234, 0.14);
+  border-radius: 8px;
+  background: #1a1a1a;
+  color: #f4f1ea;
+  padding: 0 8px;
+}
+.crew-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 12px 8px;
+  pointer-events: auto;
+}
+.crew-chip {
+  display: grid;
+  justify-items: start;
+  gap: 0;
+  padding: 4px 8px;
+  border: 1px solid rgba(244, 241, 234, 0.12);
+  border-radius: 8px;
+  background: #111111;
+  color: #f4f1ea;
+  cursor: pointer;
+  min-width: 92px;
+}
+.crew-chip em { font-style: normal; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(218, 218, 218, 0.62); }
+.crew-chip span { font-size: 12px; }
+.crew-chip small { font-size: 10px; color: rgba(218, 218, 218, 0.5); }
+.crew-chip.is-lead { border-color: rgba(244, 241, 234, 0.34); }
+.crew-chip.is-ready { background: #1a1a1a; }
+.crew-chip.is-ready small { color: #c9a227; }
+.crew-status { font-size: 11px; color: rgba(218, 218, 218, 0.68); }
+.rank-board ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.rank-board li {
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  grid-template-rows: auto auto;
+  gap: 0 8px;
+  font-size: 12px;
+}
+.rank-board li span { grid-row: 1 / span 2; color: rgba(218, 218, 218, 0.45); }
+.rank-board li em { font-style: normal; font-family: var(--mono); }
+.rank-board li small { grid-column: 2; color: rgba(218, 218, 218, 0.55); }
+.crew-report { display: grid; gap: 6px; }
+.crew-report ul { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 8px; }
+.crew-report em { font-style: normal; text-transform: uppercase; letter-spacing: 0.08em; font-size: 10px; color: rgba(218, 218, 218, 0.55); margin-right: 6px; }
 .diff-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

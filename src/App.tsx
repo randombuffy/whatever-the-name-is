@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Expand } from 'lucide-react'
-import { BriefScreen, CreditsScreen, DebriefScreen, DesignScreen, PlanScreen, SelectScreen } from './ui/screens'
+import { BriefScreen, CreditsScreen, CrewBar, DebriefScreen, DesignScreen, PlanScreen, SelectScreen } from './ui/screens'
 import { LandingScreen, SurfaceScreen } from './ui/field'
 import { PadScreen } from './ui/pad'
 import { CruiseScreen } from './ui/cruise'
@@ -288,6 +288,7 @@ export function App() {
           )}
         </nav>
         </div>
+        <CrewBar />
         {mission && objective && site && phase === 'design' && (
           <div className="mission-banner" role="banner" aria-label="Mission objectives">
             <span className="banner-item"><span className="banner-dim">Mission</span> <strong>{mission.name} · {objective.title}</strong></span>

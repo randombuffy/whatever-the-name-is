@@ -80,6 +80,10 @@ Internal units are SI. The interface shows kilograms, metres per second, watts, 
 - Propellant used on a burn step is capped by the rocket equation for the delta-v still required. Coast steps are up to 3600 seconds. Burn steps are 600 seconds.
 - A decision freezes the clock until you choose. Safe mode sheds science. An empty recorder discards new bits. An empty tank cannot finish a burn.
 
+## Challenge coverage
+
+This is a NASA Space Apps Space Mission Design Game. One spacecraft is designed against mass, power, budget, communications, data, and lifetime, then flown through pad, cruise, entry, surface, and debrief. Cadet, Specialist, and Commander change those margins. Solo or a local crew of two to four (Commander, Engineer, Scientist, CAPCOM) share one machine: every seat signs the stack before countdown. Sandbox opens a Mars campaign with looser mass and budget. Rankings come from this browser's debrief history. Trajectories are patched-conic illustrations, not NASA ephemerides.
+
 ## Missions
 
 Lunar Reconnaissance, Mars Pathfinder, Europa Explorer and Asteroid Survey. Parameters are game values. The starter spacecraft is supposed to fail validation. A flyable lunar example is a smallsat bus, the 450 N bipropellant engine, a 500 kg chemical tank, attitude thrusters, a 600 W array, the transponder, a 0.8 m high-gain antenna, a camera, insulation and a small radiator.

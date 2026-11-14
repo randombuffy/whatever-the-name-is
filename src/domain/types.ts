@@ -373,4 +373,5 @@ export interface MissionOutcome {
     anomalyPoints: number
     total: number
   }
+  crew?: { role: string; name: string }[]
 }
