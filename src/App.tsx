@@ -10,17 +10,8 @@ import { Boot } from './ui/Boot'
 import { Viewport } from './render/Viewport'
 import type { SceneMode } from './render/world'
 import { useActiveMission, useMission, type Phase } from './store/useMission'
-import { evaluate } from './domain/validate'
 import { effectiveWarp } from './domain/time'
 import { siteOf, objectiveOf } from './domain/campaign'
-
-function shortMoney(usd: number): string {
-  const abs = Math.abs(usd)
-  const sign = usd < 0 ? '-' : ''
-  if (abs >= 1e6) return `${sign}$${Math.round(abs / 1e6)}M`
-  if (abs >= 1e3) return `${sign}$${Math.round(abs / 1e3)}k`
-  return `${sign}$${Math.round(abs)}`
-}
 
 function sceneMode(phase: Phase): SceneMode {
   if (phase === 'design') return 'design'
@@ -60,11 +51,6 @@ export function App() {
   const [booting, setBooting] = useState(true)
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
   const lost = phase !== 'select' && phase !== 'credits' && !mission
-  const report = mission && craft && plan ? evaluate(craft, mission, plan) : null
-  const spent = report?.cost.totalUsd ?? 0
-  const budget = mission?.budgetUsd ?? 1
-  const budgetRatio = Math.max(0, Math.min(1, spent / budget))
-
   const site = mission && plan ? siteOf(mission, plan) : null
   const objective = plan ? objectiveOf(plan) : null
 
@@ -180,19 +166,11 @@ export function App() {
       {phase !== 'surface' && phase !== 'station' && phase !== 'pad' && phase !== 'flight' && phase !== 'landing' && phase !== 'launch' && (
       <header className="app-header-area">
         <div className="float-top">
-        <div className="brand-pill">
-          <b>Mission Control</b>
-          <small>NASA Space Apps</small>
-        </div>
-        {report && phase !== 'select' && phase !== 'credits' && (
-          <div className="budget-float" aria-label="Budget">
-            <span>Budget</span>
-            <i><b style={{ transform: `scaleX(${budgetRatio})` }} className={report.cost.marginUsd < 0 ? 'over' : ''} /></i>
-            <div className="budget-nums"><em>{shortMoney(spent)}</em><em>{shortMoney(budget)}</em></div>
-            <span>Mass {Math.round(report.mass.totalKg)} / {Math.round(mission?.maxMassKg ?? 0)} kg · Δv {Math.round(report.propulsion.dvMps)} m/s</span>
+          <div className="brand-pill">
+            <b>Mission Control</b>
+            <small>NASA Space Apps</small>
           </div>
-        )}
-        <nav className="top-nav" aria-label="Main Navigation">
+          <nav className="top-nav" aria-label="Main Navigation">
           <button
             type="button"
             className={`top-nav-btn ${phase === 'select' ? 'active' : ''}`}

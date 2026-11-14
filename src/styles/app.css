@@ -1753,7 +1753,7 @@ button.key-banner {
   min-height: 0;
   flex: 1;
   overflow-y: auto;
-  padding-bottom: 56px; /* Plan the flight button height (40px) + 16px */
+  padding-bottom: 120px; /* 120px bottom padding to clear bottom container */
   scrollbar-width: thin;
   scrollbar-color: #3a3a3a transparent;
 }
@@ -1924,7 +1924,7 @@ button.key-banner {
   min-height: 0;
   flex: 1;
   overflow-y: auto;
-  padding: 12px 12px 56px 12px; /* Plan the flight button height (40px) + 16px */
+  padding: 12px 12px 120px 12px; /* 120px bottom padding to clear bottom container */
   gap: 12px;
   scrollbar-width: thin;
   scrollbar-color: #3a3a3a transparent;
@@ -2379,6 +2379,20 @@ button.key-banner {
   pointer-events: auto;
 }
 
+@media (max-width: 1200px) {
+  .viewport-overlay-corner {
+    bottom: 140px;
+    right: 360px;
+  }
+}
+
+@media (max-width: 900px) {
+  .viewport-overlay-corner {
+    bottom: 140px;
+    right: 16px;
+  }
+}
+
 .viewport-recenter-btn {
   display: inline-flex;
   align-items: center;
@@ -2402,17 +2416,40 @@ button.key-banner {
   transform: translateY(-1px);
 }
 
-/* Primary Flight Plan Button */
+/* Bottom-Center Container: Budget Block + Plan Button */
 .bottom-plan-bar {
-  position: absolute;
+  position: fixed;
   bottom: 16px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 10;
   pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: min(340px, calc(100vw - 32px));
+}
+
+.bottom-plan-bar .budget-float {
+  position: static;
+  transform: none;
+  top: auto;
+  left: auto;
+  width: 100%;
+  box-sizing: border-box;
+  pointer-events: auto;
+  background: #111111;
+  border: 1px solid #1f1f1f;
+  border-radius: 12px;
+  padding: 8px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .plan-flight-main-btn {
+  width: 100%;
   height: 40px;
   padding: 0 24px;
   border-radius: 8px;

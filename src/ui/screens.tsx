@@ -366,6 +366,9 @@ export function DesignScreen() {
 
   if (!craft || !mission || !plan) return null
   const report = evaluate(craft, mission, plan)
+  const spent = report.cost.totalUsd
+  const budget = mission.budgetUsd || 1
+  const budgetRatio = Math.max(0, Math.min(1, spent / budget))
   const hard = report.issues.filter((issue) => issue.severity === 'hard').length
   const generation = report.power.constantGenerationW + report.power.generationAt1AuW / (mission.destinationAu ** 2)
   const selected = craft.parts.find((part) => part.instanceId === selectedInstanceId)
@@ -905,8 +908,14 @@ export function DesignScreen() {
         </button>
       </div>
 
-      {/* Bottom Primary Button */}
-      <div className="bottom-plan-bar">
+      {/* Bottom Center Container: Budget Block + Plan Button */}
+      <div className="bottom-plan-bar" role="region" aria-label="Flight planning and budget">
+        <div className="budget-float" aria-label="Budget">
+          <span>Budget</span>
+          <i><b style={{ transform: `scaleX(${budgetRatio})` }} className={report.cost.marginUsd < 0 ? 'over' : ''} /></i>
+          <div className="budget-nums"><em>{shortMoney(spent)}</em><em>{shortMoney(budget)}</em></div>
+          <span>Mass {Math.round(report.mass.totalKg)} / {Math.round(mission.maxMassKg)} kg · Δv {Math.round(report.propulsion.dvMps)} m/s</span>
+        </div>
         <button
           type="button"
           className={`plan-flight-main-btn ${hard > 0 ? 'is-disabled' : 'is-ready'}`}
