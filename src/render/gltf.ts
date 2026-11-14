@@ -15,14 +15,8 @@ const BOOT_ASSETS = [
   '/props/control_station.glb',
   '/3d/low_poly_tree_set.glb',
   '/vehicles/cybertruck.glb',
-  '/3d/glb/Earth.glb',
-  '/3d/glb/moon.glb',
   '/3d/glb/Mars.glb',
-  '/3d/glb/Jupiter.glb',
-  '/3d/glb/Europa.glb',
-  '/props/jupiter.glb',
   '/props/space.glb',
-  '/sfx/bg.mp3',
   '/sfx/manifest.json',
 ]
 

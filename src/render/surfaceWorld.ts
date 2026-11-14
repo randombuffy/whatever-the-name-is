@@ -108,7 +108,7 @@ export class SurfaceWorld {
   private groundMat: THREE.MeshStandardMaterial
   private rocks: Rock[] = []
   private rockMat: THREE.MeshStandardMaterial | null = null
-  private markers: THREE.Mesh[] = []
+  private markers: THREE.Object3D[] = []
   private lander: THREE.Group
   private rover = new THREE.Group()
   private suit = new THREE.Group()
@@ -643,18 +643,10 @@ export class SurfaceWorld {
       gradX: grade.x,
       gradZ: grade.z,
     }, dt)
-    if (this.hits(next.x, next.z, 1.25) || !this.climbOk(this.drive.x, this.drive.z, next.x, next.z, 0.55)) {
-      this.drive = { ...this.drive, speed: this.drive.speed * -0.25 }
-      this.bump = 0.7
-      if (Math.abs(this.drive.speed) > 0.4) this.wheels = Math.max(12, this.wheels - 7)
-    } else {
-      this.odometer += Math.abs(next.speed) * dt
-      this.drive = next
-      if (this.groundMesh) {
-        this.drive.x = Math.max(-680, Math.min(680, this.drive.x))
-        this.drive.z = Math.max(-680, Math.min(680, this.drive.z))
-      }
-    }
+    this.odometer += Math.abs(next.speed) * dt
+    this.drive = next
+    this.drive.x = Math.max(-680, Math.min(680, this.drive.x))
+    this.drive.z = Math.max(-680, Math.min(680, this.drive.z))
     if (this.bump > 0) this.bump = Math.max(0, this.bump - dt)
   }
 
@@ -669,7 +661,7 @@ export class SurfaceWorld {
     const nx = this.foot.x + (Math.sin(this.lookYaw) * forward + Math.cos(this.lookYaw) * strafe) * pace * (1 - Math.min(0.65, slope)) * dt
     const nz = this.foot.z + (Math.cos(this.lookYaw) * forward - Math.sin(this.lookYaw) * strafe) * pace * (1 - Math.min(0.65, slope)) * dt
     const blocked = this.hits(nx, nz, 0.42, this.hop)
-    const steep = this.hop < 0.35 && !this.climbOk(this.foot.x, this.foot.z, nx, nz, 0.7)
+    const steep = this.hop < 0.28 && !this.climbOk(this.foot.x, this.foot.z, nx, nz, 1.12)
     const clear = !blocked && !steep
     if (clear) {
       this.foot.x = nx
@@ -967,12 +959,14 @@ export class SurfaceWorld {
     return pad * (1 - blend) + raw * blend
   }
 
-  /** A rise steeper than this is a face, not a path. The body stops instead of entering it. */
+  /** A rise steeper than this is a face, not a path. Short steps are walked; walls still stop. */
   private climbOk(x0: number, z0: number, x1: number, z1: number, limit: number): boolean {
     const rise = this.heightAt(x1, z1) - this.heightAt(x0, z0)
     const run = Math.hypot(x1 - x0, z1 - z0)
     if (run < 1e-4) return true
-    return rise <= 0.85 && rise / run <= limit
+    if (rise <= 1.15) return true
+    if (rise < 0) return true
+    return rise / run <= Math.max(limit, 1.35)
   }
 
   private grade(x: number, z: number): { x: number; z: number } {
@@ -984,13 +978,11 @@ export class SurfaceWorld {
   }
 
   private hits(x: number, z: number, radius: number, hop = 0): boolean {
+    if (this.mode === 'drive') return false
     const blocks: { x: number; z: number; radius: number; height: number }[] = [
       { x: this.lander.position.x, z: this.lander.position.z, radius: 2.2, height: 3.4 },
     ]
     for (const block of this.marsGround?.solid() ?? []) blocks.push(block)
-    if (hop < 0.45) {
-      for (const rock of this.rocks) blocks.push({ x: rock.x, z: rock.z, radius: rock.r, height: 0.55 })
-    }
     for (const block of blocks) {
       if (hop > block.height - 0.12) continue
       if (Math.hypot(x - block.x, z - block.z) < block.radius + radius) return true
@@ -1124,27 +1116,66 @@ export class SurfaceWorld {
 
   private placeSamples(): void {
     for (const sample of this.setup.samples) {
-      const mark = new THREE.Mesh(
-        new THREE.OctahedronGeometry(0.32, 0),
-        new THREE.MeshStandardMaterial({ color: 0xf4f1ea, emissive: 0xf2c14e, emissiveIntensity: 0.7 }),
-      )
-      mark.position.set(sample.x, this.heightAt(sample.x, sample.z) + 0.34, sample.z)
-      mark.userData.sample = sample.id
+      const mark = this.buildSampleStation(sample.id)
+      mark.position.set(sample.x, this.heightAt(sample.x, sample.z), sample.z)
       mark.visible = !this.found.has(sample.id)
       this.scene.add(mark)
       this.markers.push(mark)
-      const outcrop = new THREE.Mesh(
-        new THREE.DodecahedronGeometry(0.7, 0),
-        new THREE.MeshStandardMaterial({ color: this.colors.rock, roughness: 1 }),
-      )
-      const lift = 0.7 * 0.6
-      outcrop.position.set(sample.x + 0.8, this.heightAt(sample.x + 0.8, sample.z) + lift, sample.z)
-      outcrop.scale.set(1, 0.6, 1.3)
-      outcrop.castShadow = true
-      this.scene.add(outcrop)
-      this.markers.push(outcrop)
-      this.rocks.push({ x: sample.x + 0.8, z: sample.z, r: 0.55 })
+      this.rocks.push({ x: sample.x, z: sample.z, r: 0.7 })
     }
+  }
+
+  /** Cache crate, core rock, and a mast — real objects, not a yellow pip. */
+  private buildSampleStation(id: string): THREE.Group {
+    const root = new THREE.Group()
+    root.userData.sample = id
+    const rock = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(0.58, 0),
+      new THREE.MeshStandardMaterial({ color: this.colors.rock, roughness: 0.96, metalness: 0.04 }),
+    )
+    rock.scale.set(1.2, 0.7, 1.35)
+    rock.position.set(0.15, 0.26, 0)
+    rock.rotation.y = 0.4
+    rock.castShadow = true
+    rock.userData.sample = id
+    root.add(rock)
+    const crate = new THREE.Mesh(
+      new THREE.BoxGeometry(0.46, 0.3, 0.34),
+      new THREE.MeshStandardMaterial({ color: 0xcfc6b4, metalness: 0.28, roughness: 0.52 }),
+    )
+    crate.position.set(-0.62, 0.18, 0.08)
+    crate.castShadow = true
+    crate.userData.sample = id
+    root.add(crate)
+    const lid = new THREE.Mesh(
+      new THREE.BoxGeometry(0.48, 0.04, 0.36),
+      new THREE.MeshStandardMaterial({ color: 0x8aa0a8, metalness: 0.45, roughness: 0.4 }),
+    )
+    lid.position.set(-0.62, 0.34, 0.08)
+    lid.userData.sample = id
+    root.add(lid)
+    const pole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.028, 0.034, 0.96, 8),
+      new THREE.MeshStandardMaterial({ color: 0xb8c0c4, metalness: 0.62, roughness: 0.32 }),
+    )
+    pole.position.set(0.48, 0.5, -0.16)
+    pole.userData.sample = id
+    root.add(pole)
+    const head = new THREE.Mesh(
+      new THREE.BoxGeometry(0.2, 0.11, 0.16),
+      new THREE.MeshStandardMaterial({ color: 0x24343c, metalness: 0.4, roughness: 0.38, emissive: 0x1a6a8a, emissiveIntensity: 0.28 }),
+    )
+    head.position.set(0.48, 0.98, -0.16)
+    head.userData.sample = id
+    root.add(head)
+    const flag = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.3, 0.18),
+      new THREE.MeshStandardMaterial({ color: 0xd9b45c, side: THREE.DoubleSide, metalness: 0.12, roughness: 0.55 }),
+    )
+    flag.position.set(0.64, 0.86, -0.16)
+    flag.userData.sample = id
+    root.add(flag)
+    return root
   }
 
   private poseRoute(): void {
@@ -1196,22 +1227,11 @@ export class SurfaceWorld {
   private pinLander(): void {
     const [lx, lz] = MARS_LANDING
     this.lander.traverse((obj) => {
-      if (obj.userData.nozzle || /plume|flame/i.test(obj.name)) obj.visible = false
+      if (obj.userData.nozzle || /plume|flame|bell/i.test(obj.name)) obj.visible = false
     })
-    if (!this.campSeated) {
-      this.lander.position.set(lx, 0, lz)
-      this.lander.updateWorldMatrix(true, true)
-      const box = new THREE.Box3()
-      this.lander.traverse((child) => {
-        const mesh = child as THREE.Mesh
-        if (!mesh.isMesh || !mesh.visible) return
-        if (mesh.userData.nozzle || /flame|plume|bell/i.test(mesh.name)) return
-        box.expandByObject(mesh)
-      })
-      this.landerLift = box.isEmpty() ? 0.05 : Math.max(0.03, -box.min.y + 0.04)
-      this.campSeated = true
-    }
-    this.lander.position.set(lx, this.heightAt(lx, lz) + this.landerLift, lz)
+    this.landerLift = this.heightAt(lx, lz) + 0.02
+    this.lander.position.set(lx, this.landerLift, lz)
+    this.campSeated = true
   }
 
   private loadRover(): void {

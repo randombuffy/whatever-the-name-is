@@ -109,3 +109,82 @@ export function solarTransfer(destAu: number): { departureMps: number; vInfArriv
   if (depart === null) return null
   return { departureMps: depart, vInfArrive: helio.vInfArriveMps, tofSec: helio.tofSec }
 }
+
+/** Laplace Sphere of Influence (SOI) radius in metres */
+export function sphereOfInfluenceM(body: 'earth' | 'moon' | 'mars' | 'jupiter' | 'europa' | 'asteroid'): number {
+  switch (body) {
+    case 'moon': return 66_100_000 // 66,100 km from Earth
+    case 'mars': return 576_000_000 // 576,000 km from Sun
+    case 'jupiter': return 48_200_000_000 // 48.2 million km
+    case 'europa': return 9_720_000 // 9,720 km from Jupiter
+    case 'asteroid': return 120_000_000 // illustrative Hill sphere
+    case 'earth':
+    default: return 925_000_000 // 925,000 km
+  }
+}
+
+export interface OrbitInterceptData {
+  targetDistanceM: number
+  soiRadiusM: number
+  inSoi: boolean
+  relativeSpeedMps: number
+  timeToInterceptSec: number
+  closestApproachM: number
+  captureDvMps: number
+  owltSec: number // One-way light time
+  rtltSec: number // Round-trip light time
+}
+
+/** Compute real-time orbital intersection and arrival metrics */
+export function computeOrbitIntercept(
+  missionId: string,
+  _destAu: number,
+  fraction: number,
+  tofSec: number,
+  rangeDestM: number,
+  rangeEarthM: number,
+  currentSpeedMps: number
+): OrbitInterceptData {
+  const body = (missionId === 'lunar' ? 'moon'
+    : missionId === 'mars' || missionId === 'custom' ? 'mars'
+    : missionId === 'europa' ? 'europa'
+    : missionId === 'asteroid' ? 'asteroid'
+    : 'mars') as 'earth' | 'moon' | 'mars' | 'jupiter' | 'europa' | 'asteroid'
+
+  const soi = sphereOfInfluenceM(body)
+  const inSoi = rangeDestM <= soi
+  const f = Math.max(0, Math.min(1, fraction))
+  const timeToIntercept = Math.max(0, tofSec * (1 - f))
+
+  // Relative speed at entry into destination reference frame
+  const transfer = missionId === 'lunar' ? lunarTransfer() : marsTransfer()
+  const vInf = transfer ? ('vInfArrive' in transfer ? transfer.vInfArrive : transfer.vInfMoonMps) : 2650
+  const relSpeed = inSoi ? Math.max(vInf, currentSpeedMps * (1 - f * 0.4)) : vInf
+
+  // Estimated periapsis / closest approach altitude based on corridor
+  const closestApproach = inSoi
+    ? Math.max(0, rangeDestM - (missionId === 'lunar' ? R_MOON_M : R_MARS_M))
+    : (missionId === 'lunar' ? 100_000 : 400_000)
+
+  // Capture delta-v required for stable orbit
+  const captureDv = missionId === 'lunar'
+    ? (transfer && 'loiMps' in transfer ? transfer.loiMps : 820)
+    : (transfer && 'captureMps' in transfer ? transfer.captureMps : 2100)
+
+  const c = 299_792_458
+  const owlt = rangeEarthM / c
+  const rtlt = owlt * 2
+
+  return {
+    targetDistanceM: rangeDestM,
+    soiRadiusM: soi,
+    inSoi,
+    relativeSpeedMps: relSpeed,
+    timeToInterceptSec: timeToIntercept,
+    closestApproachM: closestApproach,
+    captureDvMps: captureDv,
+    owltSec: owlt,
+    rtltSec: rtlt,
+  }
+}
+

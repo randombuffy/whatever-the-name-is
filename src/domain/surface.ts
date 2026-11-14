@@ -70,7 +70,7 @@ export function stepDrive(state: DriveState, input: DriveInput, dt: number): Dri
   let accel = (throttle * force * traction) / Math.max(20, input.massKg)
   accel -= input.gravity * along * 0.9
   if (input.brake) accel -= Math.sign(state.speed || throttle) * 5
-  const cap = input.boost ? 3.4 : 1.35
+  const cap = input.boost ? 11 : 7.2
   let speed = input.park ? state.speed * Math.exp(-step * 14) : (state.speed + accel * step) * Math.exp(-step * (0.55 + input.rough * 0.35))
   speed = Math.max(-0.8, Math.min(cap, speed))
   if (input.park && Math.abs(speed) < 0.08) speed = 0

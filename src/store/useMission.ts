@@ -19,7 +19,7 @@ export interface Checkpoint {
   sim: SimState
 }
 
-export type Phase = 'select' | 'brief' | 'design' | 'plan' | 'launch' | 'flight' | 'landing' | 'surface' | 'debrief' | 'credits' | 'station' | 'pad'
+export type Phase = 'select' | 'brief' | 'design' | 'plan' | 'launch' | 'flight' | 'landing' | 'surface' | 'debrief' | 'credits' | 'station' | 'pad' | 'outpost'
 
 export interface MissionSave {
   id: string
@@ -67,6 +67,9 @@ interface MissionStore {
   checkpoints: Checkpoint[]
   launchReady: boolean
   launchRequest: boolean
+  ascentFuelFrac: number
+  difficulty: 'cadet' | 'specialist' | 'commander'
+  setDifficulty: (difficulty: 'cadet' | 'specialist' | 'commander') => void
   saves: MissionSave[]
   chooseMission: (id: string) => void
   assignMission: (id: string) => void
@@ -98,7 +101,7 @@ interface MissionStore {
   reshapeHull: () => void
   autoFix: () => void
   setPlan: (patch: Partial<MissionPlan>) => void
-  commitLaunch: () => void
+  commitLaunch: (ascentFuelFrac?: number) => void
   tick: (budgetSec?: number) => void
   resumeFlight: () => void
   setPaused: (paused: boolean) => void
@@ -135,9 +138,33 @@ function commitCraft(
   set({ ...extra, craft, craftPast: past, craftFuture: [] })
 }
 
-function missionFrom(missionId: string | null, custom: MissionDef | null): MissionDef | undefined {
-  if (missionId === 'custom') return custom ?? undefined
-  return getMission(missionId ?? '')
+const missionCache = new Map<string, MissionDef>()
+
+function missionFrom(missionId: string | null, custom: MissionDef | null, difficulty?: 'cadet' | 'specialist' | 'commander'): MissionDef | undefined {
+  if (!missionId) return undefined
+  const diff = difficulty ?? 'specialist'
+  const key = `${missionId}:${custom ? 'custom' : 'base'}:${diff}`
+  const cached = missionCache.get(key)
+  if (cached && (missionId !== 'custom' || custom === cached)) return cached
+
+  const base = missionId === 'custom' ? custom ?? undefined : getMission(missionId)
+  if (!base) return undefined
+  let result: MissionDef = base
+  if (diff === 'cadet') {
+    result = {
+      ...base,
+      budgetUsd: Math.round(base.budgetUsd * 1.25),
+      maxMassKg: Math.round(base.maxMassKg * 1.15),
+    }
+  } else if (diff === 'commander') {
+    result = {
+      ...base,
+      budgetUsd: Math.round(base.budgetUsd * 0.9),
+      maxMassKg: Math.round(base.maxMassKg * 0.95),
+    }
+  }
+  missionCache.set(key, result)
+  return result
 }
 
 function captureSave(state: Pick<MissionStore, 'missionId' | 'craft' | 'plan' | 'sim' | 'phase' | 'launchReady' | 'custom' | 'customBaseId' | 'field' | 'descent'>): MissionSave | null {
@@ -170,8 +197,8 @@ function upsertSave(list: MissionSave[], next: MissionSave): MissionSave[] {
 export function useActiveMission() {
   const missionId = useMission((state) => state.missionId)
   const custom = useMission((state) => state.custom)
-  if (missionId === 'custom') return custom
-  return getMission(missionId ?? '') ?? null
+  const difficulty = useMission((state) => state.difficulty)
+  return missionFrom(missionId, custom, difficulty) ?? null
 }
 
 const campaignStorage = (() => {
@@ -228,6 +255,9 @@ export const useMission = create<MissionStore>()(
       craftFuture: [],
       launchReady: false,
       launchRequest: false,
+      ascentFuelFrac: 1,
+      difficulty: 'specialist',
+      setDifficulty: (difficulty) => set({ difficulty }),
       saves: [],
       chooseMission: (id) => {
         const mission = getMission(id)
@@ -238,7 +268,6 @@ export const useMission = create<MissionStore>()(
           plan: defaultPlan(mission),
           sim: null,
           outcome: null,
-          phase: 'pad',
           selectedId: null,
           selectedInstanceId: null,
           custom: null,
@@ -377,10 +406,10 @@ export const useMission = create<MissionStore>()(
       go: (phase) => {
         const current = get()
         if (phase === 'flight') return
-        if ((phase === 'design' || phase === 'plan' || phase === 'launch' || phase === 'brief' || phase === 'pad' || phase === 'landing' || phase === 'surface') && !current.missionId) return
+        if ((phase === 'design' || phase === 'plan' || phase === 'launch' || phase === 'brief' || phase === 'pad' || phase === 'landing' || phase === 'surface' || phase === 'outpost') && !current.missionId) return
         if (phase === 'debrief' && !current.outcome) return
         const keepFlight = phase === 'pad' || phase === 'design' || phase === 'brief' || phase === 'plan'
-        const keep = phase === 'landing' || phase === 'surface' || (keepFlight && current.sim && current.sim.status !== 'failed')
+        const keep = phase === 'landing' || phase === 'surface' || phase === 'outpost' || (keepFlight && current.sim && current.sim.status !== 'failed')
         set({
           phase,
           paused: false,
@@ -540,14 +569,27 @@ export const useMission = create<MissionStore>()(
         if (!plan) return
         set({ plan: { ...plan, ...patch } })
       },
-      commitLaunch: () => {
+      commitLaunch: (ascentFuelFrac = 1) => {
         const { craft, missionId, plan, custom } = get()
         const mission = missionFrom(missionId, custom)
         if (!craft || !mission || !plan) return
         const sim = createSim(craft, mission, plan)
         const departure: Checkpoint = { id: 'departure', tSec: 0, label: 'Departure', sim: structuredClone(sim) }
-        const rate = Math.min(WARP_MAX, Math.max(1, get().rate))
-        set({ sim, phase: 'flight', paused: false, rate, outcome: null, camera: 'wide', checkpoints: [departure], field: null, descent: null, touchdown: null, rewinds: 0 })
+        const fuelFrac = Math.min(1, Math.max(0.02, ascentFuelFrac))
+        set({
+          sim,
+          phase: 'flight',
+          paused: false,
+          rate: WARP_MAX,
+          ascentFuelFrac: fuelFrac,
+          outcome: null,
+          camera: 'wide',
+          checkpoints: [departure],
+          field: null,
+          descent: null,
+          touchdown: null,
+          rewinds: 0,
+        })
       },
       resumeFlight: () => {
         const { sim, missionId } = get()
@@ -594,8 +636,8 @@ export const useMission = create<MissionStore>()(
         set({ sim: { ...sim, disabled } })
       },
       finish: () => {
-        const { sim, craft, missionId, plan, history, custom, surfaceScience, surfaceBits, campaignNote, touchdown, rewinds, checkpoints, badges } = get()
-        const mission = missionFrom(missionId, custom)
+        const { sim, craft, missionId, plan, history, custom, difficulty, surfaceScience, surfaceBits, campaignNote, touchdown, rewinds, checkpoints, badges } = get()
+        const mission = missionFrom(missionId, custom, difficulty)
         if (!sim || !craft || !mission || !plan) return
         const scored = { ...sim, sciencePoints: sim.sciencePoints + surfaceScience, dataReturnedBits: sim.dataReturnedBits + surfaceBits }
         const outcome = outcomeOf(craft, mission, plan, scored)
@@ -691,6 +733,8 @@ export const useMission = create<MissionStore>()(
         custom: state.custom,
         customBaseId: state.customBaseId,
         launchReady: state.launchReady,
+        ascentFuelFrac: state.ascentFuelFrac,
+        difficulty: state.difficulty,
         saves: state.saves,
       }),
       merge: (persisted, current) => {
@@ -740,6 +784,8 @@ export const useMission = create<MissionStore>()(
           checkpoints,
           saves: live ? upsertSave(saves, live) : saves,
           launchReady: saved.launchReady === true,
+          ascentFuelFrac: typeof saved.ascentFuelFrac === 'number' ? Math.min(1, Math.max(0.02, saved.ascentFuelFrac)) : 1,
+          difficulty: (saved.difficulty === 'cadet' || saved.difficulty === 'commander') ? saved.difficulty : 'specialist',
           soundChosen: saved.soundChosen === true,
           audio: saved.soundChosen === true ? saved.audio !== false : true,
         }

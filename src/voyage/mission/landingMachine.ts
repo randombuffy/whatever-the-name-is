@@ -98,11 +98,14 @@ export function landingReducer(state: LandingState, event: LandingEvent): Landin
       if (event.type === 'REPLAY' && state.siteId && state.trajectory) {
         // The outpost is not rebuilt on replay. Steering can be tried again; its new grade
         // is not written back into the settlement.
-        return { ...state, stage: 'ENTRY', replay: true, run: state.run + 1, skillGrade: 'pending' };
+        return { ...state, stage: 'ENTRY', replay: true, run: state.run + 1, skillGrade: 'pending', skipped: false, fastForwardRun: null };
       }
       return state;
   }
 }
+
+// Stages in play order; the descent profile and any progress UI can share this list.
+export const LANDING_STAGES: readonly LandingStage[] = ['APPROACH', 'SITE_SELECT', 'ENTRY', 'DESCENT', 'TOUCHDOWN', 'POST_LANDING', 'SETTLEMENT'];
 
 export const isCinematic = (stage: LandingStage) => CINEMATIC.includes(stage);
 export const isSpaceStage = (stage: LandingStage) => stage === 'APPROACH' || stage === 'SITE_SELECT' || stage === 'ENTRY';

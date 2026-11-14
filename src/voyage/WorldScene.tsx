@@ -9,7 +9,7 @@ import { FLARE_SOL, LANDING_SPOTS, capacityOf, type HabitatPad, type SettlementS
 import { createTerrain, smoothstep, type Terrain } from './scene/terrain';
 import { Haze, HabitatPads, MarsSky, ResourceMarker, RockField, SunLight, TerrainMeshes } from './scene/SurfaceWorld';
 import { SpaceScene } from './scene/SpaceScene';
-import { FallingHeatShield, ParachutePackage, type Signal } from './scene/Vehicles';
+import { FallingHeatShield, ParachutePackage, preloadVehicleModels, type Signal } from './scene/Vehicles';
 import { LandingDust } from './scene/LandingDust';
 import { StormDust } from './scene/StormDust';
 import { Astronauts, Building, PowerCables } from './scene/Outpost';
@@ -445,6 +445,7 @@ function SceneContents(props: WorldSceneProps) {
 
 export function WorldScene(props: WorldSceneProps) {
   useEffect(() => {
+    preloadVehicleModels();
     const prevent = (event: Event) => event.preventDefault();
     document.addEventListener('contextmenu', prevent);
     return () => document.removeEventListener('contextmenu', prevent);

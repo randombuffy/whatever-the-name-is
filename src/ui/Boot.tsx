@@ -60,9 +60,7 @@ export function Boot({ onReady }: Props) {
   const readyRef = useRef(onReady)
   readyRef.current = onReady
   const ratio = total > 0 ? done / total : 0
-  const width = 28
-  const filled = Math.round(ratio * width)
-  const bar = '#'.repeat(filled) + '.'.repeat(width - filled)
+  const pct = Math.round(ratio * 100)
   const art = ROCKET[frame % ROCKET.length]
 
   useEffect(() => {
@@ -114,12 +112,26 @@ export function Boot({ onReady }: Props) {
       />
       <div className="boot-veil" />
       <pre className="boot-rocket">{art.join('\n')}</pre>
-      <div className="boot-copy">
-        <strong>MISSION CONTROL</strong>
-        <span>LOADING ASSETS {done}/{total}</span>
-        <code>[{bar}] {Math.round(ratio * 100)}%</code>
-        <em>{ready ? 'READY' : label.toUpperCase()}</em>
-      </div>
+      <aside className="boot-card">
+        <b>Mission Control</b>
+        <span>
+          Loading pad assets · {done}/{total}
+        </span>
+        <div
+          className="boot-track"
+          role="progressbar"
+          aria-valuenow={pct}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label="Asset load progress"
+        >
+          <i style={{ width: `${pct}%` }} />
+        </div>
+        <p className="boot-stat">
+          <code>{pct}%</code>
+          <em>{ready ? 'Ready' : label}</em>
+        </p>
+      </aside>
     </div>
   )
 }

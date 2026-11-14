@@ -2,7 +2,6 @@ import * as THREE from 'three'
 import type { SpacecraftConfig } from '../domain/types'
 import { disposeCraft } from './craft'
 import { attachLaunchStack } from './launchStack'
-import { modelLoader, seatSphere } from './gltf'
 import type { AscentState } from '../domain/ascent'
 import { viewRatio } from './pixels'
 
@@ -187,11 +186,6 @@ export class MissionWorld {
     )
     this.pad.rotation.x = -Math.PI / 2
     this.scene.add(this.earthPivot, this.moon, this.mars, this.europa, this.asteroid, this.jupiter, this.halo, this.stack, this.tower, this.path, this.pad)
-    wearGlobe(this.earthMesh, '/3d/glb/Earth.glb')
-    wearGlobe(this.moon, '/3d/glb/moon.glb')
-    wearGlobe(this.mars, '/3d/glb/Mars.glb')
-    wearGlobe(this.europa, '/3d/glb/Europa.glb')
-    wearGlobe(this.jupiter, '/3d/glb/Jupiter.glb')
 
     this.gizmo.add(makeArrow('x', 0xff6b6b), makeArrow('y', 0x7dffa8), makeArrow('z', 0x79b0ff))
     this.gizmo.visible = false
@@ -252,9 +246,15 @@ export class MissionWorld {
       this.asteroid.rotation.x += dt * 0.04
       this.jupiter.rotation.y += dt * 0.06
     }
-    this.ambientLight.intensity = view.mode === 'design' ? 0.68 : 0.28
-    this.designLamp.intensity = view.mode === 'design' ? 3.4 : 0
-    this.designFillLamp.intensity = view.mode === 'design' ? 2.0 : 0
+    this.ambientLight.intensity = view.mode === 'design' ? 0.68 : view.mode === 'destination' ? 0.85 : 0.28
+    this.designLamp.intensity = view.mode === 'design' ? 3.4 : view.mode === 'destination' ? 2.4 : 0
+    this.designFillLamp.intensity = view.mode === 'design' ? 2.0 : view.mode === 'destination' ? 1.6 : 0
+    const w = this.canvas.clientWidth || 1
+    const h = this.canvas.clientHeight || 1
+    const ratio = viewRatio(this.reduced)
+    if (this.renderer.domElement.width !== Math.floor(w * ratio) || this.renderer.domElement.height !== Math.floor(h * ratio)) {
+      this.resize()
+    }
     this.syncCraft(view)
     this.applyOffsets(view)
     this.attachGizmo(view)
@@ -470,25 +470,22 @@ export class MissionWorld {
       return
     }
     if (view.mode === 'destination') {
-      this.earthPivot.position.set(-12, -2.4, -20)
+      this.earthPivot.position.set(-14, -2.4, -22)
       this.earthPivot.scale.setScalar(0.7)
-      hero.position.set(0, 0.05, 0)
-      hero.scale.setScalar(kind === 'asteroid' ? 0.46 : kind === 'europa' ? 0.42 : 0.68)
-      hero.rotation.y = this.time * 0.18
+      hero.position.set(-0.65, 0.2, 0)
+      hero.scale.setScalar(kind === 'asteroid' ? 0.85 : kind === 'europa' ? 1.1 : 1.55)
+      hero.rotation.y = this.time * 0.12
       if (kind === 'europa') {
         this.jupiter.visible = true
-        this.jupiter.position.set(2.6, 0.2, -2.4)
-        this.jupiter.scale.set(1.35, 1.26, 1.35)
+        this.jupiter.position.set(3.8, 0.4, -4.2)
+        this.jupiter.scale.set(1.8, 1.7, 1.8)
       }
       if (kind === 'mars') {
         this.asteroid.visible = true
-        this.asteroid.position.set(2.4, -0.7, -1.8)
-        this.asteroid.scale.setScalar(0.16)
+        this.asteroid.position.set(3.4, -0.6, -3.2)
+        this.asteroid.scale.setScalar(0.32)
       }
       this.halo.visible = false
-      this.halo.position.copy(hero.position)
-      this.halo.rotation.set(Math.PI / 2.4, this.time * 0.12, 0)
-      this.halo.scale.setScalar(kind === 'asteroid' ? 0.52 : kind === 'europa' ? 0.58 : 0.78)
       return
     }
     const t = this.time
@@ -673,9 +670,9 @@ export class MissionWorld {
       this.pitch = 0.18
       this.yaw = 0.85
     } else if (view.mode !== 'design') this.framed = view.mode
-    const extra = view.mode === 'menu' ? 3.4 : view.mode === 'destination' ? 2.4 : 0
-    const orbitR = view.mode === 'destination' ? Math.max(8.4, this.distance + extra) : Math.max(2.4, this.distance + extra)
-    if (view.mode === 'destination') this.look.set(0, 0.05, 0)
+    const extra = view.mode === 'menu' ? 3.4 : 0
+    const orbitR = view.mode === 'destination' ? 5.2 : Math.max(2.4, this.distance + extra)
+    if (view.mode === 'destination') this.look.set(-0.65, 0.2, 0)
     else if (view.mode === 'menu') this.look.set(0.15, 0.35, -6.2)
     else this.look.set(0, 0.65, 0)
     this.camera.position.set(
@@ -1040,7 +1037,7 @@ function makeTower(): THREE.Group {
 }
 
 function makeEarth(): { ground: THREE.Mesh; clouds: THREE.Mesh; air: THREE.Mesh } {
-  const ground = globe('/planets/earth.jpg', 0.78)
+  const ground = globe('/planets/earth.jpg', 0.78, 0x224488)
   const clouds = new THREE.Mesh(
     new THREE.SphereGeometry(1.025, 64, 40),
     new THREE.MeshStandardMaterial({ map: cloudMap(), transparent: true, depthWrite: false, roughness: 1, metalness: 0, opacity: 0.85 }),
@@ -1050,47 +1047,59 @@ function makeEarth(): { ground: THREE.Mesh; clouds: THREE.Mesh; air: THREE.Mesh 
 }
 
 function makeMoon(): THREE.Mesh {
-  return globe('/planets/moon.jpg', 0.92)
+  return globe('/planets/moon.jpg', 0.92, 0x999999)
 }
 
 function makeJupiter(): THREE.Mesh {
-  return globe('/planets/jupiter.jpg', 0.58)
+  return globe('/planets/jupiter.jpg', 0.58, 0xb89070)
 }
 
 function makeMars(): THREE.Mesh {
-  return globe('/planets/mars.jpg', 0.9)
+  const mesh = globe('/planets/mars.jpg', 0.86, 0xd06c48)
+  const air = new THREE.Mesh(new THREE.SphereGeometry(1.035, 64, 40), marsAtmosphereMaterial())
+  mesh.add(air)
+  return mesh
 }
 
 function makeEuropa(): THREE.Mesh {
-  return globe('/planets/europa.jpg', 0.42)
+  return globe('/planets/europa.jpg', 0.42, 0xc0b098)
 }
 
-function wearGlobe(mesh: THREE.Mesh, url: string): void {
-  modelLoader().load(url, (gltf) => {
-    const model = gltf.scene
-    seatSphere(model, 2)
-    model.traverse((node) => {
-      const child = node as THREE.Mesh
-      if (!child.isMesh) return
-      child.castShadow = true
-      child.receiveShadow = true
-    })
-    mesh.add(model)
-    const mat = mesh.material
-    if (mat instanceof THREE.Material) {
-      mat.visible = false
-      mat.depthWrite = false
-    }
+function marsAtmosphereMaterial(): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    side: THREE.BackSide,
+    blending: THREE.AdditiveBlending,
+    vertexShader: `
+      varying vec3 vNormal;
+      varying vec3 vWorld;
+      void main() {
+        vNormal = normalize(normalMatrix * normal);
+        vec4 world = modelMatrix * vec4(position, 1.0);
+        vWorld = world.xyz;
+        gl_Position = projectionMatrix * viewMatrix * world;
+      }
+    `,
+    fragmentShader: `
+      varying vec3 vNormal;
+      varying vec3 vWorld;
+      void main() {
+        vec3 viewDir = normalize(cameraPosition - vWorld);
+        float fresnel = pow(1.0 - abs(dot(normalize(vNormal), viewDir)), 2.8);
+        gl_FragColor = vec4(0.92, 0.48, 0.28, fresnel * 0.72);
+      }
+    `,
   })
 }
 
-function globe(url: string, roughness: number): THREE.Mesh {
+function globe(url: string, roughness: number, defaultColor = 0xffffff): THREE.Mesh {
   const map = new THREE.TextureLoader().load(url)
   map.colorSpace = THREE.SRGBColorSpace
   map.anisotropy = 8
   return new THREE.Mesh(
     new THREE.SphereGeometry(1, 96, 64),
-    new THREE.MeshStandardMaterial({ map, roughness, metalness: 0.04 }),
+    new THREE.MeshStandardMaterial({ color: defaultColor, map, roughness, metalness: 0.04 }),
   )
 }
 

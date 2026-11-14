@@ -14,7 +14,7 @@ function voyageSite(id: string | undefined): SiteId {
   return 'jezero'
 }
 
-export function OutpostScreen() {
+export function OutpostScreen({ onReturn }: { onReturn?: () => void } = {}) {
   const mission = useActiveMission()
   const craft = useMission((state) => state.craft)
   const plan = useMission((state) => state.plan)
@@ -42,12 +42,44 @@ export function OutpostScreen() {
   }
   const file = () => {
     noteTouchdown(report.cost.marginUsd < 0 ? 'hard' : 'soft', 0.2, 0)
-    bankSurface(report.flyable ? 40 : 12, `Filed from the ${mission.destination} outpost.`)
+    bankSurface(report.flyable ? 50 : 20, `Filed from the ${mission.destination} civilization outpost.`)
     finish()
   }
   return (
-    <I18nProvider manageDocument={false}>
-      <App seed={seed} onFile={file} craft={craft} missionId={mission.id} skin="astra" />
-    </I18nProvider>
+    <div className="outpost-container" style={{ width: '100%', height: '100%', position: 'relative' }}>
+      {onReturn && (
+        <button
+          type="button"
+          className="outpost-back-btn"
+          style={{
+            position: 'absolute',
+            top: '12px',
+            left: '12px',
+            zIndex: 9999,
+            background: 'rgba(15, 23, 42, 0.85)',
+            border: '1px solid rgba(56, 189, 248, 0.4)',
+            color: '#38bdf8',
+            fontFamily: 'Rajdhani, sans-serif',
+            fontSize: '13px',
+            fontWeight: 700,
+            padding: '6px 14px',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+          }}
+          onClick={onReturn}
+        >
+          ← Surface Rover / EVA
+        </button>
+      )}
+      <I18nProvider manageDocument={false}>
+        <App seed={seed} onFile={file} craft={craft} missionId={mission.id} skin="astra" />
+      </I18nProvider>
+    </div>
   )
 }

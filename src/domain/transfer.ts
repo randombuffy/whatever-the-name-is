@@ -17,6 +17,8 @@ export interface TransferState {
   horizontal: number
   altitudeM: number
   lightSec: number
+  rangeEarthM: number
+  rangeDestM: number
   apoM: number
   periM: number
   qPa: number
@@ -105,6 +107,8 @@ export function transferState(missionId: string, destAu: number, fraction: numbe
     horizontal: rates.horizontal,
     altitudeM,
     lightSec: rangeEarth / C,
+    rangeEarthM: rangeEarth,
+    rangeDestM: rangeDest,
     apoM: rates.apo,
     periM: rates.peri,
     qPa: 0.5 * rho * rates.speed * rates.speed,

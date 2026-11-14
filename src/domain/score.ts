@@ -53,13 +53,24 @@ export function outcomeOf(config: SpacecraftConfig, mission: MissionDef, plan: M
   if (!scienceMet && survived) lessons.push('Science points come from instruments that stay powered. Duty cycle and power mode both count.')
   if (covered < kit.length) lessons.push(`${campaign.title} is not answered by a generic camera. ${kit.length - covered} instrument${kit.length - covered === 1 ? '' : 's'} from that kit were missing, and a different question wants a different kit.`)
   if (mistakes.length === 0 && primary) strengths.push('The scripted anomalies were absorbed without giving up the primary objectives.')
-  const score = scoreOf(primary, objectives[3].met, sim, report.mass.marginKg / mission.maxMassKg, report.cost.marginUsd / mission.budgetUsd)
+
+  const costMargin = (mission.budgetUsd - report.cost.totalUsd) / mission.budgetUsd
+  const massMargin = report.mass.marginKg / mission.maxMassKg
+  const optionalMet = objectives[3]?.met ?? false
+
+  const breakdown = calculateScoreBreakdown(primary, optionalMet, sim, mission, massMargin, costMargin)
+  const score = breakdown.total
+  const gradeRank: 'S' | 'A' | 'B' | 'C' | 'F' =
+    score >= 92 ? 'S' : score >= 80 ? 'A' : score >= 65 ? 'B' : score >= 50 ? 'C' : 'F'
+
   return {
     missionId: mission.id,
     craftName: config.name,
     success: primary,
     partial: survived && !primary,
     score,
+    gradeRank,
+    scoreBreakdown: breakdown,
     objectives,
     sciencePoints: sim.sciencePoints,
     dataReturnedBits: sim.dataReturnedBits,
@@ -77,7 +88,7 @@ export function outcomeOf(config: SpacecraftConfig, mission: MissionDef, plan: M
     strengths,
     mistakes,
     summary: primary
-      ? 'Primary objectives met. The score favours the science return and the margins you did not spend.'
+      ? 'Primary objectives met. The score favours the science return, budget discipline and landing integrity.'
       : survived
         ? 'The spacecraft finished, and at least one primary objective is short.'
         : 'The flight ended before the science window closed.',
@@ -85,12 +96,61 @@ export function outcomeOf(config: SpacecraftConfig, mission: MissionDef, plan: M
   }
 }
 
-function scoreOf(primary: boolean, optional: boolean, sim: SimState, massMargin: number, costMargin: number): number {
-  if (sim.failed && sim.status === 'failed') return Math.round(8 + Math.min(12, sim.sciencePoints / 10))
-  const science = Math.max(0, Math.min(40, sim.sciencePoints / 4))
-  const data = sim.dataReturnedBits > 0 ? 15 : 0
-  const decisions = sim.decisionsMade.reduce((sum, decision) => sum + (decision.option === 'ignore' || decision.option === 'ride' || decision.option === 'standoff' || decision.option === 'degrade' ? 0 : 4), 0)
-  const margins = Math.max(0, Math.min(10, massMargin * 20)) + Math.max(0, Math.min(8, costMargin * 20))
-  const base = (primary ? 25 : 8) + (optional ? 8 : 0) + science + data + decisions + margins
-  return Math.round(Math.max(0, Math.min(100, base)))
+function calculateScoreBreakdown(
+  primary: boolean,
+  optional: boolean,
+  sim: SimState,
+  mission: MissionDef,
+  massMargin: number,
+  costMargin: number
+) {
+  if (sim.failed && sim.status === 'failed') {
+    const science = Math.round(Math.min(12, sim.sciencePoints / 10))
+    return {
+      primaryPoints: 0,
+      sciencePoints: science,
+      dataPoints: 0,
+      budgetPoints: Math.max(0, Math.round(costMargin * 10)),
+      landingPoints: 0,
+      anomalyPoints: 0,
+      total: Math.max(5, 8 + science),
+    }
+  }
+
+  // 1. Primary Flight Execution (up to 25 pts)
+  const primaryPoints = primary ? 25 : 8
+
+  // 2. Science Yield (up to 30 pts)
+  const scienceRatio = Math.min(1.5, sim.sciencePoints / Math.max(1, mission.successScience))
+  const sciencePoints = Math.round(Math.min(30, scienceRatio * 22 + (optional ? 8 : 0)))
+
+  // 3. Telemetry & Data Return (up to 15 pts)
+  const dataRatio = Math.min(1.2, sim.dataReturnedBits / Math.max(1, mission.successDataBits))
+  const dataPoints = Math.round(Math.min(15, dataRatio * 15))
+
+  // 4. Budget Discipline & Cost Performance (up to 14 pts, negative penalty if over budget)
+  const budgetPoints = costMargin >= 0
+    ? Math.round(Math.min(14, costMargin * 25 + 6))
+    : Math.round(Math.max(-20, costMargin * 35))
+
+  // 5. Landing & Touchdown Precision (up to 10 pts)
+  const landingPoints = sim.status === 'complete' ? 10 : 0
+
+  // 6. Operational Resilience & Anomaly Response (up to 8 pts)
+  const goodDecisions = sim.decisionsMade.filter((d) => !['ignore', 'ride', 'standoff', 'degrade'].includes(d.option)).length
+  const anomalyPoints = Math.min(8, goodDecisions * 3 + Math.max(0, Math.round(massMargin * 5)))
+
+  const total = Math.round(
+    Math.max(0, Math.min(100, primaryPoints + sciencePoints + dataPoints + budgetPoints + landingPoints + anomalyPoints))
+  )
+
+  return {
+    primaryPoints,
+    sciencePoints,
+    dataPoints,
+    budgetPoints,
+    landingPoints,
+    anomalyPoints,
+    total,
+  }
 }

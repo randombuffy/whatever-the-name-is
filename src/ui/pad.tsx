@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { earthCoast } from '../domain/dynamics'
 import { R_EARTH_M } from '../domain/constants'
 import { getMission, MISSIONS } from '../domain/missions'
-import { createAscent, stepAscent, type AscentInput, type AscentState } from '../domain/ascent'
+import { BOOSTER, createAscent, stepAscent, ASCENT_TIME_SCALE, type AscentInput, type AscentState } from '../domain/ascent'
 import { evaluate } from '../domain/validate'
 import type { EngineeringIssue } from '../domain/types'
 import { PadWorld, type AscentView, type PadAction, type PadContact } from '../render/padWorld'
@@ -59,7 +59,8 @@ export function PadScreen() {
   const worldRef = useRef<PadWorld | null>(null)
   const warpRef = useRef(1)
   const [warp, setWarp] = useState(1)
-  const [view, setView] = useState<AscentView>('cinematic')
+  const [view, setView] = useState<AscentView>('chase')
+  const [details, setDetails] = useState(false)
   const [missionsOpen, setMissionsOpen] = useState(false)
   const [nextStep, setNextStep] = useState(false)
   const mapRef = useRef<HTMLCanvasElement>(null)
@@ -80,7 +81,7 @@ export function PadScreen() {
   useEffect(() => {
     if (count === null || count <= 0) return undefined
     playGroup('UIAlert_MusicTone', 0.1)
-    say(`${CHECKS[10 - count] ?? 'Commit'}. ${count}`, useMission.getState().audio, 0.92)
+    say(`${CHECKS[10 - count] ?? 'Commit'}.`, useMission.getState().audio, 0.92)
     const id = window.setTimeout(() => setCount((value) => (value === null ? value : value - 1)), 1800)
     return () => window.clearTimeout(id)
   }, [count])
@@ -120,7 +121,7 @@ export function PadScreen() {
         if (keys.current.has('shift')) input.current.throttle = Math.min(1, input.current.throttle + dt * 0.35)
         if (keys.current.has('control')) input.current.throttle = Math.max(0.4, input.current.throttle - dt * 0.35)
         if (keys.current.has('x')) input.current.abort = true
-        ascent.current = stepAscent(flying, input.current, dt * warpRef.current, livePayload())
+        ascent.current = stepAscent(flying, input.current, dt * warpRef.current * ASCENT_TIME_SCALE, livePayload())
         if (ascent.current.callout && ascent.current.callout !== heard) {
           heard = ascent.current.callout
           sting('radio', useMission.getState().audio)
@@ -128,16 +129,14 @@ export function PadScreen() {
         }
         const liveCall = ascent.current
         const audioOn = useMission.getState().audio
-        if (liveCall.altitudeM > 1000) sayOnce('ascent-1k', 'One thousand metres. The stack is clear of the tower.', audioOn)
-        if (liveCall.altitudeM > 10000) sayOnce('ascent-10k', 'Ten kilometres. Through the thick air.', audioOn)
+        if (liveCall.altitudeM > 1000) sayOnce('ascent-1k', 'The stack is clear of the tower.', audioOn)
+        if (liveCall.altitudeM > 10000) sayOnce('ascent-10k', 'Through the thick air.', audioOn)
         if (liveCall.altitudeM > 12_000) sayOnce('layer-strato', 'Leaving the troposphere. Entering the stratosphere.', audioOn)
         if (liveCall.altitudeM > 50_000) sayOnce('layer-meso', 'Stratosphere behind us. Mesosphere. The air is too thin to hear.', audioOn)
         if (liveCall.altitudeM > 85_000) sayOnce('layer-thermo', 'Mesosphere complete. Thermosphere. The sky is going black.', audioOn)
-        if (liveCall.altitudeM > 100_000) sayOnce('space-karman', 'One hundred kilometres. Crossing the Kármán line. We are in space.', audioOn)
+        if (liveCall.altitudeM > 100_000) sayOnce('space-karman', 'Crossing the Kármán line. We are in space.', audioOn)
         if (liveCall.altitudeM > 200_000) sayOnce('layer-exo', 'Thermosphere fading. Exosphere. The stack is on the edge of the well.', audioOn)
-        if (liveCall.velocityMps > 1000) sayOnce('ascent-1kms', `A thousand metres per second. ${Math.round(liveCall.velocityMps)} metres per second.`, audioOn)
-        if (liveCall.velocityMps > 3000) sayOnce('ascent-3kms', 'Three kilometres per second.', audioOn)
-        if (liveCall.velocityMps > 7000) sayOnce('ascent-orbital', 'Approaching orbital speed. Seven kilometres per second.', audioOn)
+        if (liveCall.velocityMps > 7000) sayOnce('ascent-orbital', 'Approaching orbital speed.', audioOn)
         if ((ascent.current.phase === 'fairing' || ascent.current.phase === 'booster') && ascent.current.phase !== stage) {
           sting('separate', useMission.getState().audio)
         }
@@ -197,7 +196,7 @@ export function PadScreen() {
       if (ascent.current?.phase === 'orbit') {
         orbitHold.current += dt
         if (orbitHold.current > 1.15) {
-          commit()
+          commit(ascent.current.propellantKg / Math.max(1, BOOSTER.propellantKg))
           return
         }
       }
@@ -242,7 +241,7 @@ export function PadScreen() {
   const beginCountdown = () => {
     const state = useMission.getState()
     const active = state.missionId === 'custom' ? state.custom : getMission(state.missionId ?? '')
-    if (!state.launchReady || !state.craft || !active || !state.plan) {
+    if (!state.craft || !active || !state.plan) {
       setMissionsOpen(true)
       return
     }
@@ -250,9 +249,10 @@ export function PadScreen() {
     const blocked = report.issues.filter((issue) => issue.severity === 'hard')
     if (blocked.length > 0) {
       setHold(blocked)
-      say('No go.', state.audio)
+      say('No go. Clear the engineering holds first.', state.audio)
       return
     }
+    useMission.getState().armLaunch()
     setHold(null)
     setMissionsOpen(false)
     setCount(10)
@@ -306,19 +306,23 @@ export function PadScreen() {
     if (missionsOpen || nextStep || hold || panel) document.exitPointerLock()
   }, [missionsOpen, nextStep, hold, panel])
 
+  const fuelPct = readout ? Math.max(0, Math.min(100, Math.round((readout.propellantKg / Math.max(1, BOOSTER.propellantKg)) * 100))) : 0
+  const layer = readout ? atmosphereLayer(readout.altitudeM) : null
+
   return (
     <div className="field-stage" ref={mount}>
-      {!readout && count === null && <canvas ref={mapRef} className="pad-map" width={168} height={168} aria-label="Grounds map" />}
+      <canvas ref={mapRef} className={`pad-map ${readout ? 'is-hidden' : ''}`} width={168} height={168} aria-label="Grounds map" />
       {count === null && !readout && <div className="crosshair" />}
+      {!readout && (
       <div className="field-hud">
         <span title="World heading. North is +Z on the grounds.">{rose(hud.heading)} {String(hud.heading).padStart(3, '0')}°</span>
         <span>{hud.place}</span>
         {models.total > 0 && models.done < models.total && <span>Models {models.done}/{models.total}</span>}
-        {hud.action !== 'countdown' && hud.action !== 'briefing' && count === null && !readout && !missionsOpen && <Keys prompt={hud.prompt} />}
-        {missionsOpen && !readout && count === null && <Keys prompt="E — Close" />}
+        {hud.action !== 'countdown' && hud.action !== 'briefing' && count === null && !missionsOpen && <Keys prompt={hud.prompt} />}
+        {missionsOpen && count === null && <Keys prompt="E — Close" />}
         {mission && launchReady && <span>Cleared</span>}
         {mission && <span>{mission.name}</span>}
-        {!readout && count === null && (
+        {count === null && (
           <span className="hud-row">
             <Mix />
           </span>
@@ -329,6 +333,7 @@ export function PadScreen() {
           </span>
         )}
       </div>
+      )}
       {!readout && count === null && mission && report && (
         <div className="budget-float">
           <span>Budget</span>
@@ -339,13 +344,21 @@ export function PadScreen() {
       {(hud.action === 'countdown' || hud.action === 'destination') && count === null && !readout && !missionsOpen && (
         <button type="button" className="key-banner" onClick={() => (hud.action === 'countdown' ? beginCountdown() : setMissionsOpen(true))}>
           <kbd>E</kbd>
-          <span>{hud.action === 'countdown' ? 'Begin the countdown' : 'Mars'}</span>
+          <span>{hud.action === 'countdown' ? 'Begin the countdown' : mission ? 'Flight Control' : 'Mars Destination'}</span>
         </button>
       )}
       {count !== null && count > 0 && (
-        <div className="count-banner">
+        <div className="count-banner" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
           <MissionTitle text={String(count)} variant="hero" />
           <p>{CHECKS[10 - count] ?? 'Commit'}</p>
+          <button
+            type="button"
+            className="word fill"
+            style={{ fontSize: '12px', padding: '6px 14px', background: '#dc2626', borderColor: '#ef4444', color: '#fff', cursor: 'pointer' }}
+            onClick={() => setCount(0)}
+          >
+            ⚡ Ignite & Liftoff Now
+          </button>
         </div>
       )}
       {hud.action === 'briefing' && !readout && count === null && !missionsOpen && (
@@ -361,16 +374,54 @@ export function PadScreen() {
             <DestStill src={destStillUrl('mars')} className="mars-gate-bg" />
             <DestModel missionId="mars" className="mars-gate-globe" />
           </div>
-          <strong>Mars</strong>
-          <p>The transfer window is open. Brief, build, then bring the stack to the pad.</p>
+          <strong>{mission ? `${mission.name} Flight Control` : 'Mars Campaign'}</strong>
+          <p>
+            {mission && craft
+              ? `${craft.name} is manifested. You can commence launch countdown, or revise the spacecraft in the hangar.`
+              : 'The transfer window is open. Select Mars, build your spacecraft, and bring the stack to the pad.'}
+          </p>
           <div className="hud-row brief-actions">
             <button type="button" className="word slim" title="Esc" onClick={() => setMissionsOpen(false)}>Close</button>
-            <button type="button" className="word fill" onClick={() => {
-              chooseMission('mars')
-              setMissionsOpen(false)
-              document.exitPointerLock()
-              go('brief')
-            }}>Launch</button>
+            {mission && craft ? (
+              <>
+                <button
+                  type="button"
+                  className="word"
+                  onClick={() => {
+                    setMissionsOpen(false)
+                    document.exitPointerLock()
+                    go('design')
+                  }}
+                >
+                  Hangar
+                </button>
+                <button
+                  type="button"
+                  className="word fill"
+                  style={{ background: '#0284c7', borderColor: '#38bdf8' }}
+                  onClick={() => {
+                    setMissionsOpen(false)
+                    document.exitPointerLock()
+                    beginCountdown()
+                  }}
+                >
+                  🚀 Launch Mission
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                className="word fill"
+                onClick={() => {
+                  chooseMission('mars')
+                  setMissionsOpen(false)
+                  document.exitPointerLock()
+                  go('brief')
+                }}
+              >
+                Select Mars
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -384,53 +435,35 @@ export function PadScreen() {
           </div>
         </div>
       )}
-      {readout && (
+      {readout && layer && (
         <>
-          <div className="layer-card" key={atmosphereLayer(readout.altitudeM).id}>
-            <b>{atmosphereLayer(readout.altitudeM).name}</b>
-            <span>{atmosphereLayer(readout.altitudeM).band}</span>
+          <div className="ascent-layer" key={layer.id}>
+            <b>Ascent</b>
+            <span>{layer.name} · {layer.band} · {mission?.name ?? craft?.name ?? 'Mars pathfinder'}</span>
           </div>
-          <aside className="ascent-side left">
-            <b>T+ {clock(readout.tSec)}</b>
-            <span>Altitude (km) {(readout.altitudeM / 1000).toFixed(1)}</span>
-            <span>Speed (m/s) {Math.round(readout.velocityMps)}</span>
-            <span>Downrange (km) {(readout.downrangeM / 1000).toFixed(1)}</span>
-            <span>Flight path (°) {(readout.flightPathRad * 180 / Math.PI).toFixed(1)}</span>
-            <span>Throttle (%) {Math.round(readout.throttle * 100)}</span>
-            <span>{readout.note ?? readout.phase}</span>
-            <span>{coastLine(readout)}</span>
-          </aside>
-          <aside className="ascent-side right">
-            <span>Mass (t) {(readout.massKg / 1000).toFixed(1)}</span>
-            <span>Propellant (t) {(readout.propellantKg / 1000).toFixed(1)}</span>
-            <span>TWR {readout.twr.toFixed(2)}</span>
-            <span>Accel (m/s²) {readout.accelMps2.toFixed(1)}</span>
-            <span>Q (Pa) {Math.round(readout.qPa)}</span>
-            <span>Mach {readout.mach.toFixed(2)}</span>
-            <span>Cl {readout.cl.toFixed(2)} · Cd {readout.cd.toFixed(2)}</span>
-            <span>L/D {Math.abs(readout.cd) > 0.02 ? (readout.cl / readout.cd).toFixed(2) : '—'}</span>
-            <div className="hud-row tight">
+          <div className="ascent-tools">
+            <div className="chip-row">
               <span>Time</span>
-              {([1, 2, 5, 10, 100, 1000] as const).map((rate) => (
+              {([1, 2, 5, 10, 100] as const).map((rate) => (
                 <button
                   key={rate}
                   type="button"
-                  className="word slim"
+                  className="hud-chip"
                   aria-pressed={warp === rate}
                   title={rate === 1 ? 'Real time' : `${rate} times faster`}
                   onClick={() => { warpRef.current = rate; setWarp(rate) }}
                 >
-                  {rate === 1 ? 'Real' : `${rate}×`}
+                  {rate === 1 ? 'Real' : `${rate}x`}
                 </button>
               ))}
             </div>
-            <div className="hud-row tight">
+            <div className="chip-row">
               <span>Camera</span>
               {(['chase', 'side', 'tower', 'nose', 'cinematic'] as const).map((mode) => (
                 <button
                   key={mode}
                   type="button"
-                  className="word slim"
+                  className="hud-chip"
                   aria-pressed={view === mode}
                   onClick={() => { setView(mode); worldRef.current?.setAscentView(mode) }}
                 >
@@ -438,13 +471,41 @@ export function PadScreen() {
                 </button>
               ))}
             </div>
+          </div>
+          <aside className="ascent-fuel">
+            <em>Fuel</em>
+            <div className="fuel-track" aria-label="Fuel remaining">
+              <i style={{ height: `${fuelPct}%` }} />
+            </div>
+            <b>{fuelPct}%</b>
+            <span>Nominal</span>
+            <span>Throttle {Math.round(readout.throttle * 100)}%</span>
+            <span>TWR {readout.twr.toFixed(2)}</span>
+            {details && (
+              <>
+                <span>Q {Math.round(readout.qPa)}</span>
+                <span>Mach {readout.mach.toFixed(2)}</span>
+                <span>Mass {(readout.massKg / 1000).toFixed(1)} t</span>
+              </>
+            )}
           </aside>
-          <div className="radar" title="Flight-path radar">
+          <div className="ascent-read">
+            <div><span>Time</span><b>T+ {clock(readout.tSec)}</b></div>
+            <div><span>Altitude</span><b>{(readout.altitudeM / 1000).toFixed(1)} km</b></div>
+            <div><span>Speed</span><b>{Math.round(readout.velocityMps)} m/s</b></div>
+          </div>
+          <div className="ascent-call" title={details ? coastLine(readout) : undefined}>{climbStatus(readout)}</div>
+          <div className="radar radar-corner" title="Flight-path radar">
             <svg viewBox="0 0 120 120">
               <circle cx="60" cy="60" r="52" />
               <circle cx="60" cy="60" r="34" />
               <circle cx="60" cy="60" r="16" />
               <path d="M60 8 V112 M8 60 H112" />
+              <g className="journey">
+                {Array.from({ length: 9 }, (_, i) => (
+                  <circle key={i} cx="60" cy={108 - i * 11} r={i === Math.min(8, Math.floor(readout.altitudeM / 20000)) ? 3.2 : 1.15} className={i === Math.min(8, Math.floor(readout.altitudeM / 20000)) ? 'blip' : 'tick'} />
+                ))}
+              </g>
               <circle
                 cx={60 + Math.cos(readout.flightPathRad) * Math.min(48, readout.velocityMps / 200)}
                 cy={60 - Math.sin(readout.flightPathRad) * Math.min(48, readout.velocityMps / 200)}
@@ -453,6 +514,9 @@ export function PadScreen() {
               />
             </svg>
           </div>
+          <button type="button" className="ascent-details" aria-pressed={details} onClick={() => setDetails((on) => !on)}>
+            Details {details ? 'On' : 'Off'}
+          </button>
         </>
       )}
       {hold && (
@@ -559,6 +623,20 @@ function atmosphereLayer(altitudeM: number): { id: string; name: string; band: s
   if (altitudeM < 85_000) return { id: 'mesosphere', name: 'Mesosphere', band: '50–85 km' }
   if (altitudeM < 600_000) return { id: 'thermosphere', name: 'Thermosphere', band: '85–600 km' }
   return { id: 'exosphere', name: 'Exosphere', band: 'Above 600 km' }
+}
+
+function climbStatus(state: AscentState): string {
+  if (state.aborted) return state.callout ?? 'Abort. The stack is coming back.'
+  if (state.callout) return state.callout
+  if (state.phase === 'orbit') return 'Orbit insertion. Hold the attitude.'
+  if (state.phase === 'ignition') return 'Ignition. Throttle is coming up.'
+  if (state.altitudeM < 250) return 'Liftoff. Tower clear shortly.'
+  if (state.qPa > 12_000 && state.qPa > state.qPeak * 0.72) return 'Climbing normally. Hold throttle through Max-Q.'
+  if (state.altitudeM < 12_000) return 'Climbing normally. Hold throttle through Max-Q.'
+  if (state.altitudeM < 50_000) return 'Through the thick air. Pitching over.'
+  if (state.altitudeM < 100_000) return 'The sky is going black. Fairing soon.'
+  if (state.boosterGone) return 'Upper stage. Pushing to insertion.'
+  return 'Climbing. The booster is still burning.'
 }
 
 function coastLine(state: AscentState): string {

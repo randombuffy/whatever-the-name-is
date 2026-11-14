@@ -48,8 +48,8 @@ export interface MarsGround {
 function seatFarFlush(geometry: THREE.BufferGeometry): void {
   const pos = geometry.attributes.position
   for (let i = 0; i < pos.count; i += 1) {
-    const inside = Math.max(Math.abs(pos.getX(i)), Math.abs(pos.getZ(i))) < 168
-    pos.setY(i, pos.getY(i) + (inside ? 11.96 : 0.31))
+    const inside = Math.max(Math.abs(pos.getX(i)), Math.abs(pos.getZ(i))) < 172
+    pos.setY(i, pos.getY(i) + (inside ? -28 : 0.08))
   }
   pos.needsUpdate = true
   geometry.computeVertexNormals()
@@ -429,8 +429,8 @@ export function buildMarsGround(siteId: string, drop = false): MarsGround {
   const root = new THREE.Group()
   root.name = 'mars-ground'
   const detail = createDetailTextures()
-  const nearGeo = buildTerrainGeometry(terrain, 336, drop ? 96 : 120, false)
-  const farGeo = buildTerrainGeometry(terrain, drop ? 2800 : 1400, drop ? 48 : 40, true)
+  const nearGeo = buildTerrainGeometry(terrain, 336, drop ? 96 : 160, false)
+  const farGeo = buildTerrainGeometry(terrain, drop ? 2800 : 1600, drop ? 48 : 48, true)
   seatFarFlush(farGeo)
   const nearMap = detail.colorMap.clone()
   nearMap.repeat.set(36, 36)
@@ -475,7 +475,7 @@ export function buildMarsGround(siteId: string, drop = false): MarsGround {
   const groundDown = new THREE.Vector3(0, -1, 0)
   const standCache = new Map<number, number>()
   const stand = (x: number, z: number) => {
-    const key = (Math.round(x * 4) + 50000) * 100000 + (Math.round(z * 4) + 50000)
+    const key = (Math.round(x * 8) + 50000) * 100000 + (Math.round(z * 8) + 50000)
     const cached = standCache.get(key)
     if (cached !== undefined) return cached
     let y = height(x, z)
@@ -486,7 +486,7 @@ export function buildMarsGround(siteId: string, drop = false): MarsGround {
       if (hit) y = hit.point.y
     }
     y += 0.05
-    if (standCache.size > 2800) standCache.clear()
+    if (standCache.size > 4200) standCache.clear()
     standCache.set(key, y)
     return y
   }

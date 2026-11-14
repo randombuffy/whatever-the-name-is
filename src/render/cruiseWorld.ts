@@ -12,7 +12,7 @@ import { makeStarfield, tickStarfield } from './starfield'
 
 export type FlightCam = 'chase' | 'cockpit' | 'free' | 'side' | 'map' | 'ground'
 
-export const FLIGHT_CAMS: FlightCam[] = ['side', 'chase', 'cockpit', 'free', 'map', 'ground']
+export const FLIGHT_CAMS: FlightCam[] = ['free', 'chase', 'side', 'cockpit', 'map', 'ground']
 
 export interface CruiseStick {
   pitch: number
@@ -41,7 +41,7 @@ export interface CruisePose {
 export class CruiseWorld {
   private renderer: THREE.WebGLRenderer
   private scene = new THREE.Scene()
-  private camera = new THREE.PerspectiveCamera(58, 1, 0.05, 8000)
+  private camera = new THREE.PerspectiveCamera(72, 1, 0.05, 8000)
   private canvas: HTMLCanvasElement
   private ship = new THREE.Group()
   private payload = new THREE.Group()
@@ -68,7 +68,7 @@ export class CruiseWorld {
   private dragging = false
   private lastX = 0
   private lastY = 0
-  private cam: FlightCam = 'side'
+  private cam: FlightCam = 'free'
   private zoom = 1
   private prograde = new THREE.Vector3(0, 0, 1)
   private readonly aim = new THREE.Vector3(0, 0, 1)
@@ -259,10 +259,10 @@ export class CruiseWorld {
       this.marker.visible = true
       this.marker.position.set(Math.cos(lat) * Math.sin(lon) * radius, Math.sin(lat) * radius, Math.cos(lat) * Math.cos(lon) * radius)
     } else this.marker.visible = false
-    const map = pose.stick.camera === 'map'
     this.path.visible = true
     this.orbits.visible = true
     this.sun.visible = true
+    const map = pose.stick.camera === 'map'
     if (map) {
       const points: THREE.Vector3[] = []
       for (let i = 0; i <= 64; i += 1) {
@@ -277,10 +277,10 @@ export class CruiseWorld {
       this.dest.position.set(dest.x, dest.y, dest.z)
       this.ship.position.set(ship.x, ship.y, ship.z)
       this.sun.position.set(0, 0, 0)
-      this.sun.scale.setScalar(0.95)
-      this.earth.scale.setScalar(0.55)
-      this.dest.scale.setScalar(0.32)
-      this.ship.scale.setScalar(2.2)
+      this.sun.scale.setScalar(1.15)
+      this.earth.scale.setScalar(1.35)
+      this.dest.scale.setScalar(0.82)
+      this.ship.scale.setScalar(1.35)
       this.earthOrbit.scale.setScalar(AU_M * SYSTEM_SCALE)
       this.marsOrbit.scale.setScalar(AU_M * SYSTEM_SCALE * (pose.missionId === 'lunar' ? 0.4 : MARS_ORBIT_AU))
       aimRing(this.earthOrbit, this.sun.position, this.earth.position)
@@ -308,8 +308,8 @@ export class CruiseWorld {
     const aheadDist = pose.missionId === 'lunar' ? 220 - arrive * 170 : 560 - arrive * 500
     this.earth.position.copy(dir).multiplyScalar(-behindDist)
     this.dest.position.copy(dir).multiplyScalar(Math.max(36, aheadDist))
-    this.earth.scale.setScalar(2.85 * (1 - leave * 0.93) + 0.08)
-    this.dest.scale.setScalar((pose.missionId === 'lunar' ? 0.12 : 0.055) + arrive * (pose.missionId === 'lunar' ? 1.1 : 0.72))
+    this.earth.scale.setScalar(2.1 * (1 - leave * 0.58) + 0.85)
+    this.dest.scale.setScalar((pose.missionId === 'lunar' ? 0.62 : 0.52) + arrive * (pose.missionId === 'lunar' ? 1.85 : 1.65))
     aimRing(this.earthOrbit, this.sun.position, this.earth.position)
     aimRing(this.marsOrbit, this.sun.position, this.dest.position)
     const points: THREE.Vector3[] = []
@@ -323,6 +323,8 @@ export class CruiseWorld {
     this.ship.updateWorldMatrix(true, false)
     const origin = this.ship.position
     this.camera.up.set(0, 1, 0)
+    this.camera.fov = mode === 'free' || mode === 'map' ? 72 : mode === 'cockpit' ? 62 : 58
+    this.camera.updateProjectionMatrix()
     if (mode === 'cockpit') {
       const eye = new THREE.Vector3(0, 0.42, 2.6).applyQuaternion(this.ship.quaternion).add(origin)
       const ahead = new THREE.Vector3(
@@ -335,7 +337,7 @@ export class CruiseWorld {
       return
     }
     if (mode === 'side' || mode === 'chase' || mode === 'free') {
-      const radius = (mode === 'side' ? 22 : mode === 'free' ? 16 : 14) * this.zoom
+      const radius = (mode === 'side' ? 22 : mode === 'free' ? 18 : 14) * this.zoom
       const flat = Math.cos(this.orbitPitch)
       this.camera.position.set(
         origin.x + radius * flat * Math.sin(this.orbitYaw),
@@ -473,7 +475,7 @@ function orbitRing(radius: number, color: number): THREE.Line {
   }
   return new THREE.Line(
     new THREE.BufferGeometry().setFromPoints(points),
-    new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.55 }),
+    new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.78 }),
   )
 }
 

@@ -363,4 +363,14 @@ export interface MissionOutcome {
   rewinds?: number
   achievements?: { id: string; name: string; detail: string }[]
   timeline?: { tSec: number; label: string }[]
+  gradeRank?: 'S' | 'A' | 'B' | 'C' | 'F'
+  scoreBreakdown?: {
+    primaryPoints: number
+    sciencePoints: number
+    dataPoints: number
+    budgetPoints: number
+    landingPoints: number
+    anomalyPoints: number
+    total: number
+  }
 }

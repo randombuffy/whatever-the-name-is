@@ -21,8 +21,12 @@ export function Viewport(props: ViewState) {
     const loop = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000)
       last = now
-      world.sync(propsRef.current, dt)
-      world.render()
+      try {
+        world.sync(propsRef.current, dt)
+        world.render()
+      } catch (err) {
+        console.warn('MissionWorld render error:', err)
+      }
       frame = requestAnimationFrame(loop)
     }
     frame = requestAnimationFrame(loop)

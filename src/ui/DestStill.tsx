@@ -1,14 +1,13 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
-import { modelLoader, seatSphere } from '../render/gltf'
 import DitherVeil from './DitherVeil'
 
-const DEST_MODEL: Record<string, string> = {
-  lunar: '/3d/glb/moon.glb',
-  mars: '/3d/glb/Mars.glb',
-  europa: '/3d/glb/Europa.glb',
-  asteroid: '/3d/glb/moon.glb',
-  earth: '/3d/glb/Earth.glb',
+const DEST_TEXTURES: Record<string, string> = {
+  mars: '/planets/mars.jpg',
+  europa: '/planets/europa.jpg',
+  earth: '/planets/earth.jpg',
+  lunar: '/planets/moon.jpg',
+  asteroid: '/planets/moon.jpg',
 }
 
 /** Spinning globe, centered so the whole planet sits in frame. */
@@ -34,7 +33,6 @@ export function DestModel({ missionId, className }: { missionId: string; classNa
     const sun = new THREE.DirectionalLight(0xfff6ea, 2.1)
     sun.position.set(2.4, 1.4, 3.2)
     scene.add(sun)
-    let model: THREE.Object3D | null = null
     let frame = 0
     let dead = false
     const fit = () => {
@@ -45,25 +43,23 @@ export function DestModel({ missionId, className }: { missionId: string; classNa
       renderer.setSize(width, height, false)
     }
     fit()
-    modelLoader().load(DEST_MODEL[missionId] ?? DEST_MODEL.lunar, (gltf) => {
-      if (dead) return
-      model = gltf.scene
-      seatSphere(model, missionId === 'asteroid' ? 0.95 : 1.15)
-      if (missionId === 'asteroid') {
-        model.traverse((obj) => {
-          const mesh = obj as THREE.Mesh
-          if (!mesh.isMesh || !(mesh.material instanceof THREE.MeshStandardMaterial)) return
-          const mat = mesh.material.clone()
-          mat.color.set(0x6e675e)
-          mat.roughness = 1
-          mesh.material = mat
-        })
-      }
-      scene.add(model)
+
+    const texPath = DEST_TEXTURES[missionId] ?? DEST_TEXTURES.lunar
+    const texture = new THREE.TextureLoader().load(texPath)
+    texture.colorSpace = THREE.SRGBColorSpace
+    const sphereGeo = missionId === 'asteroid' ? new THREE.IcosahedronGeometry(0.85, 3) : new THREE.SphereGeometry(1, 32, 24)
+    const sphereMat = new THREE.MeshStandardMaterial({
+      map: missionId === 'asteroid' ? undefined : texture,
+      color: missionId === 'asteroid' ? 0x6e675e : 0xffffff,
+      roughness: 0.9,
+      metalness: 0.04,
     })
+    const model = new THREE.Mesh(sphereGeo, sphereMat)
+    scene.add(model)
+
     const loop = () => {
       if (dead) return
-      if (model) model.rotation.y += 0.007
+      model.rotation.y += 0.007
       renderer.render(scene, camera)
       frame = requestAnimationFrame(loop)
     }
@@ -74,6 +70,9 @@ export function DestModel({ missionId, className }: { missionId: string; classNa
       dead = true
       cancelAnimationFrame(frame)
       observer.disconnect()
+      sphereGeo.dispose()
+      sphereMat.dispose()
+      texture.dispose()
       renderer.dispose()
       canvas.remove()
     }

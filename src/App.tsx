@@ -5,6 +5,7 @@ import { LandingScreen, SurfaceScreen } from './ui/field'
 import { PadScreen } from './ui/pad'
 import { CruiseScreen } from './ui/cruise'
 import { StationScreen } from './ui/station'
+import { startPadTutorial, startDesignTutorial, startPlanTutorial, startCruiseTutorial, startLandingTutorial, startSurfaceTutorial } from './ui/tutorial'
 import { applyMix, playGroup, startScore, unlock } from './ui/audio'
 import { Boot } from './ui/Boot'
 import { Viewport } from './render/Viewport'
@@ -21,7 +22,7 @@ function sceneMode(phase: Phase): SceneMode {
 
 /** Pad, cruise, landing and the surface each own a renderer. The hangar view must not keep drawing under them. */
 function hangarOpen(phase: Phase): boolean {
-  return phase !== 'pad' && phase !== 'launch' && phase !== 'flight' && phase !== 'landing' && phase !== 'surface' && phase !== 'station'
+  return phase !== 'pad' && phase !== 'launch' && phase !== 'flight' && phase !== 'landing' && phase !== 'surface' && phase !== 'station' && phase !== 'outpost'
 }
 
 export function App() {
@@ -121,6 +122,16 @@ export function App() {
     else void document.exitFullscreen()
   }
 
+  const triggerCurrentTutorial = () => {
+    if (phase === 'pad' || phase === 'launch') startPadTutorial()
+    else if (phase === 'design') startDesignTutorial()
+    else if (phase === 'plan') startPlanTutorial()
+    else if (phase === 'flight') startCruiseTutorial()
+    else if (phase === 'landing') startLandingTutorial()
+    else if (phase === 'surface' || phase === 'outpost') startSurfaceTutorial()
+    else startPadTutorial()
+  }
+
   if (booting) {
     return (
       <div className="game">
@@ -163,7 +174,7 @@ export function App() {
         </div>
       )}
       {hangarOpen(lost ? 'select' : phase) && <div className="vignette" />}
-      {phase !== 'surface' && phase !== 'station' && phase !== 'pad' && phase !== 'flight' && phase !== 'landing' && phase !== 'launch' && (
+      {phase !== 'surface' && phase !== 'outpost' && phase !== 'station' && phase !== 'pad' && phase !== 'flight' && phase !== 'landing' && phase !== 'launch' && (
       <header className="app-header-area">
         <div className="float-top">
           <div className="brand-pill">
@@ -224,6 +235,25 @@ export function App() {
             onClick={() => go('credits')}
           >
             Help
+          </button>
+          {(missionId === 'mars' || missionId === 'custom') && (
+            <button
+              type="button"
+              className={`top-nav-btn ${phase === 'surface' ? 'active' : ''}`}
+              disabled={phase !== 'surface' && phase !== 'debrief' && !outcome}
+              onClick={() => go('surface')}
+            >
+              Colonize
+            </button>
+          )}
+          <button
+            type="button"
+            className="top-nav-btn guide-btn"
+            title="Step-by-step interactive tutorial"
+            aria-label="Tutorial Guide"
+            onClick={triggerCurrentTutorial}
+          >
+            Guide
           </button>
           <button
             type="button"
@@ -295,6 +325,7 @@ export function App() {
         {phase === 'flight' && mission && <CruiseScreen />}
         {phase === 'landing' && mission && <LandingScreen />}
         {phase === 'surface' && mission && <SurfaceScreen />}
+        {phase === 'outpost' && mission && <SurfaceScreen />}
         {phase === 'debrief' && <DebriefScreen />}
         {phase === 'credits' && <CreditsScreen />}
       </div>

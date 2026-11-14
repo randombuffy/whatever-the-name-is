@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowRight, Camera, Crosshair, Fan, Flag, House, Lock, Plus, Radio, Sun, Video } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Camera, Crosshair, Fan, Flag, HelpCircle, House, Lock, Plus, Radio, Sun, Video } from 'lucide-react'
+import { startLandingTutorial, startSurfaceTutorial } from './tutorial'
 import { fieldSamples, siteOf } from '../domain/campaign'
 import type { CampPhase, CampSave } from '../domain/save'
 import { getSpec } from '../domain/catalog'
@@ -50,7 +51,7 @@ export function LandingScreen() {
   const mount = useRef<HTMLDivElement>(null)
   const worldRef = useRef<DescentWorld | null>(null)
   const [hud, setHud] = useState<DescentReadout | null>(null)
-  const [pace, setPace] = useState(4)
+  const [pace, setPace] = useState(50)
   const [armRewind, setArmRewind] = useState(false)
   const [showConfirmed, setShowConfirmed] = useState(false)
   const settled = useRef<'down' | 'hard' | 'crash' | null>(null)
@@ -67,10 +68,14 @@ export function LandingScreen() {
     const site = siteOf(mission, plan)
     const live = useMission.getState().sim
     const propellant = (live?.propellant.chemical ?? 0) + (live?.propellant['cold-gas'] ?? 0)
-    const world = new DescentWorld(canvas, craft, descentBody(mission.id, craft, mission.maxMassKg, propellant), site.difficulty, mission.id, site.id)
+    const difficultySetting = useMission.getState().difficulty
+    const diffMult = difficultySetting === 'commander' ? 1.4 : difficultySetting === 'cadet' ? 0.6 : 1.0
+    const scaledDiff = Math.max(0.1, Math.min(1.0, site.difficulty * diffMult))
+    const world = new DescentWorld(canvas, craft, descentBody(mission.id, craft, mission.maxMassKg, Math.max(propellant, 180)), scaledDiff, mission.id, site.id)
     const savedEntry = useMission.getState().descent
     if (savedEntry) world.restore(savedEntry)
     worldRef.current = world
+    world.setPace(50)
     world.resize()
     let frame = 0
     let last = performance.now()
@@ -155,14 +160,17 @@ export function LandingScreen() {
             <button type="button" aria-label="Ground" aria-pressed={hud?.view === 'ground'} onClick={() => worldRef.current?.setCamera('ground')}><Crosshair size={16} /></button>
           </div>
           <div className="group">
-            {([1, 4, 16] as const).map((rate) => (
+            {([1, 4, 16, 50] as const).map((rate) => (
               <button key={rate} type="button" aria-pressed={pace === rate} onClick={() => { setPace(rate); worldRef.current?.setPace(rate) }}>{rate}×</button>
             ))}
           </div>
+          <button type="button" className="icon" title="Step-by-step EDL tutorial" aria-label="Tutorial" onClick={startLandingTutorial}>
+            <HelpCircle size={16} />
+          </button>
           <Mix />
         </div>
       </div>
-      <div className="field-hud">
+      <div className="field-hud landing-hud">
         <span>{hud ? `${Math.round(hud.altitude)} m · ${hud.sink.toFixed(1)} ↓ · ${hud.lateral.toFixed(1)} → · ${Math.abs(hud.offset).toFixed(0)} m off` : 'Entry'}</span>
         <span>{hud ? `${Math.round(hud.throttle * 100)}% · ${hud.fuel.toFixed(0)} kg · heat ${(hud.heat * 100).toFixed(0)}` : ''}</span>
         <span className="lamps">
@@ -239,10 +247,13 @@ export function SurfaceScreen() {
     const enabled = craft.parts.filter((part) => part.enabled)
     const rover = enabled.find((part) => getSpec(part.specId)?.instrument === 'rover')
     const instruments = enabled.map((part) => getSpec(part.specId)?.instrument).filter((name): name is string => Boolean(name))
+    const difficultySetting = useMission.getState().difficulty
+    const diffMult = difficultySetting === 'commander' ? 1.4 : difficultySetting === 'cadet' ? 0.6 : 1.0
+    const scaledDiff = Math.max(0.1, Math.min(1.0, site.difficulty * diffMult))
     const world = new SurfaceWorld(canvas, {
       missionId: mission.id,
       siteId: site.id,
-      difficulty: site.difficulty,
+      difficulty: scaledDiff,
       gravity: mission.id === 'lunar' ? 1.62 : mission.id === 'europa' ? 1.31 : mission.id === 'asteroid' ? 0.05 : 3.71,
       air: mission.id === 'mars' || mission.id === 'custom',
       steady: enabled.some((part) => getSpec(part.specId)?.powerScale === 'constant' && (getSpec(part.specId)?.powerGenW ?? 0) > 0),
@@ -274,7 +285,16 @@ export function SurfaceScreen() {
       last = now
       const readout = world.step(dt)
       const sound = useMission.getState().audio
-      tone.drive(readout.speed, sound)
+      if (readout.mode === 'drive') {
+        tone.drive(readout.speed, sound)
+        setScoreBoost(false)
+        setBed(0.012 + readout.dust * 0.03, sound)
+      } else {
+        // EVA astronaut walking: silence rover motor sound; boost interstellar score in near-vacuum atmosphere
+        tone.drive(0, false)
+        setScoreBoost(true)
+        setBed(0, false)
+      }
       if (readout.cue && readout.cue !== heard) {
         heard = readout.cue
         const alarm = readout.cue === 'blackout' || readout.cue === 'storm'
@@ -286,7 +306,6 @@ export function SurfaceScreen() {
         said = readout.prompt
         say(readout.prompt, sound)
       }
-      setBed(0.012 + readout.dust * 0.03, sound)
       saveTick += dt
       if (saveTick > 2) {
         saveTick = 0
@@ -349,6 +368,48 @@ export function SurfaceScreen() {
             <Mix />
           </div>
           <p className="deck-note">{hud?.prompt || siteLabel(hud)}</p>
+          {hud?.mode === 'eva' && (
+            <span
+              style={{
+                fontFamily: 'Space Mono, monospace',
+                fontSize: '11px',
+                color: '#67e8f9',
+                background: 'rgba(8, 14, 26, 0.85)',
+                padding: '3px 8px',
+                borderRadius: '4px',
+                border: '1px solid rgba(103, 232, 249, 0.3)',
+                letterSpacing: '0.02em',
+              }}
+            >
+              Mars atmosphere ~0.02 kg/m³. Vacuum acoustics: surface sound does not propagate; helmet radio active.
+            </span>
+          )}
+          {hud && hud.label && hud.label !== 'Clear' && (
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontFamily: 'Space Mono, monospace',
+                fontSize: '11px',
+                color: hud.label === 'Dust' ? '#f59e0b' : hud.label === 'Flare' ? '#ef4444' : '#38bdf8',
+                background: 'rgba(15, 23, 42, 0.92)',
+                padding: '4px 10px',
+                borderRadius: '4px',
+                border: `1px solid ${hud.label === 'Dust' ? 'rgba(245, 158, 11, 0.5)' : hud.label === 'Flare' ? 'rgba(239, 68, 68, 0.5)' : 'rgba(56, 189, 248, 0.4)'}`,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+              }}
+            >
+              <AlertTriangle size={13} />
+              <span>
+                {hud.label === 'Dust' && 'HAZARD: Martian dust storm in progress. Solar arrays degraded; visual sensors occluded.'}
+                {hud.label === 'Flare' && 'SOLAR EVENT: Coronal mass ejection detected. High particle flux; seek hab radiation shielding.'}
+                {hud.label === 'Blackout' && 'COMMUNICATION BLACKOUT: Orbital relay out of line-of-sight. DSN downlink telemetry buffered.'}
+                {hud.label === 'Fault' && 'DIAGNOSTIC: Transceiver telemetry parity glitch. Switching redundant bus.'}
+                {hud.label === 'Wheel' && 'TERRAIN CAUTION: Heavy regolith slippage; drivetrain drag increased.'}
+              </span>
+            </div>
+          )}
           {hud?.crisis === 'power' && (
             <div className="group">
               <button type="button" className="word slim" onClick={() => {
@@ -389,6 +450,7 @@ export function SurfaceScreen() {
             <button type="button" aria-label="Next finding" onClick={() => world?.cycleHold()}><ArrowRight size={16} /></button>
             <button type="button" aria-label="Transmit" onClick={() => world?.transmit()}><Radio size={16} /></button>
             <button type="button" aria-label="File the return" onClick={send}><Flag size={16} /></button>
+            <button type="button" className="icon" title="Surface exploration tutorial" aria-label="Tutorial" onClick={startSurfaceTutorial}><HelpCircle size={16} /></button>
             <button type="button" aria-label="Hangar" onClick={() => go('design')}><House size={16} /></button>
           </div>
         </div>
@@ -505,10 +567,12 @@ function CampBar({ camp, onChange }: { camp: CampSave; onChange: (next: CampSave
           return <li key={id} className={state}>{label}</li>
         })}
       </ol>
+      {camp.phase === 'landing' && (
+        <button type="button" className="word fill colonize-start" onClick={() => commit({ ...camp, phase: 'habitat' })}>
+          Start colonizing
+        </button>
+      )}
       <div className="camp-cards">
-        {camp.phase === 'landing' && (
-          <CampCard title="Outpost" detail="Open the build, then place the habitat." preview="outpost" on={false} onAdd={() => commit({ ...camp, phase: 'habitat' })} />
-        )}
         {camp.phase === 'habitat' && (
           <>
             <CampCard title="Plain habitat" detail="A cabin on the flat ground." preview="habitat" on={hasPiece(camp, 'habitat-plain')} onAdd={() => commit(pickHabitat(camp, 'habitat-plain'))} />

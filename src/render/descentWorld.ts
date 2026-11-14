@@ -129,7 +129,7 @@ export class DescentWorld {
   private difficulty: number
   private craftSignature = ''
   private reason = ''
-  private pace = 4
+  private pace = 50
   private planet = new THREE.Group()
   private airless = false
   private beat: 'approach' | 'entry' | 'chute' | 'choice' | 'burn' = 'approach'
@@ -240,7 +240,16 @@ export class DescentWorld {
   }
 
   step(dt: number): DescentReadout {
-    if (!this.done) this.direct(dt * this.pace)
+    if (!this.done) {
+      const totalDt = dt * this.pace
+      const maxSub = 0.08
+      const steps = Math.ceil(totalDt / maxSub)
+      const subDt = totalDt / steps
+      for (let s = 0; s < steps; s++) {
+        this.direct(subDt)
+        if (this.done) break
+      }
+    }
     if (!this.done && !this.markedGate && this.altitude < 6000) {
       this.markedGate = true
       this.remember()
@@ -249,12 +258,12 @@ export class DescentWorld {
       this.markedFinal = true
       this.remember()
     }
-    this.planet.rotation.y += dt * 0.015
+    if (this.beat === 'approach') this.planet.rotation.y += dt * 0.004
     this.flame.visible = false
     this.chute.visible = false
     if (this.stars) tickStarfield(this.stars, dt, this.camera)
     if ((this.missionId === 'mars' || this.missionId === 'custom') && !this.marsGround && (this.beat !== 'approach' || this.beatT > 2)) {
-      this.marsGround = buildMarsGround(this.siteId, true)
+      this.marsGround = buildMarsGround(this.siteId, false)
       this.marsGround.root.visible = false
       this.marsGround.sky.visible = false
       this.scene.add(this.marsGround.root, this.marsGround.sky)
@@ -623,9 +632,9 @@ export class DescentWorld {
     this.view = view
   }
 
-  /** Speeds the descent clock. 1 is real time, 4 is the default, 16 is a fast pass. */
+  /** Speeds the descent clock. 1 is real time, 4 is the default, 16 and 50 are fast passes. */
   setPace(pace: number): void {
-    this.pace = Math.max(1, Math.min(16, pace))
+    this.pace = Math.max(1, Math.min(50, pace))
   }
 
   private dress(config: SpacecraftConfig): void {

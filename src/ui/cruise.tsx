@@ -1,34 +1,27 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
 import {
   ArrowDown,
   ArrowLeft,
   ArrowRight,
   ArrowUp,
   Crosshair,
-  Droplets,
   Eye,
   EyeOff,
   Flame,
   Gauge,
   House,
   Lock,
-  Mountain,
   Move3d,
-  Orbit,
   Pause,
-  PersonStanding,
   Play,
   Power,
-  Radio,
   Rocket,
   Settings,
-  Sun,
-  Thermometer,
   Video,
-  Weight,
   RotateCcw,
 } from 'lucide-react'
 import { AU_M } from '../domain/constants'
+import { computeOrbitIntercept } from '../domain/orbit'
 import { evaluate } from '../domain/validate'
 import { getSpec } from '../domain/catalog'
 import { burnSeconds, cruiseOrbit, nodeMagnitude } from '../domain/nodes'
@@ -43,14 +36,6 @@ import { setBed, setScoreBoost, sting } from './audio'
 import { say, sayOnce } from './voice'
 import { Mix } from './mix'
 import { createEngineTone } from './tone'
-const CAM_ICON = {
-  chase: Video,
-  cockpit: PersonStanding,
-  free: Move3d,
-  side: Crosshair,
-  map: Orbit,
-  ground: Mountain,
-} as const
 
 const BIND_ICON: Record<FlightAction, typeof Gauge> = {
   pitchUp: ArrowUp,
@@ -88,8 +73,10 @@ export function CruiseScreen() {
   const setPlan = useMission((state) => state.setPlan)
   const checkpoints = useMission((state) => state.checkpoints)
   const restoreCheckpoint = useMission((state) => state.restoreCheckpoint)
+  const ascentFuelFrac = useMission((state) => state.ascentFuelFrac)
 
-  const [camera, setCamera] = useState<FlightCam>('side')
+  const [camera, setCamera] = useState<FlightCam>('free')
+  const [details, setDetails] = useState(false)
   const [throttle, setThrottle] = useState(1)
   const [engines, setEngines] = useState(true)
   const [stable, setStable] = useState(true)
@@ -118,12 +105,44 @@ export function CruiseScreen() {
     sting('warn', useMission.getState().audio)
   }, [failed])
 
+  const [transitioning, setTransitioning] = useState(false)
+  const [arrivalReady, setArrivalReady] = useState(false)
+
+  const intercept = useMemo(() => {
+    if (!sim || !mission) return null
+    const hopSec = mission.id === 'lunar' ? 3 * 86400 : 210 * 86400
+    const track = transferState(mission.id, mission.destinationAu, sim.distanceFraction, sim.tSec)
+    return computeOrbitIntercept(
+      mission.id,
+      mission.destinationAu,
+      sim.distanceFraction,
+      hopSec,
+      track.rangeDestM,
+      track.rangeEarthM,
+      track.speed
+    )
+  }, [mission, sim])
+
   const arrival = Boolean(sim && !sim.failed && (sim.status === 'complete' || sim.distanceFraction >= 0.99))
   useEffect(() => {
-    if (!arrival) return undefined
-    const id = window.setTimeout(() => go('landing'), 200)
-    return () => window.clearTimeout(id)
-  }, [arrival, go])
+    if (!arrival || !mission) {
+      setArrivalReady(false)
+      return undefined
+    }
+    setArrivalReady(true)
+    useMission.getState().setRate(1)
+    sting('radio', useMission.getState().audio)
+    sayOnce('mars-entry-ready', `${mission.destination} arrival confirmed. Orbit intercept locked. Standing by for entry interface.`, useMission.getState().audio)
+  }, [arrival, mission])
+
+  const initiateLanding = () => {
+    setTransitioning(true)
+    sting('separate', useMission.getState().audio)
+    sayOnce('entry-burn', 'De-orbit burn complete. Mars entry interface in three, two, one.', useMission.getState().audio)
+    window.setTimeout(() => {
+      go('landing')
+    }, 1600)
+  }
 
   const keys = useRef(new Set<string>())
   const cameraRef = useRef(camera)
@@ -330,121 +349,118 @@ export function CruiseScreen() {
   const report = evaluate(craft, mission, plan)
   const propNow = sim.propellant.chemical + sim.propellant.electric + sim.propellant['cold-gas']
   const massNow = report.mass.dryKg + propNow
-  const numbers = instruments(sim, craft, massNow, report.mass.propellantKg, report.propulsion.dvMps, pose, throttle, engines, mission.id, mission.destinationAu)
+  const numbers = instruments(sim, craft, massNow, report.mass.propellantKg, report.propulsion.dvMps, pose, throttle, engines, mission.id, mission.destinationAu, ascentFuelFrac)
   const engine = mainEngine(craft)
   const done = sim.status === 'complete' || sim.status === 'failed'
   const site = siteOf(mission, plan)
   const leg = sim.distanceFraction < 0.08 ? 'Leaving Earth' : sim.distanceFraction < 0.82 ? 'Coasting' : 'Arrival'
+  const fuelPct = Math.max(0, Math.min(100, Math.round(numbers.fuelRatio * 100)))
+  const destRange = rangeText(numbers.rangeDestM)
+  const earthRange = rangeText(numbers.rangeEarthM)
+  const cruiseCall = sim.failed
+    ? (sim.failReason || 'The transfer stopped.')
+    : sim.decision
+      ? sim.decision.title
+      : done
+        ? `Arrival. ${site.name} is the landing.`
+        : sim.burning
+          ? 'Burning. Hold the nose on the path.'
+          : leg === 'Leaving Earth'
+            ? 'Leaving Earth. The transfer is opening.'
+            : leg === 'Arrival'
+              ? 'Mars is ahead. Confirm the landing site when you are ready.'
+              : 'Coasting. The yellow path is the transfer.'
+
   return (
     <div className="field-stage" ref={mount}>
       <div className="deck">
-        <div className="deck-top">
-          <div className="group">
-            {FLIGHT_CAMS.map((mode) => {
-              const Icon = CAM_ICON[mode]
-              return (
-                <button key={mode} type="button" aria-label={mode} aria-pressed={camera === mode} title={mode} onClick={() => setCamera(mode)}>
-                  <Icon size={16} />
-                </button>
-              )
-            })}
+        <div className="ascent-layer">
+          <b>Cruise</b>
+          <span>{leg} · {mission.name}</span>
+          <span>{destRange} to {mission.destination} · {earthRange} from Earth</span>
+          <span>{etaLine(sim, effectiveWarp(rate, sim))}</span>
+          <div className="journey-track" aria-label="Transfer progress">
+            <i style={{ transform: `scaleX(${Math.max(0.04, Math.min(1, sim.distanceFraction))})` }} />
           </div>
-          <label className="group warp-slider" title="Flight clock from 1× to 300,000×. The number here is the clock that is running.">
-            <span>{warpLabel(rate)}</span>
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.001}
-              value={warpToSlider(rate)}
-              aria-label="Sim speed"
-              onChange={(event) => setRate(sliderToWarp(Number(event.target.value)))}
-            />
-          </label>
-          <div className="group">
-            <button type="button" aria-label={paused ? 'Run' : 'Hold'} aria-pressed={paused} onClick={() => {
+        </div>
+        <div className="ascent-tools">
+          <div className="chip-row warp-row">
+            <span>Time</span>
+            <label className="warp-slider" title="Flight clock from 1× to 300,000×">
+              <span>{warpLabel(effectiveWarp(rate, sim))}</span>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.001}
+                value={warpToSlider(rate)}
+                aria-label="Sim speed"
+                onChange={(event) => setRate(sliderToWarp(Number(event.target.value)))}
+              />
+            </label>
+            {([1, 100, 1_000, 10_000, 300_000] as const).map((step) => (
+              <button
+                key={step}
+                type="button"
+                className="hud-chip"
+                aria-pressed={Math.abs(rate - step) / step < 0.08}
+                onClick={() => setRate(step)}
+              >
+                {warpLabel(step)}
+              </button>
+            ))}
+          </div>
+          <div className="chip-row">
+            <span>Camera</span>
+            {FLIGHT_CAMS.map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                className="hud-chip"
+                aria-pressed={camera === mode}
+                onClick={() => setCamera(mode)}
+              >
+                {mode === 'cockpit' ? 'Nose' : mode === 'free' ? 'Wide' : mode[0].toUpperCase() + mode.slice(1)}
+              </button>
+            ))}
+          </div>
+          <div className="chip-row">
+            <button type="button" className="hud-chip" aria-pressed={paused} onClick={() => {
               const next = !paused
               manualHold.current = next
               setPaused(next)
-            }}>
-              {paused ? <Play size={16} /> : <Pause size={16} />}
-            </button>
-            <button type="button" aria-label="Engines" aria-pressed={engines} onClick={() => setEngines((value) => !value)}>
-              <Power size={16} />
-            </button>
-            <button type="button" aria-label="Stability" aria-pressed={stable} onClick={() => setStable((value) => !value)}>
-              <Lock size={16} />
-            </button>
-            <button type="button" aria-label="Instruments" aria-pressed={hudOn} onClick={() => setHudOn((value) => !value)}>
-              {hudOn ? <Eye size={16} /> : <EyeOff size={16} />}
-            </button>
-            <button type="button" aria-label="Bindings" aria-pressed={bindsOpen} onClick={() => { setBindsOpen((value) => !value); setCapture(null) }}>
-              <Settings size={16} />
-            </button>
-            <button type="button" aria-label="Timeline" aria-pressed={timeline} onClick={() => setTimeline((value) => !value)}>
-              <RotateCcw size={16} />
-            </button>
-            <button type="button" aria-label="Center" onClick={() => go('pad')}>
-              <House size={16} />
-            </button>
+            }}>{paused ? 'Run' : 'Hold'}</button>
+            <button type="button" className="hud-chip" aria-pressed={engines} onClick={() => setEngines((value) => !value)}>Engines</button>
+            <Mix />
           </div>
-          <Mix />
-          <b className="deck-clock">{sim.phaseLabel} · {clock(sim.tSec)} · clock {warpLabel(effectiveWarp(rate, sim))}</b>
         </div>
-        {hudOn && (
-          <aside className="journey">
-            <b>Journey</b>
-            <span>{mission.name}</span>
-            <em>{leg}</em>
-            <span>{etaLine(sim, effectiveWarp(rate, sim))}</span>
-            <span title={numbers.speedTitle}>{numbers.speed} · {numbers.frame}</span>
-            <div className="journey-track" aria-label="Transfer progress">
-              <i style={{ transform: `scaleX(${Math.max(0.04, Math.min(1, sim.distanceFraction))})` }} />
-            </div>
-            <ol>
-              <li className={sim.distanceFraction >= 0.08 ? 'done' : 'now'}>Leave Earth orbit</li>
-              <li className={sim.distanceFraction >= 0.82 ? 'done' : sim.distanceFraction >= 0.08 ? 'now' : ''}>Coast to the target</li>
-              <li className={done && !sim.failed ? 'done' : sim.distanceFraction >= 0.82 ? 'now' : ''}>Arrive in orbit</li>
-              <li>Land at {site.name}</li>
-              <li>Walk the surface and survey</li>
-            </ol>
-            <p>{site.note}</p>
-          </aside>
-        )}
-        {hudOn && (
-          <NodeBar
-            sim={sim}
-            missionId={mission.id}
-            destAu={mission.destinationAu}
-            massKg={massNow}
-            thrustN={engine?.thrustN ?? 0}
-            ispS={engine?.ispS ?? 0}
-          />
-        )}
-        {hudOn && (
-          <>
-          <div className="deck-bottom">
-            <div className="cluster">
-              <Read icon={<Gauge size={14} />} value={numbers.speed} ratio={Math.min(1, numbers.speedMs / 40000)} title={numbers.speedTitle} />
-              <Read icon={<ArrowUp size={14} />} value={numbers.vertical} title={`${numbers.frame} radial speed (km/s)`} />
-              <Read icon={<ArrowRight size={14} />} value={numbers.horizontal} title={`${numbers.frame} tangential speed (km/s)`} />
-              <Read icon={<Mountain size={14} />} value={numbers.altitude} title="Altitude (km)" />
-            </div>
-            <div className="cluster">
-              <Read icon={<Orbit size={14} />} value={numbers.apo} title="Apoapsis (km)" />
-              <Read icon={<Orbit size={14} />} value={numbers.peri} title="Periapsis (km)" />
-              <Read icon={<Crosshair size={14} />} value={numbers.aoa} title="Angle of attack (°)" />
-            </div>
+        <aside className="ascent-fuel">
+          <em>Fuel</em>
+          <div className="fuel-track" aria-label="Fuel remaining">
+            <i style={{ height: `${fuelPct}%` }} />
           </div>
-          <div className="deck-side">
-            <div className="cluster">
-              <Read icon={<Gauge size={14} />} value={numbers.accel} title="Acceleration (m/s²)" />
-              <Read icon={<ArrowUp size={14} />} value={numbers.q} title="Dynamic pressure (Pa)" />
-              <Read icon={<Droplets size={14} />} value={numbers.fuel} ratio={numbers.fuelRatio} title="Propellant (kg)" />
-              <Read icon={<Weight size={14} />} value={numbers.mass} title="Vehicle mass (kg)" />
-              <Read icon={<Gauge size={14} />} value={numbers.power} title="Power margin (W)" />
-              <Read icon={<Rocket size={14} />} value={numbers.dv} title="Delta-v remaining (m/s)" />
-            </div>
+          <b>{fuelPct}%</b>
+          <span>{numbers.fuel} kg</span>
+          <span>Throttle {Math.round(throttle * 100)}%</span>
+        </aside>
+        {hudOn && details && (
+          <aside className="ascent-side left cruise-details">
+            <span>Q {numbers.q} Pa</span>
+            <span>Accel {numbers.accel} m/s²</span>
+            <span>Propellant {numbers.fuel} kg</span>
+            <span>Mass {numbers.mass} kg</span>
+            <span>Δv {numbers.dv} m/s</span>
+            <span>Apo {numbers.apo}</span>
+            <span>Peri {numbers.peri}</span>
+            <span>Earth {earthRange}</span>
+            <span>{mission.destination} {destRange}</span>
+            <span>Light {numbers.delay}</span>
+            {intercept && (
+              <>
+                <span>{intercept.inSoi ? 'Captured' : 'Transfer coast'}</span>
+                <span>Rel {(intercept.relativeSpeedMps / 1000).toFixed(2)} km/s</span>
+              </>
+            )}
             <div className="throttle">
               <Flame size={14} />
               <input
@@ -461,40 +477,75 @@ export function CruiseScreen() {
                 }}
               />
             </div>
-            <div className="cluster lamps">
-              <i className={numbers.engine} title="Engine" />
-              <Radio size={14} />
-              <b title="Link margin">{numbers.nav}</b>
-              <Sun size={14} />
-              <b title="One-way light time">{numbers.delay}</b>
-              <Thermometer size={14} />
-              <b title="Bus temperature">{numbers.temp}</b>
+            <div className="group">
+              <button type="button" aria-label={paused ? 'Run' : 'Hold'} aria-pressed={paused} onClick={() => {
+                const next = !paused
+                manualHold.current = next
+                setPaused(next)
+              }}>
+                {paused ? <Play size={16} /> : <Pause size={16} />}
+              </button>
+              <button type="button" aria-label="Engines" aria-pressed={engines} onClick={() => setEngines((value) => !value)}>
+                <Power size={16} />
+              </button>
+              <button type="button" aria-label="Stability" aria-pressed={stable} onClick={() => setStable((value) => !value)}>
+                <Lock size={16} />
+              </button>
+              <button type="button" aria-label="Bindings" aria-pressed={bindsOpen} onClick={() => { setBindsOpen((value) => !value); setCapture(null) }}>
+                <Settings size={16} />
+              </button>
+              <button type="button" aria-label="Timeline" aria-pressed={timeline} onClick={() => setTimeline((value) => !value)}>
+                <RotateCcw size={16} />
+              </button>
+              <button type="button" aria-label="Center" onClick={() => go('pad')}>
+                <House size={16} />
+              </button>
             </div>
-          </div>
-          </>
+            <Mix />
+          </aside>
+        )}
+        <div className="ascent-read">
+          <div><span>Time</span><b>T+ {clock(sim.tSec)}</b></div>
+          <div><span>Range</span><b>{destRange}</b></div>
+          <div><span>Speed</span><b>{numbers.speed}</b></div>
+        </div>
+        <div className="ascent-call">{cruiseCall}</div>
+        <button type="button" className="ascent-details" aria-pressed={details} onClick={() => setDetails((on) => !on)}>
+          Details {details ? 'On' : 'Off'}
+        </button>
+        {hudOn && (
+          <NodeBar
+            sim={sim}
+            missionId={mission.id}
+            destAu={mission.destinationAu}
+            massKg={massNow}
+            thrustN={engine?.thrustN ?? 0}
+            ispS={engine?.ispS ?? 0}
+          />
         )}
         {done && (
           <button type="button" className="deck-go" aria-label={sim.failed ? 'Debrief' : 'Entry'} onClick={() => (sim.failed ? finish() : go('landing'))}>
             {sim.failed ? <House size={18} /> : <Rocket size={18} />}
           </button>
         )}
-        {(sim.distanceFraction > 0.9 || (done && !sim.failed)) && !sim.failed && !sim.decision && (
-          <div className="deck-choice">
+        {(sim.distanceFraction > 0.88 || (done && !sim.failed) || arrivalReady) && !sim.failed && !sim.decision && (
+          <div className="deck-choice arrival-card">
+            <strong>Landing site</strong>
             <div>
-              <span title="Approach speed at this point on the transfer">{numbers.approach}</span>
-              {sitesFor(mission.id === 'custom' ? 'mars' : mission.id).map((site) => (
+              {sitesFor(mission.id === 'custom' ? 'mars' : mission.id).map((row) => (
                 <button
-                  key={site.id}
+                  key={row.id}
                   type="button"
-                  aria-pressed={(plan.siteId ?? sitesFor(mission.id === 'custom' ? 'mars' : mission.id)[0]?.id) === site.id}
-                  title={`${site.note}${site.elevM !== undefined ? ` Elevation ${site.elevM} m. Slope ${site.slopeDeg}°. Science ${site.science.toFixed(2)}.` : ''}`}
-                  onClick={() => setPlan({ siteId: site.id })}
+                  aria-pressed={(plan.siteId ?? sitesFor(mission.id === 'custom' ? 'mars' : mission.id)[0]?.id) === row.id}
+                  title={row.note}
+                  onClick={() => setPlan({ siteId: row.id })}
                 >
-                  {site.name}
-                  {site.slopeDeg !== undefined && <em>{site.slopeDeg}°</em>}
+                  {row.name}
                 </button>
               ))}
-              <button type="button" className="word fill" onClick={() => go('landing')}>Land on {site.name}</button>
+              <button type="button" className="word fill" onClick={initiateLanding}>
+                Enter at {siteOf(mission, plan).name}
+              </button>
             </div>
           </div>
         )}
@@ -591,20 +642,39 @@ export function CruiseScreen() {
             })}
           </div>
         )}
+        {transitioning && (
+          <div
+            className="entry-transition-overlay"
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 99999,
+              background: 'radial-gradient(circle at center, rgba(239, 68, 68, 0.45), rgba(15, 23, 42, 0.98) 75%)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#f8fafc',
+              fontFamily: 'Orbitron, sans-serif',
+              animation: 'entryFadeIn 400ms ease forwards',
+              backdropFilter: 'blur(8px)',
+            }}
+          >
+            <div style={{ fontSize: '12px', letterSpacing: '0.25em', color: '#fb923c', marginBottom: '8px' }}>
+              ATMOSPHERIC ENTRY INTERFACE
+            </div>
+            <h2 style={{ fontSize: '24px', letterSpacing: '0.1em', margin: '0 0 12px 0', textTransform: 'uppercase', color: '#f1f5f9' }}>
+              {mission.destination} Atmospheric Ingress
+            </h2>
+            <p style={{ fontFamily: 'Space Mono, monospace', fontSize: '13px', color: '#94a3b8', maxWidth: '440px', textAlign: 'center', margin: '0 0 24px 0' }}>
+              Hypersonic ionization blackout in progress... De-orbit retro burn nominal. Altitude 125 km...
+            </p>
+            <div style={{ width: '240px', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
+              <div style={{ width: '100%', height: '100%', background: 'linear-gradient(90deg, #f97316, #ef4444)', animation: 'entryProgress 1.6s ease forwards' }} />
+            </div>
+          </div>
+        )}
       </div>
-    </div>
-  )
-}
-
-function Read({ icon, value, ratio, title }: { icon: ReactNode; value: string; ratio?: number; title: string }) {
-  return (
-    <div className="meter" title={title}>
-      {icon}
-      <span>{title}</span>
-      <b>{value}</b>
-      {ratio !== undefined && (
-        <i><em style={{ transform: `scaleX(${Math.max(0, Math.min(1, ratio))})` }} /></i>
-      )}
     </div>
   )
 }
@@ -655,6 +725,7 @@ function instruments(
   engines: boolean,
   missionId: string,
   destAu: number,
+  ascentFuelFrac = 1,
 ) {
   const track = transferState(missionId, destAu, sim.distanceFraction, sim.tSec)
   const lunar = missionId === 'lunar'
@@ -668,7 +739,9 @@ function instruments(
     return sum + spec.thrustN
   }, 0)
   const thrust = engines && sim.burning ? fitted * throttle : 0
-  const initial = Math.max(propellantKg, prop, 1)
+  const tank = Math.max(propellantKg, 1)
+  const cruiseRatio = Math.min(1, Math.max(0, prop / tank))
+  const launchFrac = Math.min(1, Math.max(0.02, ascentFuelFrac))
   const accel = massKg > 0 ? thrust / massKg : 0
   const delay = track.lightSec >= 90 ? `${(track.lightSec / 60).toFixed(1)}m` : `${track.lightSec.toFixed(0)}s`
   return {
@@ -685,7 +758,7 @@ function instruments(
     accel: accel.toFixed(2),
     q: track.qPa >= 1000 ? `${(track.qPa / 1000).toFixed(1)}` : track.qPa.toFixed(0),
     fuel: `${prop.toFixed(0)}`,
-    fuelRatio: Math.min(1, prop / initial),
+    fuelRatio: Math.min(1, cruiseRatio * launchFrac),
     mass: `${Math.round(massKg)}`,
     power: `${Math.round(sim.powerGenW - sim.powerLoadW)}`,
     dv: `${Math.max(0, Math.round(dvBudget - sim.dvUsedMps))}`,
@@ -694,6 +767,8 @@ function instruments(
     delay,
     temp: `${Math.round(sim.temperatureK)}`,
     approach: `${(track.speed / 1000).toFixed(2)} km/s · ${span(track.altitudeM)}`,
+    rangeDestM: track.rangeDestM,
+    rangeEarthM: track.rangeEarthM,
   }
 }
 
@@ -774,4 +849,13 @@ function span(metres: number): string {
   if (size >= 100_000) return `${Math.round(metres / 1000)}`
   if (size >= 1000) return `${(metres / 1000).toFixed(1)}`
   return `${Math.round(metres)}`
+}
+
+function rangeText(metres: number): string {
+  if (!Number.isFinite(metres)) return '—'
+  const size = Math.abs(metres)
+  if (size >= AU_M * 0.05) return `${(metres / AU_M).toFixed(2)} AU`
+  if (size >= 100_000) return `${Math.round(metres / 1000).toLocaleString()} km`
+  if (size >= 1000) return `${(metres / 1000).toFixed(1)} km`
+  return `${Math.round(metres)} m`
 }

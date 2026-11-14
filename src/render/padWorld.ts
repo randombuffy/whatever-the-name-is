@@ -152,7 +152,7 @@ export class PadWorld {
   private controlAt = new THREE.Vector3(-32, 0, 46)
   private chevrons: THREE.Mesh[] = []
   private walkBody: WalkAstronaut | null = null
-  private ascentView: AscentView = 'cinematic'
+  private ascentView: AscentView = 'chase'
   private viewLocked = false
   private crewStowed = false
   private readonly padSeat = new THREE.Vector3(0, 0, 0)
@@ -277,10 +277,10 @@ export class PadWorld {
   setCrewStowed(stowed: boolean): void {
     if (stowed && !this.crewStowed) {
       this.firstPerson = false
-      this.ascentView = 'cinematic'
-      this.viewLocked = false
-      this.lookYaw = 0.85
-      this.pitch = 0.28
+      this.ascentView = 'chase'
+      this.viewLocked = true
+      this.lookYaw = Math.PI
+      this.pitch = 0.16
       if (document.pointerLockElement === this.canvas) document.exitPointerLock()
     }
     this.crewStowed = stowed
@@ -490,7 +490,6 @@ export class PadWorld {
     const alt = ascent.altitudeM / 35
     const range = ascent.downrangeM / 35
     this.stack.position.set(range + this.padSeat.x, alt, this.padSeat.z)
-    if (!this.viewLocked) this.ascentView = 'cinematic'
     const lean = Math.max(-1.35, Math.min(0.15, ascent.flightPathRad - Math.PI / 2))
     this.stack.rotation.set(0, ascent.yawRad, lean)
     if (this.launchRig) {
@@ -956,7 +955,13 @@ export class PadWorld {
     }
     if (this.feet.distanceTo(this.controlAt) < 5.5) {
       this.showMarker(this.controlAt)
-      return { prompt: 'E — Choose a destination', place: 'Launch control', action: 'destination', heading }
+      const missionSet = Boolean(useMission.getState().missionId)
+      return {
+        prompt: missionSet ? 'E — Flight Control & Launch' : 'E — Choose a destination',
+        place: 'Launch control',
+        action: 'destination',
+        heading,
+      }
     }
     const gate = this.gates.find((item) => item.open < 0.2 && this.feet.distanceTo(item.at) < 4.4)
     if (gate) {
@@ -1037,7 +1042,7 @@ export class PadWorld {
       polygonOffsetFactor: -4,
       polygonOffsetUnits: -4,
     })
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 32; i++) {
       const mesh = new THREE.Mesh(geo, material)
       mesh.visible = false
       mesh.renderOrder = 2
@@ -1059,8 +1064,16 @@ export class PadWorld {
     const yaw = Math.atan2(flat.x, flat.z)
     const up = new THREE.Vector3(0, 1, 0)
     const heading = new THREE.Quaternion().setFromAxisAngle(up, yaw)
+    const count = this.chevrons.length
+    const start = 2.6
+    const cover = Math.min(distance - 4.2, 280)
+    const spacing = cover / Math.max(1, count)
     this.chevrons.forEach((chevron, index) => {
-      const reach = 2.6 + index * 2.15
+      const reach = start + index * spacing
+      if (reach >= distance - 3.2) {
+        chevron.visible = false
+        return
+      }
       const x = this.feet.x + flat.x * reach
       const z = this.feet.z + flat.z * reach
       const normal = this.groundNormal(x, z)
@@ -1068,8 +1081,9 @@ export class PadWorld {
       chevron.visible = true
       chevron.position.set(x, this.surfaceY(x, z) + 0.05, z)
       chevron.quaternion.copy(tilt).multiply(heading)
-      const pulse = 0.92 + ((Math.sin(this.time * 3.2 - index * 0.7) + 1) * 0.5) * 0.16
-      chevron.scale.set(pulse, pulse, pulse)
+      const pulse = 0.92 + ((Math.sin(this.time * 3.2 - index * 0.35) + 1) * 0.5) * 0.16
+      const far = 1 + Math.min(0.45, reach / 80)
+      chevron.scale.set(pulse * far, pulse, pulse * far)
     })
   }
 

@@ -20,8 +20,8 @@ export const UPPER = {
   propellantKg: 55_000,
 } as const
 
-/** Real-time seconds are stretched so a burn fits a captain's sequence. The integrator itself is in SI seconds. */
-export const ASCENT_TIME_SCALE = 18
+/** Integrator dt is SI seconds. Warp buttons on the pad multiply this. Real = 1. */
+export const ASCENT_TIME_SCALE = 1
 
 export type AscentPhase =
   | 'pad'
