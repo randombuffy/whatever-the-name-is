@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Boxes, Compass, Earth, Expand, Flag, Info, Rocket, Route, Volume2, VolumeX } from 'lucide-react'
+import { Expand } from 'lucide-react'
 import { BriefScreen, CreditsScreen, DebriefScreen, DesignScreen, PlanScreen, SelectScreen } from './ui/screens'
 import { LandingScreen, SurfaceScreen } from './ui/field'
 import { PadScreen } from './ui/pad'
 import { CruiseScreen } from './ui/cruise'
 import { StationScreen } from './ui/station'
-import { Dock } from './ui/bits'
 import { applyMix, playGroup, startScore, unlock } from './ui/audio'
 import { Boot } from './ui/Boot'
 import { Viewport } from './render/Viewport'
@@ -13,15 +12,6 @@ import type { SceneMode } from './render/world'
 import { useActiveMission, useMission, type Phase } from './store/useMission'
 import { evaluate } from './domain/validate'
 import { effectiveWarp } from './domain/time'
-
-const STEPS: { id: Phase; label: string; tooltip: string; icon: typeof Compass }[] = [
-  { id: 'select', label: 'Missions', tooltip: 'Select destination mission', icon: Compass },
-  { id: 'brief', label: 'Goals', tooltip: 'Mission objectives and requirements', icon: Earth },
-  { id: 'design', label: 'Build', tooltip: 'Build spacecraft and configure subsystems', icon: Boxes },
-  { id: 'plan', label: 'Plan', tooltip: 'Plan orbital maneuvers and trajectory', icon: Route },
-  { id: 'launch', label: 'Launch', tooltip: 'Launch rocket from spaceport pad', icon: Rocket },
-  { id: 'debrief', label: 'Debrief', tooltip: 'Mission summary and telemetry report', icon: Flag },
-]
 
 function shortMoney(usd: number): string {
   const abs = Math.abs(usd)
@@ -189,60 +179,93 @@ export function App() {
           <b>Mission Control</b>
           <small>NASA Space Apps</small>
         </div>
-        <Dock>
-          {STEPS.map((step) => {
-              const Icon = step.icon
-              const needsMission = step.id !== 'select' && step.id !== 'debrief'
-              const disabled = (needsMission && !missionId) || (step.id === 'debrief' && !outcome)
-              return (
-                <button
-                  key={step.id}
-                  type="button"
-                  data-dock
-                  className="dock-btn"
-                  title={step.tooltip}
-                  aria-label={step.label}
-                  aria-current={phase === step.id ? 'step' : undefined}
-                  disabled={disabled}
-                  onClick={() => (step.id === 'launch' ? requestLaunch() : go(step.id))}
-                >
-                  <Icon size={18} strokeWidth={2} />
-                  <span className="dock-btn-label">{step.label}</span>
-                </button>
-              )
-            })
-          }
+        <nav className="top-nav" aria-label="Main Navigation">
           <button
             type="button"
-            data-dock
-            className="dock-btn"
-            title="Help & Info"
-            aria-label="Help"
-            aria-current={phase === 'credits' ? 'step' : undefined}
+            className={`top-nav-btn ${phase === 'select' ? 'active' : ''}`}
+            onClick={() => go('select')}
+          >
+            Missions
+          </button>
+          <button
+            type="button"
+            className={`top-nav-btn ${phase === 'brief' ? 'active' : ''}`}
+            disabled={!missionId}
+            onClick={() => go('brief')}
+          >
+            Goals
+          </button>
+          <button
+            type="button"
+            className={`top-nav-btn ${phase === 'design' ? 'active' : ''}`}
+            disabled={!missionId}
+            onClick={() => go('design')}
+          >
+            Build
+          </button>
+          <button
+            type="button"
+            className={`top-nav-btn ${phase === 'plan' ? 'active' : ''}`}
+            disabled={!missionId}
+            onClick={() => go('plan')}
+          >
+            Plan
+          </button>
+          <button
+            type="button"
+            className="top-nav-btn"
+            disabled={!missionId}
+            onClick={() => requestLaunch()}
+          >
+            Launch
+          </button>
+          <button
+            type="button"
+            className={`top-nav-btn ${phase === 'debrief' ? 'active' : ''}`}
+            disabled={!outcome}
+            onClick={() => go('debrief')}
+          >
+            Debrief
+          </button>
+          <button
+            type="button"
+            className={`top-nav-btn ${phase === 'credits' ? 'active' : ''}`}
             onClick={() => go('credits')}
           >
-            <Info size={18} strokeWidth={2} />
-            <span className="dock-btn-label">Help</span>
+            Help
           </button>
           <button
             type="button"
-            data-dock
-            className="dock-btn"
-            title={audio ? 'Mute audio' : 'Unmute audio'}
-            aria-label={audio ? 'Mute' : 'Sound'}
-            aria-pressed={audio}
+            className={`top-nav-btn sound-toggle-btn ${!audio ? 'is-muted' : ''}`}
+            title={audio ? 'Mute sound' : 'Unmute sound'}
+            aria-label={audio ? 'Mute sound' : 'Unmute sound'}
             onClick={() => setAudio(!audio)}
           >
-            {audio ? <Volume2 size={18} strokeWidth={2} /> : <VolumeX size={18} strokeWidth={2} />}
-            <span className="dock-btn-label">Sound</span>
+            Sound
           </button>
-          <input className="mix-range" type="range" title="Volume slider" aria-label="Volume" min={0} max={1} step={0.05} value={volume} onChange={(event) => setVolume(Number(event.target.value))} />
+          <input
+            className="mix-range"
+            type="range"
+            title="Volume slider"
+            aria-label="Volume"
+            min={0}
+            max={1}
+            step={0.05}
+            value={volume}
+            onChange={(event) => setVolume(Number(event.target.value))}
+          />
           {narrow && (
-            <button type="button" data-dock className="dock-btn" title={full ? 'Exit full screen' : 'Full screen'} aria-label={full ? 'Exit full screen' : 'Full screen'} onClick={toggleFull}>
-              <Expand size={18} strokeWidth={2} />
+            <button
+              type="button"
+              className="top-nav-btn full-btn"
+              title={full ? 'Exit full screen' : 'Full screen'}
+              aria-label={full ? 'Exit full screen' : 'Full screen'}
+              onClick={toggleFull}
+            >
+              <Expand size={16} strokeWidth={2} />
             </button>
           )}
-        </Dock>
+        </nav>
       </header>
       )}
       {report && phase !== 'select' && phase !== 'credits' && phase !== 'surface' && phase !== 'station' && phase !== 'pad' && phase !== 'flight' && phase !== 'landing' && phase !== 'launch' && (

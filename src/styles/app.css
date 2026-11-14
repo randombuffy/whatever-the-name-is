@@ -1498,50 +1498,89 @@ button.key-banner {
  * Mission Control UI Redesign & Declutter Styles
  * ========================================================================= */
 
-/* Top Toolbar: Icon + Short Label + Tooltips */
-.dock {
+/* Top Navigation Bar: Flex row with equal padding & gap, no overlap */
+.top-nav {
   display: flex;
+  flex-direction: row;
   align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
+  gap: 8px;
+  padding: 6px 12px;
   border-radius: 14px;
-  background: rgba(17, 24, 39, 0.9);
+  background: rgba(17, 24, 39, 0.88);
   backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
 }
 
-.dock-btn {
-  height: 34px;
-  padding: 0 10px;
-  border-radius: 8px;
-  color: rgba(226, 232, 240, 0.85);
+/* Nav Item Button */
+.top-nav-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12.5px;
-  font-weight: 600;
+  justify-content: center;
+  padding: 8px 16px;
+  border-radius: 8px;
   border: 1px solid transparent;
-  transition: all 140ms ease;
+  background: transparent;
+  color: #cbd5e1;
+  font-family: var(--font, inherit);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
   white-space: nowrap;
+  cursor: pointer;
+  transition: all 140ms ease;
+  user-select: none;
 }
 
-.dock-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.1);
+/* Hover State */
+.top-nav-btn:hover:not(:disabled):not(.active) {
+  background: rgba(255, 255, 255, 0.08);
   color: #ffffff;
-  transform: translateY(-1px);
 }
 
-.dock-btn[aria-current="step"],
-.dock-btn[aria-pressed="true"] {
-  background: rgba(37, 99, 235, 0.28);
-  border-color: rgba(96, 165, 250, 0.55);
+/* Active Screen Highlight: Blue box on the button itself, fitting label */
+.top-nav-btn.active {
+  background: rgba(30, 58, 138, 0.45);
+  border: 1px solid #3b82f6;
   color: #ffffff;
   box-shadow: 0 0 12px rgba(59, 130, 246, 0.35);
+  cursor: default;
 }
 
-.dock-btn-label {
-  display: inline-block;
+/* Disabled State: Debrief before flight ends */
+.top-nav-btn:disabled {
+  color: rgba(148, 163, 184, 0.35);
+  border-color: transparent;
+  background: transparent;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Sound Mute Toggle: Never highlighted as an active screen */
+.top-nav-btn.sound-toggle-btn {
+  color: #e2e8f0;
+}
+
+.top-nav-btn.sound-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.top-nav-btn.sound-toggle-btn.is-muted {
+  color: rgba(148, 163, 184, 0.55);
+  text-decoration: line-through;
+}
+
+.top-nav .mix-range {
+  width: 90px;
+  height: 4px;
+  margin-left: 2px;
+  accent-color: #3b82f6;
+  cursor: pointer;
+}
+
+.top-nav-btn.full-btn {
+  padding: 8px;
 }
 
 /* Build Tabs: Scrollable Single Row without Wrapping */
@@ -2183,6 +2222,7 @@ button.key-banner {
     right: 16px;
     bottom: 80px;
   }
+  .top-nav,
   .dock {
     max-width: calc(100vw - 16px);
     overflow-x: auto;
