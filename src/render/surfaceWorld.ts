@@ -930,7 +930,6 @@ export class SurfaceWorld {
   private groundMesh: THREE.Object3D | null = null
   private heightGrid: HeightGrid | null = null
   private marsGround: MarsGround | null = null
-  private campSeated = false
   private landerLift = 0.05
   private lastHeight = 0
 
@@ -1231,7 +1230,6 @@ export class SurfaceWorld {
     })
     this.landerLift = this.heightAt(lx, lz) + 0.02
     this.lander.position.set(lx, this.landerLift, lz)
-    this.campSeated = true
   }
 
   private loadRover(): void {

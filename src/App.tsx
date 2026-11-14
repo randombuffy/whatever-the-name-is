@@ -239,8 +239,8 @@ export function App() {
           {(missionId === 'mars' || missionId === 'custom') && (
             <button
               type="button"
-              className={`top-nav-btn ${phase === 'surface' ? 'active' : ''}`}
-              disabled={phase !== 'surface' && phase !== 'debrief' && !outcome}
+              className="top-nav-btn"
+              disabled={phase !== 'debrief' && !outcome}
               onClick={() => go('surface')}
             >
               Colonize
