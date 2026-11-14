@@ -57,7 +57,7 @@ export async function loadNasa(query: string, fallbackTitle: string, fallbackTex
     }
   }
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 8000)
+  const timer = setTimeout(() => controller.abort(), 3500)
   try {
     const response = await fetch(`https://images-api.nasa.gov/search?q=${encodeURIComponent(query)}&media_type=image`, { signal: controller.signal })
     if (!response.ok) throw new Error(`Image library responded ${response.status}`)
@@ -210,7 +210,7 @@ export async function loadMarsPhoto(): Promise<MarsFrame | null> {
   const cached = fresh('mc-nasa:mars-photo', marsCache)
   if (cached) return { sol: cached.sol, earthDate: cached.earthDate, camera: cached.camera, rover: cached.rover, imageUrl: cached.imageUrl }
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 8000)
+  const timer = setTimeout(() => controller.abort(), 3500)
   try {
     const response = await fetch('https://mars.nasa.gov/rss/api/?feed=raw_images&category=mars2020&feedtype=json&num=1', { signal: controller.signal })
     if (!response.ok) return null
@@ -233,7 +233,7 @@ export async function loadSolarNote(): Promise<SolarNote | null> {
   const from = start.toISOString().slice(0, 10)
   const to = end.toISOString().slice(0, 10)
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 8000)
+  const timer = setTimeout(() => controller.abort(), 3500)
   try {
     const response = await fetch(`https://api.nasa.gov/DONKI/notifications?startDate=${from}&endDate=${to}&type=FLR&api_key=${encodeURIComponent(apiKey())}`, { signal: controller.signal })
     if (!response.ok) return null

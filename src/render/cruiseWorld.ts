@@ -83,10 +83,13 @@ export class CruiseWorld {
     this.renderer.setSize(canvas.clientWidth || 1, canvas.clientHeight || 1)
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
-    this.scene.add(new THREE.AmbientLight(0xb9c7e4, 0.45))
-    const sun = new THREE.DirectionalLight(0xfff6ea, 2.2)
+    this.scene.add(new THREE.AmbientLight(0xe4ecf8, 0.95))
+    this.scene.add(new THREE.HemisphereLight(0xf3f6ff, 0x334155, 0.7))
+    const sun = new THREE.DirectionalLight(0xfff6ea, 4.2)
     sun.position.set(30, 18, 12)
-    this.scene.add(sun)
+    const fill = new THREE.DirectionalLight(0xc9ddf8, 1.6)
+    fill.position.set(-18, 8, -14)
+    this.scene.add(sun, fill)
     this.stars = makeStarfield(1400)
     this.scene.add(this.stars)
     this.earth = new THREE.Mesh(

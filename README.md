@@ -35,6 +35,12 @@ cp .env.example .env.local
 
 Put a key from https://api.nasa.gov/ in `.env.local`. `DEMO_KEY` works and is rate limited. Responses are checked with Zod, cached in `localStorage` for 12 hours, and labelled with source and retrieval time. A failed request falls back to the scenario text bundled with the mission. The flight never waits on the network.
 
+## Super Intelligence
+
+The hangar engineer on Design and Plan is SI-generated text from NVIDIA NIM, model `meta/llama-3.3-70b-instruct`. It reads the holds the game already computed and may suggest catalog part ids or a call sign. Mass, delta-v, power, link, heat, and cost stay in `src/domain`. Replies are labelled `SI-generated · NVIDIA NIM · Llama 3.3 70B`. No NASA logos, flags, or mission identifiers are generated. Code in this repository was written with Super Intelligence assistance; `SI.md` is the Space Apps disclosure.
+
+Put `NVIDIA_API_KEY` in `.env`. It is loaded only on the server (`/api/nim`). Restart `npm run dev` after you add it.
+
 ## Architecture
 
 One Vite + React + TypeScript application. Three.js draws the scene. Zustand holds the mission and persists it in `localStorage` under `aeroaestro-v1`. An in-progress flight is not restored. Reloading during a flight returns you to launch commit with the same spacecraft.
@@ -50,6 +56,7 @@ The engineering engine lives in `src/domain` and does not import React or Three.
 | Engineering | `src/domain/*.ts` except missions and simulate | Mass, propulsion, power, cost, link, thermal, reliability, validation |
 | Mission | `src/domain/missions.ts`, `orbit.ts`, `simulate.ts`, `score.ts` | Scenarios, burns, events, debrief |
 | External data | `src/nasa` | Image library, optional NEO count, cache, fallback |
+| Hangar engineer | `src/si`, `api/nim.js` | NVIDIA NIM Llama 3.3 70B. Explains holds. Does not compute physics. |
 
 ## Repository integrations
 

@@ -60,11 +60,11 @@ export function Sheet({ title, onClose, children }: { title: string; onClose: ()
   )
 }
 
-export function Meter({ icon, label, value, ratio, tone = 'ok' }: { icon: ReactNode; label: string; value: string; ratio: number; tone?: 'ok' | 'bad' }) {
+export function Meter({ icon, label, value, ratio, tone = 'ok' }: { icon?: ReactNode; label: string; value: string; ratio: number; tone?: 'ok' | 'bad' }) {
   const width = Math.max(0.04, Math.min(1, ratio))
   return (
-    <div className="meter">
-      <span className="meter-icon">{icon}</span>
+    <div className={`meter${icon ? '' : ' no-icon'}`}>
+      {icon ? <span className="meter-icon">{icon}</span> : null}
       <div>
         <span>{label}</span>
         <b>{value}</b>

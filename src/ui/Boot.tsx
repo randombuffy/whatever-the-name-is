@@ -48,7 +48,7 @@ const ROCKET = [
 
 type Props = { onReady: () => void }
 
-const HOLD_MS = 5500
+const HOLD_MS = 1800
 
 export function Boot({ onReady }: Props) {
   const [done, setDone] = useState(0)
@@ -107,7 +107,7 @@ export function Boot({ onReady }: Props) {
         muted
         playsInline
         loop
-        preload="auto"
+        preload="metadata"
         aria-hidden="true"
       />
       <div className="boot-veil" />

@@ -85,6 +85,7 @@ SOFTWARE.
 - Icons: Lucide for most UI; difficulty tiles use inlined SVG from Iconify (streamline-ultimate, streamline-pixel, pixel) via https://icones.js.org/.
 - Typefaces: Inter and IBM Plex Mono, loaded from the page for the interface. Technical values use tabular figures.
 - NASA Image and Video Library and, when a key is configured, the NASA Near Earth Object feed. Imagery stays labelled with its source and retrieval time. NASA retains rights in that media.
+- NVIDIA NIM (`meta/llama-3.3-70b-instruct`) supplies SI-generated hangar-engineer text. That text is watermarked in the UI. It is not a NASA product and does not compute the engineering ledger.
 
 ## Graphics note
 

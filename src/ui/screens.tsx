@@ -11,14 +11,9 @@ import {
   CircleAlert,
   CircleCheck,
   Clock,
-  Compass,
   Crosshair,
-  DollarSign,
   Droplets,
-  Eye,
-  EyeOff,
   Gauge,
-  HelpCircle,
   Info,
   List,
   Maximize2,
@@ -33,18 +28,14 @@ import {
   Redo2,
   Rocket,
   RotateCcw,
-  Route,
   Sparkles,
-  Trash2,
   Undo2,
-  Wand2,
-  Weight,
   Zap,
 } from 'lucide-react'
 import { CATALOG, getSpec } from '../domain/catalog'
 import { CREW_ROLES, crewReady, type CrewSize } from '../domain/crew'
 import { OBJECTIVES, kitCoverage, objectiveKit, objectiveOf, siteOf, sitesFor, suggestedSite, windowExtraDv } from '../domain/campaign'
-import { bits, clock, db, kelvin, kg, money, mps, percent, watts } from '../domain/format'
+import { bits, clock, db, kelvin, kg, money, mps, watts } from '../domain/format'
 import { lunarTransfer, marsTransfer, solarTransfer } from '../domain/orbit'
 import { sliderToWarp, warpLabel, warpToSlider } from '../domain/time'
 import { evaluate, requiredBurns } from '../domain/validate'
@@ -61,6 +52,8 @@ import { DestModel } from './DestStill'
 import { TitleBanner } from './TitleBanner'
 import { FAMILIES, SECTIONS, familyOf } from './families'
 import { startPlanTutorial, startDesignTutorial } from './tutorial'
+import { SiDesk } from './siDesk'
+import { EDU_LIMITS } from '../domain/brand'
 
 const FILTERS: { id: Subsystem | 'all'; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -173,9 +166,9 @@ const DIFFICULTY = [
 ]
 
 const DIFFICULTY_BLURB = {
-  cadet: 'Guided EDL · +25% budget',
-  specialist: 'Standard NASA margins',
-  commander: 'OWLT comms lag · −10% budget · heavy storms',
+  cadet: 'Easier landing · extra budget',
+  specialist: 'Usual game margins',
+  commander: 'Light-time lag on commands · tighter budget · heavier storms',
 } as const
 
 export function CrewPanel() {
@@ -442,7 +435,7 @@ export function BriefScreen() {
           )}
           {solar && <p className="muted">DONKI lists a {solar.classType} flare issued {solar.begin.slice(0, 10)}. Catalogued space weather. It does not change this flight.</p>}
           {nasa?.status === 'error' && <p className="muted">The image library did not answer. The mission text above is the fallback.</p>}
-          <p className="muted">Days, mass, and budget are educational limits, not a NASA specification.</p>
+          <p className="muted">{EDU_LIMITS}</p>
         </Glass>
       </aside>
       {info && (
@@ -480,7 +473,6 @@ export function DesignScreen() {
   const autoFix = useMission((state) => state.autoFix)
   const undo = useMission((state) => state.undo)
   const redo = useMission((state) => state.redo)
-  const arrange = useMission((state) => state.arrange)
   const canUndo = useMission((state) => (state.craftPast?.length ?? 0) > 0)
   const canRedo = useMission((state) => (state.craftFuture?.length ?? 0) > 0)
   const rename = useMission((state) => state.rename)
@@ -638,20 +630,19 @@ export function DesignScreen() {
           <div className="edit-row">
             <button type="button" className="word slim" onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)"><Undo2 size={13} /> Undo</button>
             <button type="button" className="word slim" onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Y)"><Redo2 size={13} /> Redo</button>
-            <button type="button" className="word slim" onClick={arrange} title="Auto-arrange parts symmetrically"><Wand2 size={13} /> Auto arrange</button>
-            <button type="button" className="word slim" onClick={startDesignTutorial} title="Walkthrough tutorial"><HelpCircle size={13} /> Guide</button>
+            <button type="button" className="word slim" onClick={startDesignTutorial}>Help</button>
           </div>
           <div className="scroll">
-            <Meter icon={<Weight size={14} />} label="Mass" value={kg(report.mass.totalKg)} ratio={report.mass.totalKg / mission.maxMassKg} tone={report.mass.marginKg < 0 ? 'bad' : 'ok'} />
-            <Meter icon={<Gauge size={14} />} label="Delta-v" value={mps(report.propulsion.dvMps)} ratio={report.requiredDvMps > 0 ? report.propulsion.dvMps / report.requiredDvMps : 1} tone={report.propulsion.dvMps + 1 < report.requiredDvMps ? 'bad' : 'ok'} />
-            <Meter icon={<Zap size={14} />} label="Power" value={watts(generation)} ratio={report.power.loadW > 0 ? generation / report.power.loadW : 1} tone={generation + 1 < report.power.loadW ? 'bad' : 'ok'} />
-            <Meter icon={<Radio size={14} />} label="Link" value={db(report.link.marginDb)} ratio={report.link.closes ? 1 : 0.35} tone={report.link.closes ? 'ok' : 'bad'} />
-            <Meter icon={<DollarSign size={14} />} label="Cost" value={shortMoney(report.cost.totalUsd)} ratio={report.cost.totalUsd / mission.budgetUsd} tone={report.cost.marginUsd < 0 ? 'bad' : 'ok'} />
-            <p className="muted">Dry {kg(report.mass.dryKg)} · Propellant {kg(report.mass.propellantKg)} · Payload {kg(report.mass.payloadKg)} · Isp {report.propulsion.byPropellant[0] ? `${Math.round(report.propulsion.byPropellant[0].ispS)} s` : '—'}</p>
-            <h2 className="section-label">This mission needs</h2>
-            {hard === 0 && <p className="ready">The required parts are aboard. Drag a part on the ship to place it, or remove it from the list.</p>}
-            {report.issues.filter((issue) => issue.severity === 'hard').slice(0, 4).map((issue) => (
-              <p key={issue.id} className="need"><strong>{issue.what}</strong> {issue.change}</p>
+            <Meter label="Mass" value={kg(report.mass.totalKg)} ratio={report.mass.totalKg / mission.maxMassKg} tone={report.mass.marginKg < 0 ? 'bad' : 'ok'} />
+            <Meter label="Fuel / Δv" value={mps(report.propulsion.dvMps)} ratio={report.requiredDvMps > 0 ? report.propulsion.dvMps / report.requiredDvMps : 1} tone={report.propulsion.dvMps + 1 < report.requiredDvMps ? 'bad' : 'ok'} />
+            <Meter label="Power" value={watts(generation)} ratio={report.power.loadW > 0 ? generation / report.power.loadW : 1} tone={generation + 1 < report.power.loadW ? 'bad' : 'ok'} />
+            <Meter label="Cost" value={shortMoney(report.cost.totalUsd)} ratio={report.cost.totalUsd / mission.budgetUsd} tone={report.cost.marginUsd < 0 ? 'bad' : 'ok'} />
+            <p className="muted">{EDU_LIMITS}</p>
+            <SiDesk mission={mission} craft={craft} plan={plan} report={report} />
+            <h2 className="section-label">Fix these first</h2>
+            {hard === 0 && <p className="ready">The required parts are aboard. Add a part from the left list, or drag it onto the ship.</p>}
+            {report.issues.filter((issue) => issue.severity === 'hard').slice(0, 3).map((issue) => (
+              <p key={issue.id} className="need">{issue.change}</p>
             ))}
             <h2 className="section-label">Fitted</h2>
             {craft.parts.map((part) => {
@@ -665,11 +656,11 @@ export function DesignScreen() {
                     <strong>{family?.name ?? fitted.name}</strong>
                     <em>{headline(fitted)} · {shortMoney(fitted.costUsd)}</em>
                   </span>
-                  <button type="button" className="icon" aria-label={part.enabled ? `Stand down ${fitted.name}` : `Fit ${fitted.name}`} onClick={(event) => { event.stopPropagation(); togglePart(part.instanceId) }}>
-                    {part.enabled ? <Eye size={12} /> : <EyeOff size={12} />}
+                  <button type="button" className="word slim" onClick={(event) => { event.stopPropagation(); togglePart(part.instanceId) }}>
+                    {part.enabled ? 'Hide' : 'Show'}
                   </button>
-                  <button type="button" className="icon" aria-label={`Remove ${fitted.name}`} onClick={(event) => { event.stopPropagation(); removePart(part.instanceId) }}>
-                    <Trash2 size={12} />
+                  <button type="button" className="word slim" onClick={(event) => { event.stopPropagation(); removePart(part.instanceId) }}>
+                    Remove
                   </button>
                   {family && (
                     <Setting
@@ -712,14 +703,13 @@ export function DesignScreen() {
             )}
           </div>
           <div className="card-actions">
-            <button type="button" className="word" onClick={() => go('pad')}><Orbit size={16} /> Center</button>
-            <button type="button" className="word" onClick={() => go('plan')}><Route size={16} /> Plan</button>
+            <button type="button" className="word" onClick={() => go('plan')}>Plan the flight</button>
           </div>
         </Glass>
       </aside>
       <div className="plan-launch hangar-actions">
         <p>Mass {kg(report.mass.totalKg)} / {kg(mission.maxMassKg)} · {shortMoney(report.cost.totalUsd)} / {shortMoney(mission.budgetUsd)} · {hard > 0 ? `${hard} holds` : 'Clear to plan'}</p>
-        <button type="button" className="word" onClick={() => go('plan')}><Route size={16} /> Plan the flight</button>
+        <button type="button" className="word" onClick={() => go('plan')}>Plan the flight</button>
       </div>
       {spec && (
         <Sheet title={spec.name} onClose={() => setSpecId(null)}>
@@ -819,12 +809,14 @@ export function PlanScreen() {
           {notes.length > 0 && (
             <button type="button" className="word autofix" onClick={autoFix}><Sparkles size={12} /> Auto-fix</button>
           )}
+          <SiDesk mission={mission} craft={craft} plan={plan} report={report} />
         </Glass>
       </aside>
       <aside className="side right">
         <Glass className="pad-card">
-          <Meter icon={<Gauge size={14} />} label="Available" value={mps(report.propulsion.dvMps)} ratio={report.requiredDvMps > 0 ? report.propulsion.dvMps / report.requiredDvMps : 1} tone={report.propulsion.dvMps + 1 < report.requiredDvMps ? 'bad' : 'ok'} />
-          <Meter icon={<Route size={14} />} label="Required" value={mps(report.requiredDvMps)} ratio={1} />
+          <Meter label="Available Δv" value={mps(report.propulsion.dvMps)} ratio={report.requiredDvMps > 0 ? report.propulsion.dvMps / report.requiredDvMps : 1} tone={report.propulsion.dvMps + 1 < report.requiredDvMps ? 'bad' : 'ok'} />
+          <Meter label="Needed Δv" value={mps(report.requiredDvMps)} ratio={1} />
+          <p className="muted">{EDU_LIMITS}</p>
           <label className="slider">
             <span>Reserve <b>{mps(plan.reserveDvMps)}</b></span>
             <input type="range" min={0} max={200} step={5} value={plan.reserveDvMps} onChange={(event) => setPlan({ reserveDvMps: Number(event.target.value) })} />
@@ -896,7 +888,7 @@ export function PlanScreen() {
       </aside>
       <div className="plan-launch">
         <p>Budget {shortMoney(mission.budgetUsd)} · this ship {shortMoney(report.cost.totalUsd)}</p>
-        <button type="button" className="word slim" title="Flight Planning Tutorial" onClick={startPlanTutorial}><HelpCircle size={16} /> Guide</button>
+        <button type="button" className="word slim" onClick={startPlanTutorial}>Help</button>
         <button type="button" className="word slim" onClick={() => go('design')}><Boxes size={16} /> Design</button>
         <button type="button" className="word" onClick={() => armLaunch()}><Rocket size={16} /> Launch</button>
       </div>
@@ -1229,23 +1221,20 @@ export function DebriefScreen() {
   const history = useMission((state) => state.history)
   const field = useMission((state) => state.field)
   const resumeSurface = useMission((state) => state.resumeSurface)
-  const [notes, setNotes] = useState(false)
+  const missionId = useMission((state) => state.missionId)
   const [copied, setCopied] = useState(false)
   if (!outcome) return null
 
   const rank = outcome.gradeRank ?? (outcome.score >= 92 ? 'S' : outcome.score >= 80 ? 'A' : outcome.score >= 65 ? 'B' : outcome.score >= 50 ? 'C' : 'F')
-  const rankSub =
-    rank === 'S'
-      ? 'OPTIMAL MASTERY'
-      : rank === 'A'
-        ? 'MISSION EXCELLENCE'
-        : rank === 'B'
-          ? 'FLIGHT QUALIFIED'
-          : rank === 'C'
-            ? 'MARGINAL RETURN'
-            : 'MISSION CRITICAL'
+  const leftover = outcome.budgetUsd - outcome.costUsd
+  const verdict = outcome.success ? 'You won' : outcome.partial ? 'Partial result' : 'You lost'
+  const why = outcome.success
+    ? 'The flight finished and the primary goals were met.'
+    : outcome.partial
+      ? 'The spacecraft finished, but at least one primary goal was short.'
+      : outcome.summary
 
-  const title = outcome.success ? 'PRIMARY MISSION NOMINAL' : outcome.partial ? 'PARTIAL COMPLETION' : 'MISSION TERMINATED'
+  const title = verdict
 
   const breakdown = outcome.scoreBreakdown ?? {
     primaryPoints: outcome.success ? 25 : 8,
@@ -1263,67 +1252,38 @@ export function DebriefScreen() {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const mars = missionId === 'mars' || missionId === 'custom'
+
   return (
     <div className="center-stage" style={{ padding: '20px 0' }}>
-      <Glass className="debrief-console">
+      <Glass className={`debrief-console result-card ${outcome.success ? 'is-win' : outcome.partial ? 'is-partial' : 'is-lose'}`}>
         <div className="debrief-header">
           <div>
-            <span className="debrief-tag">NASA FLIGHT OPERATIONS · POST-MISSION DEBRIEF</span>
-            <h1 className="debrief-title">{outcome.craftName}</h1>
+            <span className="debrief-tag">AeroAestro result</span>
+            <h1 className="debrief-title">{title}</h1>
+            <p className="muted">{outcome.craftName}{outcome.siteName ? ` · ${outcome.siteName}` : ''}</p>
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <span
-              style={{
-                display: 'inline-block',
-                padding: '3px 8px',
-                borderRadius: '4px',
-                fontSize: '11px',
-                fontFamily: 'Space Mono, monospace',
-                fontWeight: 700,
-                letterSpacing: '0.04em',
-                background: outcome.success ? 'rgba(74, 222, 128, 0.15)' : outcome.partial ? 'rgba(251, 146, 60, 0.15)' : 'rgba(248, 113, 113, 0.15)',
-                color: outcome.success ? '#4ade80' : outcome.partial ? '#fb923c' : '#f87171',
-                border: `1px solid ${outcome.success ? 'rgba(74, 222, 128, 0.3)' : outcome.partial ? 'rgba(251, 146, 60, 0.3)' : 'rgba(248, 113, 113, 0.3)'}`,
-              }}
-            >
-              {title}
-            </span>
-            {outcome.siteName && (
-              <p style={{ margin: '4px 0 0', fontSize: '11px', color: '#94a3b8' }}>
-                Target: {outcome.siteName}
-              </p>
-            )}
+          <div className={`debrief-rank-badge rank-${rank}`}>
+            <span>{rank}</span>
           </div>
         </div>
 
+        <p className="result-why">{why}</p>
+        <p className="muted">{EDU_LIMITS}</p>
+
         <div className="debrief-hero">
-          <div className={`debrief-rank-badge rank-${rank}`}>
-            <span>{rank}</span>
-            <span className="debrief-rank-sub">{rankSub}</span>
-          </div>
           <div className="debrief-summary-box">
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
               <span className="debrief-summary-score">{outcome.score}</span>
-              <span style={{ fontSize: '12px', color: '#64748b', fontFamily: 'Space Mono, monospace' }}>/ 100 PTS</span>
+              <span style={{ fontSize: '12px', color: '#64748b' }}>/ 100</span>
             </div>
-            <p style={{ margin: 0, fontSize: '13px', color: '#cbd5e1', lineHeight: 1.4 }}>
-              {outcome.summary}
-            </p>
-            {outcome.achievements && outcome.achievements.length > 0 && (
-              <div className="chips" style={{ marginTop: '4px' }}>
-                {outcome.achievements.map((badge) => (
-                  <span key={badge.id} className="chip on" title={badge.detail}>
-                    {badge.name}
-                  </span>
-                ))}
-              </div>
-            )}
+            <p>{outcome.summary}</p>
           </div>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', fontWeight: 600 }}>
-            Science & Operations Score Breakdown
+            Score
           </span>
           <div className="debrief-breakdown-grid">
             <div className="debrief-cat-row">
@@ -1390,34 +1350,44 @@ export function DebriefScreen() {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', fontWeight: 600 }}>
-            Flight Telemetry & Statistics
+            What you have left
           </span>
           <div className="debrief-metrics-grid">
             <div className="debrief-metric-cell">
-              <span className="debrief-metric-label">Propellant Remaining</span>
+              <span className="debrief-metric-label">Score</span>
+              <span className="debrief-metric-val">{outcome.score} / 100</span>
+            </div>
+            <div className="debrief-metric-cell">
+              <span className="debrief-metric-label">Budget left</span>
+              <span className="debrief-metric-val">{shortMoney(leftover)}</span>
+            </div>
+            <div className="debrief-metric-cell">
+              <span className="debrief-metric-label">Fuel left</span>
               <span className="debrief-metric-val">{kg(outcome.propellantRemainingKg, 1)}</span>
             </div>
             <div className="debrief-metric-cell">
-              <span className="debrief-metric-label">Delta-V Expended</span>
-              <span className="debrief-metric-val">{mps(outcome.dvUsedMps)}</span>
+              <span className="debrief-metric-label">Fuel used</span>
+              <span className="debrief-metric-val">{kg(outcome.propellantUsedKg, 1)}</span>
             </div>
             <div className="debrief-metric-cell">
-              <span className="debrief-metric-label">Mission Duration</span>
-              <span className="debrief-metric-val">{outcome.durationSec !== undefined ? clock(outcome.durationSec) : '—'}</span>
-            </div>
-            <div className="debrief-metric-cell">
-              <span className="debrief-metric-label">Data Transmitted</span>
+              <span className="debrief-metric-label">Data returned</span>
               <span className="debrief-metric-val">{bits(outcome.dataReturnedBits)}</span>
             </div>
             <div className="debrief-metric-cell">
-              <span className="debrief-metric-label">Vehicle Mass</span>
-              <span className="debrief-metric-val">{kg(outcome.massKg)}</span>
-            </div>
-            <div className="debrief-metric-cell">
-              <span className="debrief-metric-label">Budget Efficiency</span>
+              <span className="debrief-metric-label">Spent / budget</span>
               <span className="debrief-metric-val">{shortMoney(outcome.costUsd)} / {shortMoney(outcome.budgetUsd)}</span>
             </div>
           </div>
+        </div>
+
+        <div className="result-lessons">
+          <span className="debrief-metric-label">How your choices landed</span>
+          {outcome.strengths.map((line) => <p key={line} className="result-good">{line}</p>)}
+          {outcome.mistakes.map((line) => <p key={line} className="result-bad">{line}</p>)}
+          {outcome.lessons.map((line) => <p key={line}>{line}</p>)}
+          {outcome.strengths.length + outcome.mistakes.length + outcome.lessons.length === 0 && (
+            <p>Fit the missing parts, keep mass under the launcher, and close the radio link before you fly.</p>
+          )}
         </div>
 
         {outcome.crew && outcome.crew.length > 1 && (
@@ -1433,7 +1403,7 @@ export function DebriefScreen() {
         <RankBoard />
         <div className="debrief-objectives-box">
           <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', fontWeight: 600 }}>
-            Mission Objectives Status
+            Goals
           </span>
           {outcome.objectives.map((item) => (
             <div key={item.id} className="debrief-obj-row">
@@ -1450,57 +1420,21 @@ export function DebriefScreen() {
           ))}
         </div>
 
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', paddingTop: '10px', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
-          <button type="button" className="word fill" onClick={() => go('surface')}>
-            <Boxes size={16} /> Start colonizing
-          </button>
-          {field && (
-            <button type="button" className="word" onClick={resumeSurface}>
-              Surface Rover
+        <div className="result-actions">
+          {!outcome.success && (
+            <button type="button" className="word fill" onClick={() => go('design')}>Try again</button>
+          )}
+          {mars && (outcome.success || outcome.partial) && (
+            <button type="button" className="word fill" onClick={() => (field ? resumeSurface() : go('surface'))}>
+              Walk the surface
             </button>
           )}
-          <button type="button" className="word slim" onClick={() => go('design')}>
-            <RotateCcw size={16} /> Revise Spacecraft
-          </button>
-          <button type="button" className="word slim" onClick={() => go('plan')}>
-            <Route size={16} /> Next Flight
-          </button>
-          <button type="button" className="word slim" onClick={handleCopy}>
-            {copied ? 'Copied ✓' : 'Copy Log'}
-          </button>
-          <button type="button" className="icon" title="Full Notes" aria-label="Flight notes" onClick={() => setNotes(true)}>
-            <Info size={16} />
-          </button>
-          <button type="button" className="icon" title="Missions" aria-label="Missions" onClick={() => go('select')}>
-            <Compass size={16} />
-          </button>
+          <button type="button" className="word slim" onClick={() => go('design')}>Rebuild</button>
+          <button type="button" className="word slim" onClick={() => go('select')}>Home</button>
+          <button type="button" className="word slim" onClick={handleCopy}>{copied ? 'Copied' : 'Copy result'}</button>
         </div>
+        {history.length > 1 && <p className="muted">{history.length} flights on this browser.</p>}
       </Glass>
-      {notes && (
-        <Sheet title={outcome.craftName} onClose={() => setNotes(false)}>
-          <p>{outcome.summary}</p>
-          <div className="facts">
-            <div><span>Propellant</span><b>{kg(outcome.propellantUsedKg, 1)}</b></div>
-            <div><span>Left</span><b>{kg(outcome.propellantRemainingKg, 1)}</b></div>
-            <div><span>Delta-v</span><b>{mps(outcome.dvUsedMps)}</b></div>
-            <div><span>Mass</span><b>{kg(outcome.massKg)}</b></div>
-            <div><span>Cost</span><b>{shortMoney(outcome.costUsd)}</b></div>
-            <div><span>Budget</span><b>{shortMoney(outcome.budgetUsd)}</b></div>
-            <div><span>Data</span><b>{bits(outcome.dataReturnedBits)}</b></div>
-            <div><span>Reliability</span><b>{percent(outcome.reliability)}</b></div>
-          </div>
-          {outcome.objectives.map((item) => <p key={item.id}><strong>{item.label}.</strong> {item.met ? 'Met' : 'Short'}. {item.detail}</p>)}
-          {outcome.strengths.map((line) => <p key={line}>{line}</p>)}
-          {outcome.mistakes.map((line) => <p key={line}>{line}</p>)}
-          {outcome.lessons.map((line) => <p key={line}>{line}</p>)}
-          {outcome.timeline && outcome.timeline.length > 0 && (
-            <div className="note-list">
-              {outcome.timeline.map((mark) => <p key={`${mark.tSec}-${mark.label}`}>{clock(mark.tSec)} · {mark.label}</p>)}
-            </div>
-          )}
-          {history.length > 1 && <p className="muted">{history.length} flights on this browser.</p>}
-        </Sheet>
-      )}
     </div>
   )
 }
@@ -1517,7 +1451,8 @@ function summaryOf(outcome: MissionOutcome): string {
     `- Operational Resilience: ${bd.anomalyPoints} / 8`,
   ] : []
   return [
-    `=== NASA MISSION DEBRIEF: ${outcome.craftName} ===`,
+    `=== AeroAestro result: ${outcome.craftName} ===`,
+    EDU_LIMITS,
     `Rank: ${outcome.gradeRank ?? 'A'} | Overall Score: ${outcome.score}/100`,
     `Status: ${outcome.success ? 'Mission Success' : outcome.partial ? 'Partial Completion' : 'Mission Stopped'}`,
     outcome.siteName ? `Landing Target: ${outcome.siteName}` : '',
@@ -1547,6 +1482,7 @@ export function CreditsScreen() {
         <p>Sound effects are the Oculus Audio Pack 1 by Oculus VR, LLC, CC BY 4.0, from the Meta open-sound collection. https://github.com/facebookincubator/Meta-open-sound</p>
         <p>The Mars surface rover is the NASA/JPL public-domain Perseverance model. The yard also uses NASA’s Ingenuity helicopter, Apollo lunar module, Explorer Jupiter-C, astronaut, and extravehicular suit. Those models are free of copyright. https://github.com/nasa/NASA-3D-Resources</p>
         <p>Starfield, flame and renderer fallback follow VOIDTYPE by Itz-Murali and Itz-Anya. https://github.com/Itz-Murali/Void-Type</p>
+        <p>The hangar engineer is SI-generated text from NVIDIA NIM, model meta/llama-3.3-70b-instruct. It explains holds and can suggest catalog parts. Mass, delta-v, power, link, heat, and cost are still computed in the game. No NASA logos or mission marks are generated.</p>
         <p>Mission titles use TechText; spotlight cards, the dock and the starfield follow patterns from React Bits (reactbits.dev).</p>
         <p className="muted">{gpu}</p>
       </Glass>

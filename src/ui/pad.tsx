@@ -198,7 +198,7 @@ export function PadScreen() {
       })
       if (ascent.current?.phase === 'orbit') {
         orbitHold.current += dt
-        if (orbitHold.current > 1.15) {
+        if (orbitHold.current > 0.45) {
           commit(ascent.current.propellantKg / Math.max(1, BOOSTER.propellantKg))
           return
         }

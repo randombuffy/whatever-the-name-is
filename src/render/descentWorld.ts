@@ -170,12 +170,12 @@ export class DescentWorld {
     this.airless = airless
     const marsLook = missionId === 'mars' || missionId === 'custom'
     this.scene.background = new THREE.Color(airless ? 0x02030a : marsLook ? 0x8a6a58 : 0x1a0c08)
-    this.scene.add(new THREE.AmbientLight(airless ? 0xc9d4ea : marsLook ? 0xf0d5bd : 0xffe6d0, airless ? 0.35 : marsLook ? 0.12 : 0.5))
-    if (marsLook) this.scene.add(new THREE.HemisphereLight(0xcfb39b, 0x4f3a2e, 0.5))
-    const sun = new THREE.DirectionalLight(marsLook ? 0xfff0dd : 0xfff2e2, marsLook ? 2.7 : 1.8)
+    this.scene.add(new THREE.AmbientLight(airless ? 0xd7e2f4 : marsLook ? 0xf7e4d0 : 0xffe6d0, airless ? 0.7 : marsLook ? 0.48 : 0.7))
+    if (marsLook) this.scene.add(new THREE.HemisphereLight(0xf0d5bd, 0x6a4a38, 0.95))
+    const sun = new THREE.DirectionalLight(marsLook ? 0xfff4e4 : 0xfff2e2, marsLook ? 4.4 : 2.4)
     if (marsLook) {
       sun.position.copy(MARS_SUN).multiplyScalar(80)
-      this.renderer.toneMappingExposure = 1.12
+      this.renderer.toneMappingExposure = 1.28
     } else sun.position.set(20, 40, 10)
     this.scene.add(sun)
     this.stars = makeStarfield(2200)
@@ -469,20 +469,22 @@ export class DescentWorld {
     }
     if (this.altitude <= 2800) this.beat = 'burn'
     else if (this.altitude >= 9000) this.beat = 'entry'
-    const target = this.altitude > 8000 ? 36
-      : this.altitude > 3000 ? 14
-      : this.altitude > 800 ? 4.5
-      : this.altitude > 80 ? 1.6
-      : 0.55
-    const blend = 1 - Math.exp(-dt * 0.55)
+    const target = this.altitude > 5000 ? 70
+      : this.altitude > 2200 ? 28
+      : this.altitude > 600 ? 9
+      : this.altitude > 70 ? 2.8
+      : 0.85
+    const blend = 1 - Math.exp(-dt * 0.7)
     this.sink += (target - this.sink) * blend
-    this.vx += ((this.altitude > 8000 ? 18 : this.altitude > 2500 ? 4 : 0) - this.vx) * blend
-    this.throttle = this.altitude < 2500 && this.altitude > 6 ? Math.min(0.8, 0.22 + this.sink / 18) : 0
+    this.vx += ((this.altitude > 5000 ? 22 : this.altitude > 1800 ? 6 : 0) - this.vx) * blend
+    this.throttle = this.altitude < 2200 && this.altitude > 6 ? Math.min(0.85, 0.22 + this.sink / 16) : 0
     this.heading = 0
     this.altitude -= this.sink * dt
-    const pull = 1 - Math.exp(-dt * 0.06)
-    this.trackX += (MARS_LANDING[0] - this.trackX) * pull
-    this.trackZ += (MARS_LANDING[1] - this.trackZ) * pull
+    const pull = 1 - Math.exp(-dt * 0.08)
+    const aimX = MARS_LANDING[0] + (this.path === 'divert' ? 22 : 0)
+    const aimZ = MARS_LANDING[1] + (this.path === 'divert' ? 16 : 0)
+    this.trackX += (aimX - this.trackX) * pull
+    this.trackZ += (aimZ - this.trackZ) * pull
     this.heat = this.altitude > 8000 ? Math.min(0.2, this.heat + dt * 0.01) : this.heat * 0.99
     if (this.altitude > 3) return
     this.altitude = 0
@@ -555,7 +557,7 @@ export class DescentWorld {
     const ease = (value: number) => value * value * (3 - 2 * value)
     if (this.beat === 'approach') {
       this.beatT += dt
-      const p = Math.min(1, this.beatT / 11)
+      const p = Math.min(1, this.beatT / 3.2)
       const k = ease(p)
       this.altitude = 80_000 + (10_000 - 80_000) * k
       this.sink = 90 - k * 54
@@ -575,9 +577,9 @@ export class DescentWorld {
         this.beat = 'entry'
         this.beatT = 0
         this.blendCam = 0
-        this.altitude = this.airless ? 4000 : 10_000
-        this.sink = this.airless ? 40 : 36
-        this.vx = this.airless ? 12 : 18
+        this.altitude = this.airless ? 2800 : 6200
+        this.sink = this.airless ? 52 : 70
+        this.vx = this.airless ? 14 : 22
         this.heading = 0
         this.trackX = MARS_LANDING[0]
         this.trackZ = MARS_LANDING[1]
@@ -623,9 +625,9 @@ export class DescentWorld {
   }
 
   choose(path: 'divert' | 'hold'): void {
-    if (this.done || this.beat === 'entry') return
+    if (this.done) return
     this.path = path
-    this.offset = path === 'divert' ? 6 : 28 * this.difficulty
+    this.offset = path === 'divert' ? 8 : 0
   }
 
   setCamera(view: 'chase' | 'ground' | 'side'): void {
@@ -634,7 +636,7 @@ export class DescentWorld {
 
   /** Speeds the descent clock. 1 is real time, 4 is the default, 16 and 50 are fast passes. */
   setPace(pace: number): void {
-    this.pace = Math.max(1, Math.min(50, pace))
+    this.pace = Math.max(1, Math.min(80, pace))
   }
 
   private dress(config: SpacecraftConfig): void {

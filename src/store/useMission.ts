@@ -243,7 +243,7 @@ export const useMission = create<MissionStore>()(
       outcome: null,
       history: [],
       paused: false,
-      rate: 300_000,
+      rate: WARP_MAX,
       camera: 'wide',
       selectedId: null,
       selectedInstanceId: null,

@@ -29,7 +29,7 @@ import type { ManoeuvreNode, ScriptItem, SimState, SpacecraftConfig } from '../d
 import { siteOf, sitesFor } from '../domain/campaign'
 import { effectiveWarp, sliderToWarp, warpLabel, warpToSlider } from '../domain/time'
 import { transferState } from '../domain/transfer'
-import { STORAGE_FLIGHT_GUIDE } from '../domain/brand'
+import { EDU_LIMITS, STORAGE_FLIGHT_GUIDE } from '../domain/brand'
 import { FLIGHT_ACTIONS, keyLabel, keyName, loadBinds, saveBinds, type FlightAction, type FlightBinds } from './binds'
 import { CruiseWorld, FLIGHT_CAMS, type FlightCam } from '../render/cruiseWorld'
 import { useActiveMission, useMission } from '../store/useMission'
@@ -85,7 +85,9 @@ export function CruiseScreen() {
   const [bindsOpen, setBindsOpen] = useState(false)
   const [timeline, setTimeline] = useState(false)
   const [pending, setPending] = useState<string | null>(null)
-  const [guide, setGuide] = useState(() => localStorage.getItem(STORAGE_FLIGHT_GUIDE) !== '1')
+  const [guide, setGuide] = useState(false)
+  const [lagNote, setLagNote] = useState('')
+  const difficulty = useMission((state) => state.difficulty)
   const [binds, setBinds] = useState<FlightBinds>(() => loadBinds())
   const [capture, setCapture] = useState<FlightAction | null>(null)
   const [pose, setPose] = useState({ pitch: 0, yaw: 0, roll: 0 })
@@ -111,7 +113,7 @@ export function CruiseScreen() {
 
   const intercept = useMemo(() => {
     if (!sim || !mission) return null
-    const hopSec = mission.id === 'lunar' ? 3 * 86400 : 210 * 86400
+    const hopSec = mission.burns[0]?.coastAfterSec ?? mission.durationDays * 86400
     const track = transferState(mission.id, mission.destinationAu, sim.distanceFraction, sim.tSec)
     return computeOrbitIntercept(
       mission.id,
@@ -346,6 +348,19 @@ export function CruiseScreen() {
     }
   }, [decide, finish, go, setPaused])
 
+  const queueCommand = (fn: () => void) => {
+    const lag = difficulty === 'commander' ? Math.min(2.4, Math.max(0.7, ((intercept?.owltSec ?? 240) / 180))) : 0
+    if (lag <= 0) {
+      fn()
+      return
+    }
+    setLagNote('Command in transit')
+    window.setTimeout(() => {
+      fn()
+      setLagNote('')
+    }, lag * 1000)
+  }
+
   if (!sim || !craft || !mission || !plan) return null
   const report = evaluate(craft, mission, plan)
   const propNow = sim.propellant.chemical + sim.propellant.electric + sim.propellant['cold-gas']
@@ -387,7 +402,7 @@ export function CruiseScreen() {
         <div className="ascent-tools">
           <div className="chip-row warp-row">
             <span>Time</span>
-            <label className="warp-slider" title="Flight clock from 1× to 300,000×">
+            <label className="warp-slider" title="Flight clock from 1× to 1,000,000×">
               <span>{warpLabel(effectiveWarp(rate, sim))}</span>
               <input
                 type="range"
@@ -399,7 +414,7 @@ export function CruiseScreen() {
                 onChange={(event) => setRate(sliderToWarp(Number(event.target.value)))}
               />
             </label>
-            {([1, 100, 1_000, 10_000, 300_000] as const).map((step) => (
+            {([1, 1_000, 100_000, 1_000_000] as const).map((step) => (
               <button
                 key={step}
                 type="button"
@@ -431,7 +446,7 @@ export function CruiseScreen() {
               manualHold.current = next
               setPaused(next)
             }}>{paused ? 'Run' : 'Hold'}</button>
-            <button type="button" className="hud-chip" aria-pressed={engines} onClick={() => setEngines((value) => !value)}>Engines</button>
+            <button type="button" className="hud-chip" aria-pressed={engines} onClick={() => queueCommand(() => setEngines((value) => !value))}>Engines</button>
             <Mix />
           </div>
         </div>
@@ -508,9 +523,12 @@ export function CruiseScreen() {
         <div className="ascent-read">
           <div><span>Time</span><b>T+ {clock(sim.tSec)}</b></div>
           <div><span>Range</span><b>{destRange}</b></div>
-          <div><span>Speed</span><b>{numbers.speed}</b></div>
+          <div><span>Earth delay</span><b>{numbers.delay}</b></div>
         </div>
-        <div className="ascent-call">{cruiseCall}</div>
+        <div className="ascent-call">
+          {lagNote || cruiseCall}
+          {difficulty === 'commander' && <small> Light-time lag is on. {EDU_LIMITS}</small>}
+        </div>
         <button type="button" className="ascent-details" aria-pressed={details} onClick={() => setDetails((on) => !on)}>
           Details {details ? 'On' : 'Off'}
         </button>
@@ -599,7 +617,7 @@ export function CruiseScreen() {
             <strong title={sim.decision.detail}>{sim.decision.title}</strong>
             <div>
               {sim.decision.options.map((option, index) => (
-                <button key={option.id} type="button" title={option.detail} onClick={() => decide(option.id)}>
+                <button key={option.id} type="button" title={option.detail} onClick={() => queueCommand(() => decide(option.id))}>
                   <em>{index + 1}</em>
                   <span>{option.label}<small>{option.detail}</small></span>
                 </button>
@@ -643,11 +661,21 @@ export function CruiseScreen() {
             })}
           </div>
         )}
+        {sim.failed && (
+          <div className="result-overlay is-lose" role="alertdialog">
+            <b>You lost</b>
+            <p>{sim.failReason || 'The transfer stopped before arrival.'}</p>
+            <p className="muted">{EDU_LIMITS}</p>
+            <div className="result-actions">
+              <button type="button" className="word fill" onClick={() => finish()}>See result</button>
+            </div>
+          </div>
+        )}
         {transitioning && (
           <div className="entry-transition-overlay" role="status" aria-live="polite">
-            <div className="entry-kicker">ATMOSPHERIC ENTRY INTERFACE</div>
-            <h2>{mission.destination} Atmospheric Ingress</h2>
-            <p>Hypersonic ionization blackout in progress... De-orbit retro burn nominal. Altitude 125 km...</p>
+            <div className="entry-kicker">Entry</div>
+            <h2>{mission.destination}</h2>
+            <p>De-orbit burn complete. Educational limits, not NASA specifications.</p>
             <div className="entry-progress"><i /></div>
           </div>
         )}

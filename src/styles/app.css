@@ -1,7 +1,7 @@
 @import "./tokens.css";
 
 html, body, #root { height: 100%; overflow: hidden; }
-button, input { font: inherit; color: inherit; }
+button, input, textarea { font: inherit; color: inherit; }
 p { margin: 0; }
 
 .game {
@@ -567,6 +567,7 @@ p { margin: 0; }
 .spec-hero .glyph { width: 72px; height: 72px; border-radius: 18px; }
 
 .meter { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; align-items: center; padding: 7px 0; }
+.meter.no-icon { grid-template-columns: minmax(0, 1fr); }
 .meter b { display: block; font-weight: 560; font-variant-numeric: tabular-nums; }
 .meter i, .meter i.bad {
   display: block;
@@ -3340,3 +3341,102 @@ button.key-banner {
   background: rgba(244, 241, 234, 0.16);
   color: #f4f1ea;
 }
+
+.si-desk {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(244, 241, 234, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.si-desk-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.si-desk-head b {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.si-note, .si-error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.si-error { color: #c47a62; }
+.si-desk textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 52px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: #111111;
+  color: #f4f1ea;
+}
+.si-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.si-reply {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 8px;
+  background: #111111;
+}
+.si-reply p, .si-reply li { font-size: 13px; line-height: 1.4; }
+.si-reply ol { margin: 0; padding-left: 18px; }
+.si-mark {
+  display: inline-block;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(218, 218, 218, 0.62);
+}
+
+.result-overlay {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  transform: translate(-50%, -50%);
+  z-index: 40;
+  width: min(420px, calc(100vw - 32px));
+  padding: 22px 20px 18px;
+  border-radius: 16px;
+  background: #111111;
+  color: #f4f1ea;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: center;
+  pointer-events: auto;
+}
+.result-overlay b {
+  font-size: 28px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.result-overlay.is-win b { color: #9be7b0; }
+.result-overlay.is-lose b { color: #f0a090; }
+.result-overlay p { margin: 0; line-height: 1.4; }
+.result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  padding-top: 8px;
+}
+.result-card.is-win .debrief-title { color: #9be7b0; }
+.result-card.is-lose .debrief-title { color: #f0a090; }
+.result-card.is-partial .debrief-title { color: #f0c48a; }
+.result-why { margin: 0; font-size: 15px; line-height: 1.45; }
+.result-lessons { display: flex; flex-direction: column; gap: 6px; }
+.result-lessons p { margin: 0; font-size: 13px; line-height: 1.4; }
+.result-good { color: #9be7b0; }
+.result-bad { color: #f0a090; }

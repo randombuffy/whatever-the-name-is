@@ -120,17 +120,17 @@ export class MissionWorld {
     this.renderer.setClearColor(0x03040c, 1)
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
-    this.renderer.toneMappingExposure = 1.08
-    this.ambientLight = new THREE.AmbientLight(0xd0dcee, 0.28)
+    this.renderer.toneMappingExposure = 1.32
+    this.ambientLight = new THREE.AmbientLight(0xe8eef8, 0.46)
     this.scene.add(this.ambientLight)
-    this.scene.add(new THREE.HemisphereLight(0x2a3d66, 0x111622, 0.55))
-    const sun = new THREE.DirectionalLight(0xfff3df, 3.4)
+    this.scene.add(new THREE.HemisphereLight(0xc5d6f2, 0x2a3344, 0.92))
+    const sun = new THREE.DirectionalLight(0xfff6ea, 4.4)
     sun.position.set(28, 14, 18)
-    const fill = new THREE.DirectionalLight(0x7da4d8, 0.65)
+    const fill = new THREE.DirectionalLight(0xb7d0ee, 1.35)
     fill.position.set(-12, -3, -8)
-    this.designLamp = new THREE.DirectionalLight(0xfffaed, 0)
+    this.designLamp = new THREE.DirectionalLight(0xfffaf0, 0)
     this.designLamp.position.set(6, 12, 10)
-    this.designFillLamp = new THREE.DirectionalLight(0xa5c4ea, 0)
+    this.designFillLamp = new THREE.DirectionalLight(0xd7e6f8, 0)
     this.designFillLamp.position.set(-10, 4, 12)
     this.scene.add(sun, fill, this.designLamp, this.designFillLamp)
     this.engineLight = new THREE.PointLight(0xffb26b, 0, 8, 2)
@@ -246,9 +246,9 @@ export class MissionWorld {
       this.asteroid.rotation.x += dt * 0.04
       this.jupiter.rotation.y += dt * 0.06
     }
-    this.ambientLight.intensity = view.mode === 'design' ? 0.68 : view.mode === 'destination' ? 0.85 : 0.28
-    this.designLamp.intensity = view.mode === 'design' ? 3.4 : view.mode === 'destination' ? 2.4 : 0
-    this.designFillLamp.intensity = view.mode === 'design' ? 2.0 : view.mode === 'destination' ? 1.6 : 0
+    this.ambientLight.intensity = view.mode === 'design' ? 1.15 : view.mode === 'destination' ? 1.05 : 0.46
+    this.designLamp.intensity = view.mode === 'design' ? 5.6 : view.mode === 'destination' ? 3.8 : 0
+    this.designFillLamp.intensity = view.mode === 'design' ? 3.4 : view.mode === 'destination' ? 2.6 : 0
     const w = this.canvas.clientWidth || 1
     const h = this.canvas.clientHeight || 1
     const ratio = viewRatio(this.reduced)

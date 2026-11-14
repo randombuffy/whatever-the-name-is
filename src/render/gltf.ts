@@ -11,14 +11,17 @@ loader.setDRACOLoader(draco)
 
 const BOOT_ASSETS = [
   '/3d/walking_astronaut.glb',
-  '/3d/tesla_bot/scene.gltf',
-  '/props/control_station.glb',
-  '/3d/low_poly_tree_set.glb',
-  '/vehicles/cybertruck.glb',
-  '/3d/glb/Mars.glb',
-  '/props/space.glb',
   '/sfx/manifest.json',
 ]
+
+function fetchWithBudget(url: string, ms = 2500): Promise<ArrayBuffer | null> {
+  const controller = new AbortController()
+  const timer = window.setTimeout(() => controller.abort(), ms)
+  return fetch(url, { signal: controller.signal })
+    .then((response) => (response.ok ? response.arrayBuffer() : null))
+    .catch(() => null)
+    .finally(() => window.clearTimeout(timer))
+}
 
 function labelOf(url: string): string {
   return url.split('/').pop() ?? url
@@ -29,18 +32,12 @@ export async function preloadAssets(onProgress: (done: number, total: number, la
   const total = BOOT_ASSETS.length
   let done = 0
   onProgress(0, total, 'assets')
-  for (const url of BOOT_ASSETS) {
-    onProgress(done, total, labelOf(url))
-    try {
-      const response = await fetch(url)
-      const bytes = await response.arrayBuffer()
-      if (url.endsWith('.glb') || url.endsWith('.json')) THREE.Cache.add(url, bytes)
-    } catch {
-      /* missing files still count so the gate cannot stick */
-    }
+  await Promise.allSettled(BOOT_ASSETS.map(async (url) => {
+    const bytes = await fetchWithBudget(url)
+    if (bytes && (url.endsWith('.glb') || url.endsWith('.json'))) THREE.Cache.add(url, bytes)
     done += 1
     onProgress(done, total, labelOf(url))
-  }
+  }))
 }
 
 let assetsDone = 0

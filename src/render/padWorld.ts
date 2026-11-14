@@ -197,12 +197,12 @@ export class PadWorld {
     this.renderer.shadowMap.enabled = true
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
-    this.renderer.toneMappingExposure = 1.05
+    this.renderer.toneMappingExposure = 1.22
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
     this.scene.fog = new THREE.Fog(0x6a8454, 420, 1600)
     this.skyMesh = this.makeSky()
     this.scene.add(this.skyMesh)
-    this.hemi = new THREE.HemisphereLight(0xc5d7ee, 0x6a624e, 0.72)
+    this.hemi = new THREE.HemisphereLight(0xe4eef8, 0x6a624e, 1.05)
     this.scene.add(this.hemi)
     const sun = new THREE.DirectionalLight(0xfff4e2, 2.15)
     sun.position.set(70, 110, 40)
@@ -580,7 +580,7 @@ export class PadWorld {
       }
       this.groundMesh.visible = groundFade > 0.04
     }
-    this.hemi.intensity = 0.72 * (1 - Math.min(0.82, lift)) + 0.08
+    this.hemi.intensity = 1.05 * (1 - Math.min(0.82, lift)) + 0.12
     const space = Math.min(1, Math.max(0, (altitudeM - 40_000) / 90_000))
     this.spaceGroup.visible = space > 0.02
     this.spaceGroup.traverse((node) => {
@@ -839,7 +839,7 @@ export class PadWorld {
     }
     this.aimCamera(dt)
     this.aimGuide()
-    this.hemi.intensity = 0.72
+    this.hemi.intensity = 1.05
   }
 
   private aimCamera(dt: number): void {

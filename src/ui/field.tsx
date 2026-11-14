@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, ArrowRight, Camera, CloudFog, Crosshair, Fan, Flag, HelpCircle, House, Lock, Plus, Radio, Sun, Video, WifiOff, Zap } from 'lucide-react'
-import { startLandingTutorial, startSurfaceTutorial } from './tutorial'
+import { AlertTriangle, House, Plus } from 'lucide-react'
 import { fieldSamples, siteOf } from '../domain/campaign'
 import type { CampPhase, CampSave } from '../domain/save'
 import { getSpec } from '../domain/catalog'
@@ -51,7 +50,8 @@ export function LandingScreen() {
   const mount = useRef<HTMLDivElement>(null)
   const worldRef = useRef<DescentWorld | null>(null)
   const [hud, setHud] = useState<DescentReadout | null>(null)
-  const [pace, setPace] = useState(50)
+  const [pace, setPace] = useState(80)
+  const [result, setResult] = useState<'down' | 'hard' | 'crash' | null>(null)
   const [armRewind, setArmRewind] = useState(false)
   const [showConfirmed, setShowConfirmed] = useState(false)
   const settled = useRef<'down' | 'hard' | 'crash' | null>(null)
@@ -75,7 +75,7 @@ export function LandingScreen() {
     const savedEntry = useMission.getState().descent
     if (savedEntry) world.restore(savedEntry)
     worldRef.current = world
-    world.setPace(50)
+    world.setPace(80)
     world.resize()
     let frame = 0
     let last = performance.now()
@@ -109,13 +109,9 @@ export function LandingScreen() {
         setShowConfirmed(true)
       }
       if (confirmUntil.current && performance.now() > confirmUntil.current) setShowConfirmed(false)
-      if (!handed.current && (readout.phase === 'down' || readout.phase === 'hard')) {
+      if (!handed.current && readout.phase !== 'fly') {
         handed.current = true
-        handoff.current = window.setTimeout(() => {
-          useMission.getState().noteTouchdown(readout.phase === 'hard' ? 'hard' : 'soft', readout.heat, readout.offset)
-          bankSurface(readout.phase === 'hard' ? -12 : 8, readout.prompt)
-          go('surface')
-        }, 2200)
+        setResult(readout.phase)
       }
       setHud((prev) => (prev && prev.prompt === readout.prompt && Math.abs(prev.altitude - readout.altitude) < 8 && prev.phase === readout.phase && prev.warnSink === readout.warnSink && prev.warnSide === readout.warnSide && prev.warnFuel === readout.warnFuel && prev.warnHeat === readout.warnHeat && prev.warnOffset === readout.warnOffset && prev.assist === readout.assist ? prev : readout))
       frame = requestAnimationFrame(loop)
@@ -155,18 +151,15 @@ export function LandingScreen() {
       <div className="deck">
         <div className="deck-top">
           <div className="group">
-            <button type="button" aria-label="Chase" aria-pressed={hud?.view === 'chase'} onClick={() => worldRef.current?.setCamera('chase')}><Video size={16} /></button>
-            <button type="button" aria-label="Side" aria-pressed={hud?.view === 'side'} onClick={() => worldRef.current?.setCamera('side')}><Camera size={16} /></button>
-            <button type="button" aria-label="Ground" aria-pressed={hud?.view === 'ground'} onClick={() => worldRef.current?.setCamera('ground')}><Crosshair size={16} /></button>
+            <button type="button" aria-pressed={hud?.view === 'chase'} onClick={() => worldRef.current?.setCamera('chase')}>Chase</button>
+            <button type="button" aria-pressed={hud?.view === 'side'} onClick={() => worldRef.current?.setCamera('side')}>Side</button>
+            <button type="button" aria-pressed={hud?.view === 'ground'} onClick={() => worldRef.current?.setCamera('ground')}>Ground</button>
           </div>
           <div className="group">
-            {([1, 4, 16, 50] as const).map((rate) => (
+            {([1, 4, 16, 80] as const).map((rate) => (
               <button key={rate} type="button" aria-pressed={pace === rate} onClick={() => { setPace(rate); worldRef.current?.setPace(rate) }}>{rate}×</button>
             ))}
           </div>
-          <button type="button" className="icon" title="Step-by-step EDL tutorial" aria-label="Tutorial" onClick={startLandingTutorial}>
-            <HelpCircle size={16} />
-          </button>
           <Mix />
         </div>
       </div>
@@ -182,7 +175,7 @@ export function LandingScreen() {
           <i className={hud?.assist ? 'idle' : 'off'} title="Guidance" />
         </span>
         <em>{hud?.prompt ?? 'Flying the entry.'}</em>
-        {hud?.choice && (
+        {hud?.choice && !result && (
           <div className="edl-choice" role="group" aria-label="Landing trajectory">
             <button type="button" className="word" onClick={() => worldRef.current?.choose('divert')}>Divert to clear ground</button>
             <button type="button" className="word" onClick={() => worldRef.current?.choose('hold')}>Hold the target</button>
@@ -200,23 +193,36 @@ export function LandingScreen() {
             setArmRewind(false)
           }}>{armRewind ? 'Restore' : 'Rewind'}</button>
           {armRewind && <button type="button" className="word slim" onClick={() => setArmRewind(false)}>Cancel</button>}
-          {hud && hud.phase !== 'fly' && (
-            <button type="button" className="word" onClick={() => {
-              if (hud.phase === 'down' || hud.phase === 'hard') {
-                useMission.getState().noteTouchdown(hud.phase === 'hard' ? 'hard' : 'soft', hud.heat, hud.offset)
-                bankSurface(hud.phase === 'hard' ? -12 : 8, hud.prompt)
-                go('surface')
-              } else finish()
-            }}>{hud.phase === 'crash' ? 'Debrief' : 'Get down'}</button>
-          )}
-          {hud && hud.phase !== 'fly' && hud.phase !== 'crash' && (
-            <span className="key-hint"><kbd>F</kbd><span>Get down</span></span>
-          )}
         </div>
-        {showConfirmed && (
+        {showConfirmed && !result && (
           <div className="landing-confirmed" role="status">
             <b>Landing confirmed</b>
             <span>Surface operations initialized</span>
+          </div>
+        )}
+        {result && (
+          <div className={`result-overlay ${result === 'crash' ? 'is-lose' : 'is-win'}`} role="alertdialog">
+            <b>{result === 'crash' ? 'You lost' : 'You landed'}</b>
+            <p>{hud?.prompt ?? (result === 'crash' ? 'The landing was too hard.' : 'The gear is down.')}</p>
+            <p className="muted">Educational limits, not NASA specifications.</p>
+            <div className="result-actions">
+              {result === 'crash' ? (
+                <button type="button" className="word fill" onClick={() => finish()}>See result</button>
+              ) : (
+                <>
+                  <button type="button" className="word fill" onClick={() => {
+                    useMission.getState().noteTouchdown(result === 'hard' ? 'hard' : 'soft', hud?.heat ?? 0, hud?.offset ?? 0)
+                    bankSurface(result === 'hard' ? -12 : 8, hud?.prompt ?? 'Touchdown')
+                    go('surface')
+                  }}>Walk the surface</button>
+                  <button type="button" className="word slim" onClick={() => {
+                    useMission.getState().noteTouchdown(result === 'hard' ? 'hard' : 'soft', hud?.heat ?? 0, hud?.offset ?? 0)
+                    bankSurface(result === 'hard' ? -12 : 8, hud?.prompt ?? 'Touchdown')
+                    finish()
+                  }}>See score</button>
+                </>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -236,6 +242,7 @@ export function SurfaceScreen() {
   const [hud, setHud] = useState<SurfaceReadout | null>(null)
   const marsSurface = mission?.id === 'mars' || mission?.id === 'custom'
   const [camp, setCamp] = useState<CampSave>(() => readCamp())
+  const [moreHud, setMoreHud] = useState(false)
   const campRef = useRef(camp)
   campRef.current = camp
 
@@ -352,37 +359,35 @@ export function SurfaceScreen() {
   const world = worldRef.current
   const sky = hud?.sky ?? 'Clear'
   return (
-    <div className={`field-stage${sky === 'Dust' ? ' is-dust' : sky === 'Flare' ? ' is-flare' : ''}`} ref={mount}>
+      <div className={`field-stage${sky === 'Dust' ? ' is-dust' : sky === 'Flare' ? ' is-flare' : ''}`} ref={mount}>
       {hud?.mode === 'eva' && <div className="crosshair" />}
       <div className="deck">
-        {marsSurface && <CampBar camp={camp} onChange={setCamp} />}
+        {marsSurface && moreHud && <CampBar camp={camp} onChange={setCamp} />}
         <div className="deck-top surface-top">
           <div className="group">
-            <button type="button" aria-label="Camera" onClick={() => world?.cycleCam()}><Video size={16} /></button>
-            {hud?.hasRover && <button type="button" aria-label="Park" aria-pressed={hud.parked} onClick={() => world?.togglePark()}><Lock size={16} /></button>}
-            {hud?.hasRover && <button type="button" aria-label="Route" aria-pressed={hud.assist} onClick={() => world?.toggleAssist()}><Crosshair size={16} /></button>}
+            <button type="button" onClick={() => world?.cycleCam()}>Camera</button>
             {hud?.hasRover && (
-              <button type="button" className="board-key" aria-label={hud.mode === 'eva' ? 'Board the rover' : 'Get down'} aria-pressed={hud.mode === 'eva'} onClick={() => world?.toggleEgress()}>
-                {hud.mode === 'drive' ? 'Down' : 'Board'}<kbd>F</kbd>
+              <button type="button" aria-pressed={hud.mode === 'eva'} onClick={() => world?.toggleEgress()}>
+                {hud.mode === 'drive' ? 'Walk' : 'Board'}
               </button>
             )}
-            {hud?.hasHeli && <button type="button" aria-label="Helicopter" aria-pressed={hud.mode === 'scout'} onClick={() => world?.toggleScout()}><Fan size={16} /></button>}
-            <button type="button" aria-label="Next sol" onClick={() => world?.nextSol()}><Sun size={16} /></button>
+            <button type="button" onClick={() => world?.nextSol()}>Next sol</button>
+            <button type="button" aria-pressed={moreHud} onClick={() => setMoreHud((on) => !on)}>More</button>
             <Mix />
           </div>
-          {marsSurface && (
+          {marsSurface && moreHud && (
             <div className="group weather-sim" role="group" aria-label="Simulate weather">
               <button type="button" aria-pressed={hud?.weather === 'auto'} onClick={() => worldRef.current?.setWeather('auto')}>Auto</button>
               <button type="button" aria-pressed={hud?.weather === 'clear'} onClick={() => worldRef.current?.setWeather('clear')}>Clear</button>
-              <button type="button" aria-pressed={hud?.weather === 'dust'} onClick={() => worldRef.current?.setWeather('dust')}><CloudFog size={14} /> Dust storm</button>
-              <button type="button" aria-pressed={hud?.weather === 'flare'} onClick={() => worldRef.current?.setWeather('flare')}><Zap size={14} /> Solar flare</button>
-              <button type="button" aria-pressed={hud?.weather === 'blackout'} onClick={() => worldRef.current?.setWeather('blackout')}><WifiOff size={14} /> Blackout</button>
+              <button type="button" aria-pressed={hud?.weather === 'dust'} onClick={() => worldRef.current?.setWeather('dust')}>Dust storm</button>
+              <button type="button" aria-pressed={hud?.weather === 'flare'} onClick={() => worldRef.current?.setWeather('flare')}>Solar flare</button>
+              <button type="button" aria-pressed={hud?.weather === 'blackout'} onClick={() => worldRef.current?.setWeather('blackout')}>Blackout</button>
             </div>
           )}
           <p className="deck-note">{hud?.prompt || siteLabel(hud)}</p>
           {hud?.mode === 'eva' && (
             <span className="eva-note">
-              Mars atmosphere ~0.02 kg/m³. Vacuum acoustics: surface sound does not propagate; helmet radio active.
+              Thin Mars air. You hear the radio in the helmet, not the wind. Educational limits, not NASA specifications.
             </span>
           )}
           {sky !== 'Clear' && (
@@ -416,29 +421,17 @@ export function SurfaceScreen() {
         </div>
         <div className="deck-bottom">
           <div className="cluster">
-            <Read label="Speed (m/s)" value={hud ? hud.speed.toFixed(1) : '0'} />
-            <Read label="Grade (°)" value={hud ? hud.slopeDeg.toFixed(0) : '0'} />
-            <Read label="Battery (%)" value={hud ? String(Math.round(hud.energy)) : '0'} />
-            <Read label="Wheels (%)" value={hud ? String(Math.round(hud.wheels)) : '100'} />
-            <Read label="Link" value={hud ? (hud.link ? 'Open' : 'Dark') : '—'} />
-            <Read label="Air (%)" value={hud ? String(Math.round(hud.oxygen)) : '0'} />
-            <Read label="Sol" value={hud ? String(hud.sol) : '1'} />
-            <Read label="Dust" value={hud ? hud.dust.toFixed(2) : '0'} />
+            <Read label="Speed" value={hud ? hud.speed.toFixed(1) : '0'} />
+            <Read label="Battery" value={hud ? `${Math.round(hud.energy)}%` : '0'} />
+            <Read label="Radio" value={hud ? (hud.link ? 'Open' : 'Dark') : '—'} />
             <Read label="Held" value={hud ? String(hud.held) : '0'} />
             <Read label="Sent" value={hud ? String(hud.sent) : '0'} />
-            <span className="lamps" title={sky}>
-              <i className={hud?.link === false ? 'off' : 'idle'} />
-              <i className={sky !== 'Clear' ? 'off' : 'lit'} />
-            </span>
           </div>
           <div className="group">
-            <button type="button" aria-label="Photograph" onClick={() => world?.capture()}><Camera size={16} /></button>
-            <button type="button" aria-label="Sample" onClick={() => world?.sample()}><Crosshair size={16} /></button>
-            <button type="button" aria-label="Next finding" onClick={() => world?.cycleHold()}><ArrowRight size={16} /></button>
-            <button type="button" aria-label="Transmit" onClick={() => world?.transmit()}><Radio size={16} /></button>
-            <button type="button" aria-label="File the return" onClick={send}><Flag size={16} /></button>
-            <button type="button" className="icon" title="Surface exploration tutorial" aria-label="Tutorial" onClick={startSurfaceTutorial}><HelpCircle size={16} /></button>
-            <button type="button" aria-label="Hangar" onClick={() => go('design')}><House size={16} /></button>
+            <button type="button" onClick={() => world?.sample()}>Sample</button>
+            <button type="button" onClick={() => world?.transmit()}>Send</button>
+            <button type="button" onClick={send}>File return</button>
+            <button type="button" aria-label="Home" onClick={() => go('design')}><House size={16} /></button>
           </div>
         </div>
       </div>

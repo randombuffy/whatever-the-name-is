@@ -97,7 +97,7 @@ export const MISSIONS: MissionDef[] = [
     id: 'mars',
     name: 'Mars pathfinder',
     index: 2,
-    destination: 'Mars, 400 km class orbit',
+    destination: 'Mars landing (educational)',
     destinationAu: 1.5237,
     originAu: 1,
     summary: 'A heliocentric transfer, a capture at Mars, and a spectrometer data return.',

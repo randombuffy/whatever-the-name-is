@@ -5,7 +5,6 @@ import { LandingScreen, SurfaceScreen } from './ui/field'
 import { PadScreen } from './ui/pad'
 import { CruiseScreen } from './ui/cruise'
 import { StationScreen } from './ui/station'
-import { startPadTutorial, startDesignTutorial, startPlanTutorial, startCruiseTutorial, startLandingTutorial, startSurfaceTutorial } from './ui/tutorial'
 import { applyMix, playGroup, startScore, unlock } from './ui/audio'
 import { Boot } from './ui/Boot'
 import { Viewport } from './render/Viewport'
@@ -38,7 +37,6 @@ export function App() {
   const audio = useMission((state) => state.audio)
   const volume = useMission((state) => state.volume)
   const setAudio = useMission((state) => state.setAudio)
-  const setVolume = useMission((state) => state.setVolume)
   const sim = useMission((state) => state.sim)
   const camera = useMission((state) => state.camera)
   const selectedInstanceId = useMission((state) => state.selectedInstanceId)
@@ -122,16 +120,6 @@ export function App() {
     else void document.exitFullscreen()
   }
 
-  const triggerCurrentTutorial = () => {
-    if (phase === 'pad' || phase === 'launch') startPadTutorial()
-    else if (phase === 'design') startDesignTutorial()
-    else if (phase === 'plan') startPlanTutorial()
-    else if (phase === 'flight') startCruiseTutorial()
-    else if (phase === 'landing') startLandingTutorial()
-    else if (phase === 'surface' || phase === 'outpost') startSurfaceTutorial()
-    else startPadTutorial()
-  }
-
   if (booting) {
     return (
       <div className="game">
@@ -184,18 +172,10 @@ export function App() {
           <nav className="top-nav" aria-label="Main Navigation">
           <button
             type="button"
-            className={`top-nav-btn ${phase === 'select' ? 'active' : ''}`}
+            className={`top-nav-btn ${phase === 'select' || phase === 'brief' ? 'active' : ''}`}
             onClick={() => go('select')}
           >
-            Missions
-          </button>
-          <button
-            type="button"
-            className={`top-nav-btn ${phase === 'brief' ? 'active' : ''}`}
-            disabled={!missionId}
-            onClick={() => go('brief')}
-          >
-            Goals
+            Home
           </button>
           <button
             type="button"
@@ -227,7 +207,7 @@ export function App() {
             disabled={!outcome}
             onClick={() => go('debrief')}
           >
-            Debrief
+            Result
           </button>
           <button
             type="button"
@@ -235,25 +215,6 @@ export function App() {
             onClick={() => go('credits')}
           >
             Help
-          </button>
-          {(missionId === 'mars' || missionId === 'custom') && (
-            <button
-              type="button"
-              className="top-nav-btn"
-              disabled={phase !== 'debrief' && !outcome}
-              onClick={() => go('surface')}
-            >
-              Colonize
-            </button>
-          )}
-          <button
-            type="button"
-            className="top-nav-btn guide-btn"
-            title="Step-by-step interactive tutorial"
-            aria-label="Tutorial Guide"
-            onClick={triggerCurrentTutorial}
-          >
-            Guide
           </button>
           <button
             type="button"
@@ -264,17 +225,6 @@ export function App() {
           >
             Sound
           </button>
-          <input
-            className="mix-range"
-            type="range"
-            title="Volume slider"
-            aria-label="Volume"
-            min={0}
-            max={1}
-            step={0.05}
-            value={volume}
-            onChange={(event) => setVolume(Number(event.target.value))}
-          />
           {narrow && (
             <button
               type="button"
@@ -298,6 +248,8 @@ export function App() {
             <span className="banner-item"><span className="banner-dim">Required</span> <strong>{mission.requiredInstruments.join(', ')}</strong></span>
             <span className="banner-sep">·</span>
             <span className="banner-item"><span className="banner-dim">Window</span> <strong>{mission.launchWindow}</strong></span>
+            <span className="banner-sep">·</span>
+            <span className="banner-item muted">Educational limits, not NASA specifications.</span>
           </div>
         )}
       </header>

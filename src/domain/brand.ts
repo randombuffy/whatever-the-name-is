@@ -1,6 +1,9 @@
 /** Product name shown in the shell, boot gate, credits, and docs. */
 export const APP_NAME = 'AeroAestro'
 
+/** Required disclaimer on numbers, windows, and hardware figures. */
+export const EDU_LIMITS = 'Educational limits, not NASA specifications.'
+
 export const STORAGE_MAIN = 'aeroaestro-v1'
 export const STORAGE_BINDS = 'aeroaestro-binds-v2'
 export const STORAGE_FLIGHT_GUIDE = 'aeroaestro-flight-guide'

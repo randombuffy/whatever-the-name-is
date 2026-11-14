@@ -216,9 +216,9 @@ export class SurfaceWorld {
     this.scene.fog = mars
       ? new THREE.FogExp2(0xb8957c, 0.0042)
       : new THREE.Fog(this.colors.fog, setup.air ? 70 : 140, setup.air ? 640 : 1600)
-    this.fill = new THREE.AmbientLight(mars ? 0xf0d5bd : 0xfff2e0, mars ? 0.07 : 0.72)
+    this.fill = new THREE.AmbientLight(mars ? 0xf7e6d4 : 0xfff2e0, mars ? 0.42 : 0.85)
     this.scene.add(this.fill)
-    this.hemi = new THREE.HemisphereLight(mars ? 0xcfb39b : this.colors.skyHorizon, mars ? 0x4f3a2e : this.colors.low, mars ? 0.34 : 0.7)
+    this.hemi = new THREE.HemisphereLight(mars ? 0xf0d5bd : this.colors.skyHorizon, mars ? 0x6a4a38 : this.colors.low, mars ? 0.85 : 0.85)
     this.scene.add(this.hemi)
     this.sun = new THREE.DirectionalLight(mars ? 0xfff4e6 : 0xfff1df, mars ? 3.55 : 2.9)
     if (mars) this.renderer.toneMappingExposure = 1.18
@@ -791,9 +791,9 @@ export class SurfaceWorld {
     this.stormDustMat.opacity = sky.storm ? 0.7 : sky.flare ? 0.28 : 0
     const mars = this.setup.missionId === 'mars' || this.setup.missionId === 'custom'
     if (mars) {
-      this.sun.intensity = sky.storm ? 0.95 : sky.flare ? 4.4 : 3.55
-      this.fill.intensity = sky.storm ? 0.28 : sky.flare ? 0.14 : 0.07
-      this.hemi.intensity = sky.storm ? 0.55 : 0.34
+      this.sun.intensity = sky.storm ? 1.4 : sky.flare ? 5.2 : 4.4
+      this.fill.intensity = sky.storm ? 0.38 : sky.flare ? 0.22 : 0.42
+      this.hemi.intensity = sky.storm ? 0.7 : 0.85
       this.scene.background = new THREE.Color(sky.storm ? 0x6a4a3a : sky.flare ? 0xa86848 : 0x8a6a58)
     }
   }

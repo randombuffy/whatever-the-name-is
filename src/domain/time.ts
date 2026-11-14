@@ -1,8 +1,8 @@
 import type { SimState } from './types'
 
-/** Coast runs from real time up to 300,000×. A decision still holds the clock at 1×. */
+/** Coast runs from real time up to 1,000,000×. A decision still holds the clock at 1×. */
 export const WARP_MIN = 1
-export const WARP_MAX = 300_000
+export const WARP_MAX = 1_000_000
 const WARP_SPAN = Math.log10(WARP_MAX)
 
 /** Mission clock versus the real clock. 100× means one real second is 100 seconds of flight. */
