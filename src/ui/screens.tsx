@@ -1263,7 +1263,7 @@ export function DebriefScreen() {
                 <b>{breakdown.landingPoints} / 10</b>
               </div>
               <div className="debrief-cat-bar">
-                <div className="debrief-cat-fill" style={{ width: `${(Math.max(0, breakdown.landingPoints) / 10) * 100}%`, background: '#38bdf8' }} />
+                <div className="debrief-cat-fill" style={{ width: `${(Math.max(0, breakdown.landingPoints) / 10) * 100}%` }} />
               </div>
             </div>
 
@@ -1331,7 +1331,7 @@ export function DebriefScreen() {
         </div>
 
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', paddingTop: '10px', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
-          <button type="button" className="word" style={{ background: '#0284c7', borderColor: '#38bdf8' }} onClick={() => go('surface')}>
+          <button type="button" className="word fill" onClick={() => go('surface')}>
             <Boxes size={16} /> Start colonizing
           </button>
           {field && (

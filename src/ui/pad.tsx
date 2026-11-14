@@ -348,16 +348,11 @@ export function PadScreen() {
         </button>
       )}
       {count !== null && count > 0 && (
-        <div className="count-banner" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+        <div className="count-banner">
           <MissionTitle text={String(count)} variant="hero" />
           <p>{CHECKS[10 - count] ?? 'Commit'}</p>
-          <button
-            type="button"
-            className="word fill"
-            style={{ fontSize: '12px', padding: '6px 14px', background: '#dc2626', borderColor: '#ef4444', color: '#fff', cursor: 'pointer' }}
-            onClick={() => setCount(0)}
-          >
-            ⚡ Ignite & Liftoff Now
+          <button type="button" className="count-skip" onClick={() => setCount(0)}>
+            Ignite &amp; liftoff now
           </button>
         </div>
       )}

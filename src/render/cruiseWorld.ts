@@ -72,6 +72,9 @@ export class CruiseWorld {
   private zoom = 1
   private prograde = new THREE.Vector3(0, 0, 1)
   private readonly aim = new THREE.Vector3(0, 0, 1)
+  private readonly shipRight = new THREE.Vector3()
+  private readonly shipLift = new THREE.Vector3()
+  private readonly shipBasis = new THREE.Matrix4()
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -202,8 +205,14 @@ export class CruiseWorld {
     }
     this.cam = stick.camera
     this.place(pose)
-    const forward = this.prograde.lengthSq() > 1e-6 ? this.prograde : this.aim
-    this.ship.quaternion.setFromUnitVectors(this.aim, forward)
+    // Seated hull nose is local +Z. Point that axis along Earth → destination.
+    const forward = this.prograde.lengthSq() > 1e-6 ? this.prograde.clone().normalize() : this.aim.clone()
+    this.shipLift.set(0, 1, 0)
+    if (Math.abs(forward.dot(this.shipLift)) > 0.98) this.shipLift.set(0, 0, 1)
+    this.shipRight.crossVectors(this.shipLift, forward).normalize()
+    this.shipLift.crossVectors(forward, this.shipRight).normalize()
+    this.shipBasis.makeBasis(this.shipRight, this.shipLift, forward)
+    this.ship.quaternion.setFromRotationMatrix(this.shipBasis)
     this.ship.rotateX(this.pitch)
     this.ship.rotateY(this.yaw)
     this.ship.rotateZ(this.roll)
@@ -326,18 +335,36 @@ export class CruiseWorld {
     this.camera.fov = mode === 'free' || mode === 'map' ? 72 : mode === 'cockpit' ? 62 : 58
     this.camera.updateProjectionMatrix()
     if (mode === 'cockpit') {
-      const eye = new THREE.Vector3(0, 0.42, 2.6).applyQuaternion(this.ship.quaternion).add(origin)
+      const eye = new THREE.Vector3(0, 0.42, 1.15).applyQuaternion(this.ship.quaternion).add(origin)
       const ahead = new THREE.Vector3(
         Math.sin(this.glanceYaw) * 12,
         0.08 + this.glancePitch * 6,
-        Math.cos(this.glanceYaw) * 12,
+        10 + Math.cos(this.glanceYaw) * 2,
       ).applyQuaternion(this.ship.quaternion).add(origin)
       this.camera.position.copy(eye)
       this.camera.lookAt(ahead)
       return
     }
-    if (mode === 'side' || mode === 'chase' || mode === 'free') {
-      const radius = (mode === 'side' ? 22 : mode === 'free' ? 18 : 14) * this.zoom
+    if (mode === 'chase') {
+      const radius = 14 * this.zoom
+      const back = this.prograde.lengthSq() > 1e-6 ? this.prograde.clone().normalize() : this.aim.clone()
+      this.camera.position.copy(origin).addScaledVector(back, -radius)
+      this.camera.position.y += 3.4 * this.zoom
+      this.camera.lookAt(origin.x + back.x * 8, origin.y + 0.35, origin.z + back.z * 8)
+      return
+    }
+    if (mode === 'side') {
+      const fwd = this.prograde.lengthSq() > 1e-6 ? this.prograde.clone().normalize() : this.aim.clone()
+      const side = new THREE.Vector3().crossVectors(fwd, new THREE.Vector3(0, 1, 0))
+      if (side.lengthSq() < 1e-6) side.set(1, 0, 0)
+      side.normalize()
+      this.camera.position.copy(origin).addScaledVector(side, 20 * this.zoom)
+      this.camera.position.y += 2.6
+      this.camera.lookAt(origin.x, origin.y + 0.2, origin.z)
+      return
+    }
+    if (mode === 'free') {
+      const radius = 18 * this.zoom
       const flat = Math.cos(this.orbitPitch)
       this.camera.position.set(
         origin.x + radius * flat * Math.sin(this.orbitYaw),

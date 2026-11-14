@@ -644,35 +644,11 @@ export function CruiseScreen() {
           </div>
         )}
         {transitioning && (
-          <div
-            className="entry-transition-overlay"
-            style={{
-              position: 'fixed',
-              inset: 0,
-              zIndex: 99999,
-              background: 'radial-gradient(circle at center, rgba(239, 68, 68, 0.45), rgba(15, 23, 42, 0.98) 75%)',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#f8fafc',
-              fontFamily: 'Orbitron, sans-serif',
-              animation: 'entryFadeIn 400ms ease forwards',
-              backdropFilter: 'blur(8px)',
-            }}
-          >
-            <div style={{ fontSize: '12px', letterSpacing: '0.25em', color: '#fb923c', marginBottom: '8px' }}>
-              ATMOSPHERIC ENTRY INTERFACE
-            </div>
-            <h2 style={{ fontSize: '24px', letterSpacing: '0.1em', margin: '0 0 12px 0', textTransform: 'uppercase', color: '#f1f5f9' }}>
-              {mission.destination} Atmospheric Ingress
-            </h2>
-            <p style={{ fontFamily: 'Space Mono, monospace', fontSize: '13px', color: '#94a3b8', maxWidth: '440px', textAlign: 'center', margin: '0 0 24px 0' }}>
-              Hypersonic ionization blackout in progress... De-orbit retro burn nominal. Altitude 125 km...
-            </p>
-            <div style={{ width: '240px', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
-              <div style={{ width: '100%', height: '100%', background: 'linear-gradient(90deg, #f97316, #ef4444)', animation: 'entryProgress 1.6s ease forwards' }} />
-            </div>
+          <div className="entry-transition-overlay" role="status" aria-live="polite">
+            <div className="entry-kicker">ATMOSPHERIC ENTRY INTERFACE</div>
+            <h2>{mission.destination} Atmospheric Ingress</h2>
+            <p>Hypersonic ionization blackout in progress... De-orbit retro burn nominal. Altitude 125 km...</p>
+            <div className="entry-progress"><i /></div>
           </div>
         )}
       </div>

@@ -458,8 +458,10 @@ export function buildMarsGround(siteId: string, drop = false): MarsGround {
   })
   const near = new THREE.Mesh(nearGeo, nearMat)
   near.name = 'mars-skin'
+  near.receiveShadow = true
   const far = new THREE.Mesh(farGeo, farMat)
   far.name = 'mars-skin'
+  far.receiveShadow = true
   root.add(near, far)
   if (drop) {
     const skirt = new THREE.Mesh(
@@ -518,6 +520,8 @@ export function buildMarsGround(siteId: string, drop = false): MarsGround {
     })
     mesh.instanceMatrix.needsUpdate = true
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+    mesh.castShadow = true
+    mesh.receiveShadow = true
     root.add(mesh)
     rockMeshes.push(mesh)
   })
@@ -587,6 +591,12 @@ export function buildMarsGround(siteId: string, drop = false): MarsGround {
       piece.object.position.y = stand(piece.x, piece.z) + 0.04
     }
   }
+  root.traverse((obj) => {
+    const mesh = obj as THREE.Mesh
+    if (!mesh.isMesh) return
+    mesh.receiveShadow = true
+    if (mesh !== near && mesh !== far) mesh.castShadow = true
+  })
   return {
     root,
     sky,

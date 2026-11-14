@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, ArrowRight, Camera, Crosshair, Fan, Flag, HelpCircle, House, Lock, Plus, Radio, Sun, Video } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Camera, CloudFog, Crosshair, Fan, Flag, HelpCircle, House, Lock, Plus, Radio, Sun, Video, WifiOff, Zap } from 'lucide-react'
 import { startLandingTutorial, startSurfaceTutorial } from './tutorial'
 import { fieldSamples, siteOf } from '../domain/campaign'
 import type { CampPhase, CampSave } from '../domain/save'
@@ -183,34 +183,36 @@ export function LandingScreen() {
         </span>
         <em>{hud?.prompt ?? 'Flying the entry.'}</em>
         {hud?.choice && (
-          <div className="group">
+          <div className="edl-choice" role="group" aria-label="Landing trajectory">
             <button type="button" className="word" onClick={() => worldRef.current?.choose('divert')}>Divert to clear ground</button>
             <button type="button" className="word" onClick={() => worldRef.current?.choose('hold')}>Hold the target</button>
           </div>
         )}
-        <Mix />
-        <button type="button" className="word slim" onClick={() => {
-          if (!armRewind) {
-            setArmRewind(true)
-            return
-          }
-          worldRef.current?.rewind()
-          useMission.getState().noteRewind()
-          setArmRewind(false)
-        }}>{armRewind ? 'Restore' : 'Rewind'}</button>
-        {armRewind && <button type="button" className="word slim" onClick={() => setArmRewind(false)}>Cancel</button>}
-        {hud && hud.phase !== 'fly' && (
-          <button type="button" className="word" onClick={() => {
-            if (hud.phase === 'down' || hud.phase === 'hard') {
-              useMission.getState().noteTouchdown(hud.phase === 'hard' ? 'hard' : 'soft', hud.heat, hud.offset)
-              bankSurface(hud.phase === 'hard' ? -12 : 8, hud.prompt)
-              go('surface')
-            } else finish()
-          }}>{hud.phase === 'crash' ? 'Debrief' : 'Get down'}</button>
-        )}
-        {hud && hud.phase !== 'fly' && hud.phase !== 'crash' && (
-          <span className="key-hint"><kbd>F</kbd><span>Get down</span></span>
-        )}
+        <div className="edl-actions">
+          <Mix />
+          <button type="button" className="word slim" onClick={() => {
+            if (!armRewind) {
+              setArmRewind(true)
+              return
+            }
+            worldRef.current?.rewind()
+            useMission.getState().noteRewind()
+            setArmRewind(false)
+          }}>{armRewind ? 'Restore' : 'Rewind'}</button>
+          {armRewind && <button type="button" className="word slim" onClick={() => setArmRewind(false)}>Cancel</button>}
+          {hud && hud.phase !== 'fly' && (
+            <button type="button" className="word" onClick={() => {
+              if (hud.phase === 'down' || hud.phase === 'hard') {
+                useMission.getState().noteTouchdown(hud.phase === 'hard' ? 'hard' : 'soft', hud.heat, hud.offset)
+                bankSurface(hud.phase === 'hard' ? -12 : 8, hud.prompt)
+                go('surface')
+              } else finish()
+            }}>{hud.phase === 'crash' ? 'Debrief' : 'Get down'}</button>
+          )}
+          {hud && hud.phase !== 'fly' && hud.phase !== 'crash' && (
+            <span className="key-hint"><kbd>F</kbd><span>Get down</span></span>
+          )}
+        </div>
         {showConfirmed && (
           <div className="landing-confirmed" role="status">
             <b>Landing confirmed</b>
@@ -348,8 +350,9 @@ export function SurfaceScreen() {
   }
 
   const world = worldRef.current
+  const sky = hud?.sky ?? 'Clear'
   return (
-    <div className="field-stage" ref={mount}>
+    <div className={`field-stage${sky === 'Dust' ? ' is-dust' : sky === 'Flare' ? ' is-flare' : ''}`} ref={mount}>
       {hud?.mode === 'eva' && <div className="crosshair" />}
       <div className="deck">
         {marsSurface && <CampBar camp={camp} onChange={setCamp} />}
@@ -367,46 +370,30 @@ export function SurfaceScreen() {
             <button type="button" aria-label="Next sol" onClick={() => world?.nextSol()}><Sun size={16} /></button>
             <Mix />
           </div>
+          {marsSurface && (
+            <div className="group weather-sim" role="group" aria-label="Simulate weather">
+              <button type="button" aria-pressed={hud?.weather === 'auto'} onClick={() => worldRef.current?.setWeather('auto')}>Auto</button>
+              <button type="button" aria-pressed={hud?.weather === 'clear'} onClick={() => worldRef.current?.setWeather('clear')}>Clear</button>
+              <button type="button" aria-pressed={hud?.weather === 'dust'} onClick={() => worldRef.current?.setWeather('dust')}><CloudFog size={14} /> Dust storm</button>
+              <button type="button" aria-pressed={hud?.weather === 'flare'} onClick={() => worldRef.current?.setWeather('flare')}><Zap size={14} /> Solar flare</button>
+              <button type="button" aria-pressed={hud?.weather === 'blackout'} onClick={() => worldRef.current?.setWeather('blackout')}><WifiOff size={14} /> Blackout</button>
+            </div>
+          )}
           <p className="deck-note">{hud?.prompt || siteLabel(hud)}</p>
           {hud?.mode === 'eva' && (
-            <span
-              style={{
-                fontFamily: 'Space Mono, monospace',
-                fontSize: '11px',
-                color: '#67e8f9',
-                background: 'rgba(8, 14, 26, 0.85)',
-                padding: '3px 8px',
-                borderRadius: '4px',
-                border: '1px solid rgba(103, 232, 249, 0.3)',
-                letterSpacing: '0.02em',
-              }}
-            >
+            <span className="eva-note">
               Mars atmosphere ~0.02 kg/m³. Vacuum acoustics: surface sound does not propagate; helmet radio active.
             </span>
           )}
-          {hud && hud.label && hud.label !== 'Clear' && (
-            <div
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                fontFamily: 'Space Mono, monospace',
-                fontSize: '11px',
-                color: hud.label === 'Dust' ? '#f59e0b' : hud.label === 'Flare' ? '#ef4444' : '#38bdf8',
-                background: 'rgba(15, 23, 42, 0.92)',
-                padding: '4px 10px',
-                borderRadius: '4px',
-                border: `1px solid ${hud.label === 'Dust' ? 'rgba(245, 158, 11, 0.5)' : hud.label === 'Flare' ? 'rgba(239, 68, 68, 0.5)' : 'rgba(56, 189, 248, 0.4)'}`,
-                boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
-              }}
-            >
+          {sky !== 'Clear' && (
+            <div className={`hazard-chip sky-${sky.toLowerCase()}`}>
               <AlertTriangle size={13} />
               <span>
-                {hud.label === 'Dust' && 'HAZARD: Martian dust storm in progress. Solar arrays degraded; visual sensors occluded.'}
-                {hud.label === 'Flare' && 'SOLAR EVENT: Coronal mass ejection detected. High particle flux; seek hab radiation shielding.'}
-                {hud.label === 'Blackout' && 'COMMUNICATION BLACKOUT: Orbital relay out of line-of-sight. DSN downlink telemetry buffered.'}
-                {hud.label === 'Fault' && 'DIAGNOSTIC: Transceiver telemetry parity glitch. Switching redundant bus.'}
-                {hud.label === 'Wheel' && 'TERRAIN CAUTION: Heavy regolith slippage; drivetrain drag increased.'}
+                {sky === 'Dust' && 'Dust storm. Arrays degraded. Walking and driving crawl until it clears.'}
+                {sky === 'Flare' && 'Solar flare. Particle flux is high. Stay near the lander.'}
+                {sky === 'Blackout' && 'Relay blackout. No line to Earth until the orbiter returns.'}
+                {sky === 'Fault' && 'Transceiver glitch. Switching the redundant bus.'}
+                {sky === 'Wheel' && 'Heavy regolith. Drivetrain drag is up.'}
               </span>
             </div>
           )}
@@ -439,9 +426,9 @@ export function SurfaceScreen() {
             <Read label="Dust" value={hud ? hud.dust.toFixed(2) : '0'} />
             <Read label="Held" value={hud ? String(hud.held) : '0'} />
             <Read label="Sent" value={hud ? String(hud.sent) : '0'} />
-            <span className="lamps" title={hud?.label ?? 'Clear'}>
+            <span className="lamps" title={sky}>
               <i className={hud?.link === false ? 'off' : 'idle'} />
-              <i className={hud && (hud.label === 'Dust' || hud.label === 'Flare' || hud.label === 'Fault' || hud.label === 'Wheel') ? 'off' : 'lit'} />
+              <i className={sky !== 'Clear' ? 'off' : 'lit'} />
             </span>
           </div>
           <div className="group">

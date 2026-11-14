@@ -25,7 +25,8 @@ function nozzleFlames(at: THREE.Vector3): THREE.Mesh[] {
 }
 
 function seat(model: THREE.Object3D, tall: number, stand: boolean): void {
-  model.rotation.set(stand ? 0 : -Math.PI / 2, 0, 0)
+  // Hull is built nose +Y. Cruise lies it down so the nose aims along local +Z (Earth → Mars).
+  model.rotation.set(stand ? 0 : Math.PI / 2, 0, 0)
   model.scale.setScalar(1)
   model.position.set(0, 0, 0)
   model.updateMatrixWorld(true)

@@ -1,11 +1,11 @@
-/* NASA Space Apps / AeroAestro Driver.js Theme */
+/* AeroAestro Driver.js tour — neutral #111 chrome */
 .driver-popover.nasa-tour-popover {
-  background: rgba(10, 16, 26, 0.96) !important;
+  background: #111111 !important;
   backdrop-filter: blur(14px);
-  border: 1px solid rgba(88, 196, 220, 0.35) !important;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.75), 0 0 20px rgba(88, 196, 220, 0.18) !important;
+  border: 1px solid rgba(244, 241, 234, 0.18) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.75) !important;
   border-radius: 8px !important;
-  color: #e6edf4 !important;
+  color: #f4f1ea !important;
   font-family: 'Rajdhani', sans-serif !important;
   padding: 16px !important;
   max-width: 360px !important;
@@ -17,19 +17,19 @@
   font-weight: 700 !important;
   letter-spacing: 0.08em !important;
   text-transform: uppercase !important;
-  color: #6ee7b7 !important;
+  color: #c9a227 !important;
   margin-bottom: 8px !important;
   display: flex !important;
   align-items: center !important;
   gap: 8px !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(244, 241, 234, 0.1);
   padding-bottom: 6px;
 }
 
 .driver-popover.nasa-tour-popover .driver-popover-description {
   font-size: 14px !important;
   line-height: 1.5 !important;
-  color: #cbd5e1 !important;
+  color: rgba(218, 218, 218, 0.82) !important;
   margin-bottom: 14px !important;
 }
 
@@ -43,7 +43,7 @@
 .driver-popover.nasa-tour-popover .driver-popover-progress-text {
   font-family: 'Space Mono', monospace !important;
   font-size: 11px !important;
-  color: #64748b !important;
+  color: rgba(218, 218, 218, 0.55) !important;
   letter-spacing: 0.05em;
 }
 
@@ -53,9 +53,9 @@
 }
 
 .driver-popover.nasa-tour-popover button.driver-popover-btn {
-  background: rgba(30, 41, 59, 0.9) !important;
-  border: 1px solid rgba(148, 163, 184, 0.3) !important;
-  color: #f1f5f9 !important;
+  background: #1a1a1a !important;
+  border: 1px solid rgba(244, 241, 234, 0.16) !important;
+  color: #f4f1ea !important;
   font-family: 'Orbitron', monospace !important;
   font-size: 11px !important;
   font-weight: 600 !important;
@@ -68,34 +68,34 @@
 }
 
 .driver-popover.nasa-tour-popover button.driver-popover-btn:hover {
-  background: rgba(56, 189, 248, 0.25) !important;
-  border-color: #38bdf8 !important;
-  color: #38bdf8 !important;
-}
-
-.driver-popover.nasa-tour-popover button.driver-popover-next-btn {
-  background: linear-gradient(135deg, #0284c7, #0369a1) !important;
-  border: 1px solid #38bdf8 !important;
+  background: #242424 !important;
+  border-color: rgba(244, 241, 234, 0.28) !important;
   color: #ffffff !important;
 }
 
+.driver-popover.nasa-tour-popover button.driver-popover-next-btn {
+  background: #f4f1ea !important;
+  border: 1px solid #f4f1ea !important;
+  color: #111111 !important;
+}
+
 .driver-popover.nasa-tour-popover button.driver-popover-next-btn:hover {
-  background: linear-gradient(135deg, #0369a1, #0284c7) !important;
-  box-shadow: 0 0 10px rgba(56, 189, 248, 0.45) !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 12px rgba(244, 241, 234, 0.25) !important;
 }
 
 .driver-popover.nasa-tour-popover .driver-popover-arrow-side-left {
-  border-right-color: rgba(10, 16, 26, 0.96) !important;
+  border-right-color: #111111 !important;
 }
 
 .driver-popover.nasa-tour-popover .driver-popover-arrow-side-right {
-  border-left-color: rgba(10, 16, 26, 0.96) !important;
+  border-left-color: #111111 !important;
 }
 
 .driver-popover.nasa-tour-popover .driver-popover-arrow-side-top {
-  border-bottom-color: rgba(10, 16, 26, 0.96) !important;
+  border-bottom-color: #111111 !important;
 }
 
 .driver-popover.nasa-tour-popover .driver-popover-arrow-side-bottom {
-  border-top-color: rgba(10, 16, 26, 0.96) !important;
+  border-top-color: #111111 !important;
 }

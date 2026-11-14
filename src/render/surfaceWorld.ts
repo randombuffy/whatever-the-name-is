@@ -16,6 +16,7 @@ import { viewRatio } from './pixels'
 
 export type SurfaceCam = 'chase' | 'mast' | 'overhead'
 export type SurfaceMode = 'drive' | 'eva' | 'scout'
+export type WeatherSim = 'auto' | 'clear' | 'dust' | 'flare' | 'blackout'
 
 export interface SurfaceSetup {
   missionId: string
@@ -61,6 +62,8 @@ export interface SurfaceReadout {
   wheels: number
   crisis: '' | 'power' | 'comm'
   lost: boolean
+  sky: string
+  weather: WeatherSim
 }
 
 const CHUNK = 36
@@ -116,6 +119,9 @@ export class SurfaceWorld {
   private sky: THREE.Mesh
   private dust: THREE.Points
   private dustMat: THREE.PointsMaterial
+  private stormDust: THREE.Points
+  private stormDustMat: THREE.PointsMaterial
+  private blob: THREE.Mesh
   private route: THREE.Line
   private sun: THREE.DirectionalLight
   private fill!: THREE.AmbientLight
@@ -169,6 +175,8 @@ export class SurfaceWorld {
   private dead = false
   private cargo = 8
   private globeR = 0
+  private clock = 0
+  private weatherSim: WeatherSim = 'auto'
   private readonly up = new THREE.Vector3()
   private readonly fwd = new THREE.Vector3()
   private readonly right = new THREE.Vector3()
@@ -201,29 +209,29 @@ export class SurfaceWorld {
     this.renderer.setSize(canvas.clientWidth || 1, canvas.clientHeight || 1)
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
-    const marsEarly = setup.missionId === 'mars' || setup.missionId === 'custom'
-    this.renderer.shadowMap.enabled = !marsEarly
+    this.renderer.shadowMap.enabled = true
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
     const mars = setup.missionId === 'mars' || setup.missionId === 'custom'
     this.scene.background = new THREE.Color(mars ? 0x8a6a58 : this.colors.skyTop)
     this.scene.fog = mars
       ? new THREE.FogExp2(0xb8957c, 0.0042)
       : new THREE.Fog(this.colors.fog, setup.air ? 70 : 140, setup.air ? 640 : 1600)
-    this.fill = new THREE.AmbientLight(mars ? 0xf0d5bd : 0xfff2e0, mars ? 0.12 : 0.72)
+    this.fill = new THREE.AmbientLight(mars ? 0xf0d5bd : 0xfff2e0, mars ? 0.07 : 0.72)
     this.scene.add(this.fill)
-    this.hemi = new THREE.HemisphereLight(mars ? 0xcfb39b : this.colors.skyHorizon, mars ? 0x4f3a2e : this.colors.low, mars ? 0.5 : 0.7)
+    this.hemi = new THREE.HemisphereLight(mars ? 0xcfb39b : this.colors.skyHorizon, mars ? 0x4f3a2e : this.colors.low, mars ? 0.34 : 0.7)
     this.scene.add(this.hemi)
-    this.sun = new THREE.DirectionalLight(mars ? 0xfff0dd : 0xfff1df, mars ? 2.7 : 2.9)
-    if (mars) this.renderer.toneMappingExposure = 1.12
-    this.sun.castShadow = !mars
-    this.sun.shadow.mapSize.set(1024, 1024)
-    this.sun.shadow.camera.near = 2
-    this.sun.shadow.camera.far = 140
-    this.sun.shadow.camera.left = -48
-    this.sun.shadow.camera.right = 48
-    this.sun.shadow.camera.top = 48
-    this.sun.shadow.camera.bottom = -48
-    this.sun.shadow.bias = -0.0004
+    this.sun = new THREE.DirectionalLight(mars ? 0xfff4e6 : 0xfff1df, mars ? 3.55 : 2.9)
+    if (mars) this.renderer.toneMappingExposure = 1.18
+    this.sun.castShadow = true
+    this.sun.shadow.mapSize.set(2048, 2048)
+    this.sun.shadow.camera.near = 1
+    this.sun.shadow.camera.far = 160
+    this.sun.shadow.camera.left = -22
+    this.sun.shadow.camera.right = 22
+    this.sun.shadow.camera.top = 22
+    this.sun.shadow.camera.bottom = -22
+    this.sun.shadow.bias = -0.0006
+    this.sun.shadow.normalBias = 0.035
     this.scene.add(this.sun, this.sunTarget)
     this.sun.target = this.sunTarget
     this.sky = this.makeSky()
@@ -233,7 +241,16 @@ export class SurfaceWorld {
     this.scene.add(this.chunkRoot)
     this.dust = this.makeDust()
     this.dustMat = this.dust.material as THREE.PointsMaterial
-    this.scene.add(this.dust)
+    this.stormDust = this.makeStormDust()
+    this.stormDustMat = this.stormDust.material as THREE.PointsMaterial
+    this.scene.add(this.dust, this.stormDust)
+    this.blob = new THREE.Mesh(
+      new THREE.CircleGeometry(0.72, 22),
+      new THREE.MeshBasicMaterial({ color: 0x1a100c, transparent: true, opacity: 0.58, depthWrite: false }),
+    )
+    this.blob.rotation.x = -Math.PI / 2
+    this.blob.renderOrder = 1
+    this.scene.add(this.blob)
     this.route = new THREE.Line(
       new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
       new THREE.LineBasicMaterial({ color: 0xf2c14e }),
@@ -246,6 +263,11 @@ export class SurfaceWorld {
     attachOrbiter(this.lander, 5.2, true, undefined, setup.craft, setup.missionId)
     this.lander.traverse((obj) => {
       if (obj.userData.nozzle || /plume|flame/i.test(obj.name)) obj.visible = false
+      const mesh = obj as THREE.Mesh
+      if (mesh.isMesh) {
+        mesh.castShadow = true
+        mesh.receiveShadow = true
+      }
     })
     this.scene.add(this.rover, this.suit, this.heli)
     if (setup.roverMassKg !== null) this.loadRover()
@@ -337,6 +359,23 @@ export class SurfaceWorld {
 
   cycleCam(): void {
     this.cam = this.cam === 'chase' ? 'mast' : this.cam === 'mast' ? 'overhead' : 'chase'
+  }
+
+  setWeather(kind: WeatherSim): void {
+    this.weatherSim = kind
+    if (kind === 'dust') {
+      this.ping('storm')
+      this.say('Regional dust storm. Visibility gone. Walk and drive crawl.')
+    } else if (kind === 'flare') {
+      this.ping('storm')
+      this.say('Solar particle event. Seek the lander. Movement is cautious.')
+    } else if (kind === 'blackout') {
+      this.say('Relay blackout. No line to Earth until the orbiter returns.')
+    } else if (kind === 'clear') {
+      this.say('Skies forced clear.')
+    } else {
+      this.say('Weather follows the sol clock.')
+    }
   }
 
   togglePark(): void {
@@ -571,6 +610,7 @@ export class SurfaceWorld {
 
   step(dt: number): SurfaceReadout {
     const stepDt = Math.min(0.05, Math.max(0, dt))
+    this.clock += stepDt
     if (!this.introDone) {
       this.intro += stepDt
       if (this.intro > 3.2 || this.keys.size > 0) this.introDone = true
@@ -593,7 +633,8 @@ export class SurfaceWorld {
       this.sky.position.set(focus.x, 0, focus.z)
       this.sun.position.set(focus.x + 40, 48, focus.z + 18)
     }
-    this.sunTarget.position.set(focus.x, 0, focus.z)
+    this.sunTarget.position.set(focus.x, this.heightAt(focus.x, focus.z), focus.z)
+    this.sun.updateMatrixWorld()
     this.renderer.render(this.scene, this.camera)
     return this.readout()
   }
@@ -631,6 +672,9 @@ export class SurfaceWorld {
     }
     if (this.energy <= 0 || this.crisis || this.lost) throttle = 0
     throttle *= Math.max(0.25, this.wheels / 100)
+    const sky = this.condition()
+    if (sky.storm) throttle *= 0.18
+    else if (sky.flare) throttle *= 0.62
     const next = stepDrive(this.drive, {
       throttle,
       steer,
@@ -655,7 +699,10 @@ export class SurfaceWorld {
     const strafe = this.keys.has('a') ? 1 : this.keys.has('d') ? -1 : 0
     const moving = forward !== 0 || strafe !== 0
     const gravity = Math.max(0.04, this.setup.gravity)
-    const pace = (this.oxygen > 8 ? 6.4 : 3.2) * Math.sqrt(gravity / 3.71)
+    const sky = this.condition()
+    let pace = (this.oxygen > 8 ? 6.4 : 3.2) * Math.sqrt(gravity / 3.71)
+    if (sky.storm) pace *= 0.16
+    else if (sky.flare) pace *= 0.6
     const grade = this.grade(this.foot.x, this.foot.z)
     const slope = Math.hypot(grade.x, grade.z)
     const nx = this.foot.x + (Math.sin(this.lookYaw) * forward + Math.cos(this.lookYaw) * strafe) * pace * (1 - Math.min(0.65, slope)) * dt
@@ -673,7 +720,7 @@ export class SurfaceWorld {
     }
     if (moving) this.walk += dt * (4.2 + gravity)
     else this.walk *= Math.max(0, 1 - dt * 4)
-    if (this.keys.has(' ') && this.hop <= 0 && this.hopV <= 0) {
+    if (this.keys.has(' ') && this.hop <= 0 && this.hopV <= 0 && !sky.storm) {
       const hang = Math.sqrt(2 * gravity * 2.4)
       this.hopV = Math.min(4.2, Math.max(hang, 2.1 * Math.sqrt(3.71 / gravity)))
     }
@@ -694,7 +741,8 @@ export class SurfaceWorld {
     const forward = this.keys.has('w') ? 1 : this.keys.has('s') ? -0.6 : 0
     const steer = this.keys.has('a') ? 1 : this.keys.has('d') ? -1 : 0
     this.lookYaw += steer * dt * 0.8
-    const speed = this.energy > 0 ? 7 : 0
+    const sky = this.condition()
+    const speed = this.energy > 0 ? (sky.storm ? 1.4 : sky.flare ? 4.2 : 7) : 0
     const nx = this.heliAt.x + Math.sin(this.lookYaw) * forward * speed * dt
     const nz = this.heliAt.z + Math.cos(this.lookYaw) * forward * speed * dt
     if (!this.hits(nx, nz, 0.4, 8)) {
@@ -731,13 +779,23 @@ export class SurfaceWorld {
     else this.notice = ''
     const fog = this.scene.fog
     if (fog instanceof THREE.FogExp2) {
-      fog.density = sky.storm ? 0.013 : 0.0042
-      fog.color.set(sky.storm ? 0x9f7660 : 0xb8957c)
+      fog.density = sky.storm ? 0.028 : sky.flare ? 0.007 : 0.0042
+      fog.color.set(sky.storm ? 0x8a5c48 : sky.flare ? 0xc48a62 : 0xb8957c)
     } else if (fog instanceof THREE.Fog) {
-      fog.near = sky.storm ? 28 : this.setup.air ? 70 : 140
-      fog.far = sky.storm ? 240 : this.setup.air ? 1800 : 1600
+      fog.near = sky.storm ? 12 : this.setup.air ? 70 : 140
+      fog.far = sky.storm ? 90 : this.setup.air ? 1800 : 1600
     }
-    this.dustMat.opacity = sky.storm ? 0.55 : 0.12 + sky.dust * 0.22
+    this.dustMat.opacity = sky.storm ? 0.72 : 0.12 + sky.dust * 0.22
+    this.dustMat.size = sky.storm ? 0.14 : 0.05
+    this.stormDust.visible = sky.storm || sky.flare
+    this.stormDustMat.opacity = sky.storm ? 0.7 : sky.flare ? 0.28 : 0
+    const mars = this.setup.missionId === 'mars' || this.setup.missionId === 'custom'
+    if (mars) {
+      this.sun.intensity = sky.storm ? 0.95 : sky.flare ? 4.4 : 3.55
+      this.fill.intensity = sky.storm ? 0.28 : sky.flare ? 0.14 : 0.07
+      this.hemi.intensity = sky.storm ? 0.55 : 0.34
+      this.scene.background = new THREE.Color(sky.storm ? 0x6a4a3a : sky.flare ? 0xa86848 : 0x8a6a58)
+    }
   }
 
   private poseVehicles(dt: number): void {
@@ -770,13 +828,15 @@ export class SurfaceWorld {
     const right = new THREE.Vector3().crossVectors(up, ahead).normalize()
     this.basis.makeBasis(right, up, ahead)
     this.suit.quaternion.setFromRotationMatrix(this.basis)
+    const sky = this.condition()
+    if (sky.storm) this.suit.rotateZ(Math.sin(this.clock * 9.4) * 0.1)
     const climbing = false
     this.suit.visible = this.mode === 'eva'
     this.rover.visible = this.setup.roverMassKg !== null
     if (this.walkBody) {
       const moving = this.keys.has('w') || this.keys.has('s') || this.keys.has('a') || this.keys.has('d')
       this.walkBody.setClip(this.hop > 0.04 ? 'air' : climbing || moving ? 'walk' : 'idle')
-      this.walkBody.tick(dt)
+      this.walkBody.tick(sky.storm ? dt * 0.42 : dt)
     }
     const homeY = this.heightAt(7, 5)
     if (this.mode === 'scout') {
@@ -786,6 +846,14 @@ export class SurfaceWorld {
       this.heli.position.set(7, homeY, 5)
       this.heli.rotation.y = 0.4
     }
+    const blobAt = this.mode === 'eva' ? this.foot : this.mode === 'scout' ? this.heliAt : this.drive
+    const blobY = this.heightAt(blobAt.x, blobAt.z) + 0.04
+    this.blob.position.set(blobAt.x, blobY, blobAt.z)
+    const blobScale = this.mode === 'eva' ? (this.hop > 0.04 ? 0.35 : 1) : this.mode === 'drive' ? 1.65 : 0.9
+    this.blob.scale.setScalar(blobScale)
+    const blobMat = this.blob.material as THREE.MeshBasicMaterial
+    blobMat.opacity = sky.storm ? 0.22 : this.mode === 'eva' ? 0.62 : 0.48
+    this.blob.visible = this.mode !== 'scout'
   }
 
   private frame(): void {
@@ -796,14 +864,10 @@ export class SurfaceWorld {
     if (this.cam === 'overhead') {
       this.camera.position.set(focus.x, y + 26, focus.z + 8)
       this.camera.lookAt(focus.x, y, focus.z)
-      return
-    }
-    if (this.mode === 'scout') {
+    } else if (this.mode === 'scout') {
       this.camera.position.set(focus.x - Math.sin(this.lookYaw) * 6, y + 9, focus.z - Math.cos(this.lookYaw) * 6)
       this.camera.lookAt(focus.x, y + 7.5, focus.z)
-      return
-    }
-    if (this.mode === 'eva' || this.cam === 'chase') {
+    } else if (this.mode === 'eva' || this.cam === 'chase') {
       const yaw = this.mode === 'eva' ? this.lookYaw : this.drive.yaw
       const glance = this.mode === 'eva' ? 0 : this.orbitYaw
       const back = this.mode === 'eva' ? this.gap : this.gap + 2.2
@@ -814,17 +878,21 @@ export class SurfaceWorld {
       this.camera.position.copy(eye).addScaledVector(up, lift).addScaledVector(backDir, back)
       const look = eye.clone().addScaledVector(up, 0.8 + this.lookPitch).addScaledVector(new THREE.Vector3(Math.sin(yaw + glance), 0, Math.cos(yaw + glance)), 4)
       this.camera.lookAt(look)
-      return
+    } else {
+      const yaw = this.drive.yaw + this.orbitYaw
+      const eyeY = y + 2.05
+      this.camera.position.set(focus.x + Math.sin(this.drive.yaw) * 0.35, eyeY, focus.z + Math.cos(this.drive.yaw) * 0.35)
+      const lookDist = Math.cos(this.lookPitch)
+      this.camera.lookAt(
+        this.camera.position.x + Math.sin(yaw) * lookDist,
+        eyeY + Math.sin(this.lookPitch),
+        this.camera.position.z + Math.cos(yaw) * lookDist,
+      )
     }
-    const yaw = this.drive.yaw + this.orbitYaw
-    const eyeY = y + 2.05
-    this.camera.position.set(focus.x + Math.sin(this.drive.yaw) * 0.35, eyeY, focus.z + Math.cos(this.drive.yaw) * 0.35)
-    const lookDist = Math.cos(this.lookPitch)
-    this.camera.lookAt(
-      this.camera.position.x + Math.sin(yaw) * lookDist,
-      eyeY + Math.sin(this.lookPitch),
-      this.camera.position.z + Math.cos(yaw) * lookDist,
-    )
+    if (this.condition().storm) {
+      this.camera.position.x += Math.sin(this.clock * 21) * 0.11
+      this.camera.position.y += Math.cos(this.clock * 17) * 0.07
+    }
   }
 
   private readout(): SurfaceReadout {
@@ -843,6 +911,8 @@ export class SurfaceWorld {
       ? 'On Jezero crater. WASD or arrows to walk. F boards the rover. E picks a sample.'
       : 'On the surface. WASD or arrows to walk. F boards the rover. E picks a sample.'
     else if (this.notice) prompt = this.notice
+    else if (sky.storm) prompt = 'Dust storm. Visibility gone. WASD crawls. Wait it out or reach the lander.'
+    else if (sky.flare) prompt = 'Solar flare. Particle flux is high. Keep close to the lander.'
     else if (this.mode === 'drive' && this.energy <= 0) prompt = 'Batteries empty. Wait in the sun.'
     else if (this.mode === 'drive' && this.parked) prompt = 'Parked. WASD drive. F get down.'
     else if (this.mode === 'drive' && slope > 16 && Math.abs(this.drive.speed) < 0.15 && this.keys.has('w')) prompt = 'Grade too steep.'
@@ -856,7 +926,7 @@ export class SurfaceWorld {
     const held = this.notes.filter((item) => !item.sent)
     const chosen = held.length > 0 ? held[Math.abs(this.pick) % held.length] : null
     return {
-      speed: this.mode === 'drive' ? this.drive.speed : this.mode === 'scout' ? 7 : walking ? 6.4 : 0,
+      speed: this.mode === 'drive' ? this.drive.speed : this.mode === 'scout' ? (sky.storm ? 1.4 : 7) : walking ? (sky.storm ? 1 : sky.flare ? 3.8 : 6.4) : 0,
       slopeDeg: slope,
       energy: this.energy,
       oxygen: this.oxygen,
@@ -879,15 +949,22 @@ export class SurfaceWorld {
       wheels: this.wheels,
       crisis: this.crisis,
       lost: this.lost,
+      sky: sky.label,
+      weather: this.weatherSim,
     }
   }
 
   private condition() {
     const sky = fieldSol(this.sol, this.setup.air, this.setup.steady, this.setup.difficulty)
-    const fault = sky.fault || (this.sol === 1 && this.setup.entryFault)
-    const wheel = this.setup.damaged ? Math.max(sky.wheel, 0.55) : sky.wheel
-    const label = sky.label !== 'Clear' ? sky.label : fault ? 'Fault' : wheel > 0.2 ? 'Wheel' : 'Clear'
-    return { ...sky, fault, wheel, label }
+    let next = { ...sky }
+    if (this.weatherSim === 'clear') next = { storm: false, dust: 0.04, comms: true, wheel: 0, fault: false, flare: false, label: 'Clear' }
+    else if (this.weatherSim === 'dust') next = { storm: true, dust: 0.88, comms: true, wheel: 0.4, fault: false, flare: false, label: 'Dust' }
+    else if (this.weatherSim === 'flare') next = { storm: false, dust: 0.22, comms: false, wheel: 0, fault: false, flare: true, label: 'Flare' }
+    else if (this.weatherSim === 'blackout') next = { storm: false, dust: 0.08, comms: false, wheel: 0, fault: false, flare: false, label: 'Blackout' }
+    const fault = next.fault || (this.sol === 1 && this.setup.entryFault && this.weatherSim === 'auto')
+    const wheel = this.setup.damaged ? Math.max(next.wheel, 0.55) : next.wheel
+    const label = next.label !== 'Clear' ? next.label : fault ? 'Fault' : wheel > 0.2 ? 'Wheel' : 'Clear'
+    return { ...next, fault, wheel, label }
   }
 
   private roomFor(bytes: number): boolean {
@@ -1188,23 +1265,41 @@ export class SurfaceWorld {
   }
 
   private poseDust(x: number, z: number, dt: number): void {
+    const sky = this.condition()
     const pos = this.dust.geometry.getAttribute('position') as THREE.BufferAttribute
     const speed = this.mode === 'drive' ? Math.abs(this.drive.speed) : 0.2
+    const drift = sky.storm ? 9.5 : 0.35 + speed * 0.35
+    const lift = sky.storm ? 2.4 : 0.15 + speed * 0.35
     for (let i = 0; i < pos.count; i++) {
-      let px = pos.getX(i) + x
-      let py = pos.getY(i) + dt * (0.15 + speed * 0.35)
-      let pz = pos.getZ(i) + z
-      if (py > 1.6 || Math.hypot(px - x, pz - z) > 18) {
+      let px = pos.getX(i) + x + dt * drift
+      let py = pos.getY(i) + dt * lift
+      let pz = pos.getZ(i) + z + dt * (sky.storm ? Math.sin(this.clock * 3 + i) * 1.4 : 0)
+      if (py > (sky.storm ? 6 : 1.6) || Math.hypot(px - x, pz - z) > (sky.storm ? 28 : 18)) {
         const a = shade(i, this.sol) * Math.PI * 2
-        const r = 2 + shade(i, 4) * 12
+        const r = 2 + shade(i, 4) * (sky.storm ? 22 : 12)
         px = x + Math.cos(a) * r
-        py = 0.12 + shade(i, 8) * 0.9
+        py = 0.12 + shade(i, 8) * (sky.storm ? 3.2 : 0.9)
         pz = z + Math.sin(a) * r
       }
       pos.setXYZ(i, px - x, py, pz - z)
     }
     this.dust.position.set(x, this.heightAt(x, z), z)
     pos.needsUpdate = true
+    const storm = this.stormDust.geometry.getAttribute('position') as THREE.BufferAttribute
+    if (this.stormDust.visible) {
+      const gust = (sky.storm ? 22 : 8) * dt
+      for (let i = 0; i < storm.count; i++) {
+        let sx = storm.getX(i) + gust
+        let sy = storm.getY(i)
+        let sz = storm.getZ(i) + Math.sin(this.clock * 2.2 + i * 0.15) * dt * 3
+        if (sx > 36) sx = -36
+        if (sz > 36) sz = -36
+        if (sz < -36) sz = 36
+        storm.setXYZ(i, sx, sy, sz)
+      }
+      storm.needsUpdate = true
+      this.stormDust.position.set(x, this.heightAt(x, z), z)
+    }
   }
 
   private seat(obj: THREE.Object3D, x: number, z: number): void {
@@ -1260,6 +1355,13 @@ export class SurfaceWorld {
     loader.load('/3d/walking_astronaut.glb', (gltf) => {
       if (this.dead) return
       this.walkBody = bindWalkAstronaut(gltf, 1.85)
+      this.walkBody.root.traverse((obj) => {
+        const mesh = obj as THREE.Mesh
+        if (mesh.isMesh) {
+          mesh.castShadow = true
+          mesh.receiveShadow = true
+        }
+      })
       this.suit.add(this.walkBody.root)
     })
   }
@@ -1314,7 +1416,7 @@ export class SurfaceWorld {
   }
 
   private makeDust(): THREE.Points {
-    const count = 40
+    const count = 160
     const positions = new Float32Array(count * 3)
     for (let i = 0; i < count; i++) {
       const a = shade(i, 2) * Math.PI * 2
@@ -1326,6 +1428,28 @@ export class SurfaceWorld {
     const geo = new THREE.BufferGeometry()
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
     return new THREE.Points(geo, new THREE.PointsMaterial({ color: this.colors.dust, size: 0.05, transparent: true, opacity: 0.28, depthWrite: false }))
+  }
+
+  private makeStormDust(): THREE.Points {
+    const count = 280
+    const positions = new Float32Array(count * 3)
+    for (let i = 0; i < count; i++) {
+      positions[i * 3] = ((i * 47) % 72) - 36
+      positions[i * 3 + 1] = 0.4 + ((i * 13) % 28) * 0.22
+      positions[i * 3 + 2] = ((i * 29) % 72) - 36
+    }
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    const points = new THREE.Points(geo, new THREE.PointsMaterial({
+      color: 0xc4a08a,
+      size: 0.22,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+    }))
+    points.visible = false
+    points.frustumCulled = false
+    return points
   }
 
   private onClick = () => {
