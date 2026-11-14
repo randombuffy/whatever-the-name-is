@@ -1,43 +1,26 @@
 import { useEffect, useRef, useState, useMemo } from 'react'
 import {
-  AlertTriangle,
-  ArrowDown,
   ArrowLeft,
-  ArrowRight,
-  ArrowUp,
   Battery,
   Boxes,
-  ChevronDown,
-  ChevronUp,
-  ChevronsDown,
-  ChevronsUp,
-  CircleAlert,
-  CircleCheck,
-  CheckCircle2,
   Clock,
   Compass,
   Crosshair,
-  DollarSign,
   Droplets,
   Gauge,
   Info,
   List,
   Maximize2,
-  Move3d,
   Orbit,
   Pause,
   Flag,
   PenLine,
   Play,
   Radio,
-  Redo2,
   Rocket,
   RotateCcw,
   Route,
   Sparkles,
-  Undo2,
-  Wand2,
-  Weight,
   Zap,
 } from 'lucide-react'
 import { CATALOG, getSpec } from '../domain/catalog'
@@ -46,7 +29,7 @@ import { bits, clock, db, kelvin, kg, money, mps, percent, watts } from '../doma
 import { lunarTransfer, marsTransfer, solarTransfer } from '../domain/orbit'
 import { sliderToWarp, warpLabel, warpToSlider } from '../domain/time'
 import { evaluate, requiredBurns } from '../domain/validate'
-import type { ComponentSpec, EngineeringIssue, EngineeringReport, MissionDef, MissionOutcome, MissionPlan, SpacecraftConfig } from '../domain/types'
+import type { ComponentSpec, EngineeringIssue, MissionDef, MissionOutcome, MissionPlan } from '../domain/types'
 import { loadMarsPhoto, loadNasa, loadSolarNote, type MarsFrame, type NasaContext, type SolarNote } from '../nasa/client'
 import { useActiveMission, useMission } from '../store/useMission'
 import { graphicsLabel } from '../render/world'
@@ -56,11 +39,10 @@ import { Dock, Glass, Meter, MissionTitle, ScoreRing, Sheet, SpotButton } from '
 import { PartPreview } from './partPreview'
 import { DestModel } from './DestStill'
 import { TitleBanner } from './TitleBanner'
-import { FAMILIES, SECTIONS, familyOf } from './families'
-import { CATEGORIES, type UiCategory, getPartCategory, JARGON_TOOLTIPS } from './themeTokens'
-import { PartCard } from './PartCard'
+import { familyOf } from './families'
+import { JARGON_TOOLTIPS, plainSpec } from './themeTokens'
 
-const BUILD_TABS: { id: UiCategory | 'all'; label: string }[] = [
+const BUILD_TABS: { id: string; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'structure', label: 'Structure' },
   { id: 'propulsion', label: 'Propulsion' },
@@ -71,8 +53,6 @@ const BUILD_TABS: { id: UiCategory | 'all'; label: string }[] = [
   { id: 'thermal', label: 'Thermal' },
   { id: 'landing', label: 'Landing' },
 ]
-
-const EXTRA_PARTS = new Set(['magnetometer', 'particle', 'payload', 'soil', 'rock', 'radiation', 'arm', 'cache'])
 
 const SHORT: Record<string, string> = {
   lunar: 'Moon',
@@ -89,15 +69,6 @@ function shortMoney(usd: number): string {
   if (abs >= 1e6) return `${sign}$${Math.round(abs / 1e6)}M`
   if (abs >= 1e3) return `${sign}$${Math.round(abs / 1e3)}k`
   return `${sign}$${Math.round(abs)}`
-}
-
-function withoutLine(craft: SpacecraftConfig, mission: MissionDef, plan: MissionPlan, instanceId: string, report: EngineeringReport): string {
-  const alt = evaluate({ ...craft, parts: craft.parts.filter((part) => part.instanceId !== instanceId) }, mission, plan)
-  const mass = report.mass.totalKg - alt.mass.totalKg
-  const dv = alt.propulsion.dvMps - report.propulsion.dvMps
-  const massText = `${Math.abs(mass).toFixed(0)} kg ${mass >= 0 ? 'lighter' : 'heavier'}`
-  const dvText = `${Math.abs(dv).toFixed(0)} m/s ${dv >= 0 ? 'more' : 'less'} delta-v`
-  return `Without this part the ship is ${massText} and has ${dvText}.`
 }
 
 function facts(spec: ComponentSpec): { label: string; value: string }[] {
@@ -294,38 +265,38 @@ export function BriefScreen() {
   )
 }
 
+const isLandingPart = (specId: string) => ['heatshield', 'chute', 'descent', 'legs'].includes(specId)
+
 export function DesignScreen() {
   const craft = useMission((state) => state.craft)
   const plan = useMission((state) => state.plan)
   const mission = useActiveMission()
-  const selectedId = useMission((state) => state.selectedId)
   const selectedInstanceId = useMission((state) => state.selectedInstanceId)
   const addPart = useMission((state) => state.addPart)
   const removePart = useMission((state) => state.removePart)
   const setFill = useMission((state) => state.setFill)
   const setSpec = useMission((state) => state.setSpec)
-  const selectPart = useMission((state) => state.selectPart)
   const selectInstance = useMission((state) => state.selectInstance)
   const nudgePart = useMission((state) => state.nudgePart)
   const resetOffset = useMission((state) => state.resetOffset)
   const togglePart = useMission((state) => state.togglePart)
   const generate = useMission((state) => state.generate)
-  const autoFix = useMission((state) => state.autoFix)
   const undo = useMission((state) => state.undo)
   const redo = useMission((state) => state.redo)
   const arrange = useMission((state) => state.arrange)
   const canUndo = useMission((state) => (state.craftPast?.length ?? 0) > 0)
   const canRedo = useMission((state) => (state.craftFuture?.length ?? 0) > 0)
   const rename = useMission((state) => state.rename)
+  const autoFix = useMission((state) => state.autoFix)
   const go = useMission((state) => state.go)
-  const [filter, setFilter] = useState<UiCategory | 'all'>('structure')
-  const [pick, setPick] = useState<Record<string, number>>({})
+  const [filter, setFilter] = useState<string>('structure')
   const [callSign, setCallSign] = useState(craft?.name ?? 'Surveyor')
   const [specId, setSpecId] = useState<string | null>(null)
   const [advanced, setAdvanced] = useState(false)
-  const [moreParts, setMoreParts] = useState(false)
   const [issuesOpen, setIssuesOpen] = useState(false)
+  const [passedOpen, setPassedOpen] = useState(false)
   const [fittedOpen, setFittedOpen] = useState(true)
+  const [deltaNotice, setDeltaNotice] = useState<string | null>(null)
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -362,406 +333,543 @@ export function DesignScreen() {
     const counts: Record<string, number> = {}
     if (!craft) return counts
     for (const p of craft.parts) {
-      const spec = CATALOG.find((c) => c.id === p.specId)
-      if (spec) {
-        const cat = getPartCategory(spec)
-        counts[cat] = (counts[cat] ?? 0) + 1
-        counts['all'] = (counts['all'] ?? 0) + 1
+      if (isLandingPart(p.specId)) {
+        counts['landing'] = (counts['landing'] ?? 0) + 1
+      } else {
+        const itemSpec = CATALOG.find((c) => c.id === p.specId)
+        if (itemSpec) {
+          counts[itemSpec.subsystem] = (counts[itemSpec.subsystem] ?? 0) + 1
+        }
       }
+      counts['all'] = (counts['all'] ?? 0) + 1
     }
     return counts
   }, [craft])
 
   if (!craft || !mission || !plan) return null
   const report = evaluate(craft, mission, plan)
-  const sections = SECTIONS.map((section) => ({
-    label: section.label,
-    families: section.familyIds
-      .map((id) => FAMILIES.find((family) => family.id === id))
-      .filter((family): family is NonNullable<typeof family> => {
-        if (!family) return false
-        const sampleSpec = CATALOG.find((e) => e.id === family.ids[0])
-        if (!sampleSpec) return false
-        return filter === 'all' || getPartCategory(sampleSpec) === filter
-      }),
-    singles: section.singleIds
-      .map((id) => CATALOG.find((item) => item.id === id))
-      .filter((item): item is ComponentSpec => {
-        if (!item) return false
-        const matchesFilter = filter === 'all' || getPartCategory(item) === filter
-        const matchesExtra = moreParts || !EXTRA_PARTS.has(item.id) || filter === 'science'
-        return matchesFilter && matchesExtra
-      }),
-  })).filter((section) => section.families.length > 0 || section.singles.length > 0)
-  const spec = CATALOG.find((item) => item.id === specId) ?? null
   const hard = report.issues.filter((issue) => issue.severity === 'hard').length
   const generation = report.power.constantGenerationW + report.power.generationAt1AuW / (mission.destinationAu ** 2)
   const selected = craft.parts.find((part) => part.instanceId === selectedInstanceId)
-  const fitOrSelect = (specId: string) => {
-    const fitted = craft.parts.find((part) => part.specId === specId && part.enabled) ?? craft.parts.find((part) => part.specId === specId)
+
+  // Delta effect notification on mass/dv change
+  const prevMassRef = useRef(report.mass.totalKg)
+  const prevDvRef = useRef(report.propulsion.dvMps)
+  useEffect(() => {
+    const diffMass = report.mass.totalKg - prevMassRef.current
+    const diffDv = report.propulsion.dvMps - prevDvRef.current
+    prevMassRef.current = report.mass.totalKg
+    prevDvRef.current = report.propulsion.dvMps
+
+    if (Math.abs(diffMass) > 0.05 || Math.abs(diffDv) > 0.5) {
+      const text = `${diffMass >= 0 ? '+' : ''}${diffMass.toFixed(1)} kg · Δv ${diffDv >= 0 ? '+' : ''}${Math.round(diffDv)} m/s`
+      setDeltaNotice(text)
+      const t = setTimeout(() => setDeltaNotice(null), 2500)
+      return () => clearTimeout(t)
+    }
+  }, [report.mass.totalKg, report.propulsion.dvMps])
+
+  // Filter parts for active tab
+  const displayedParts = useMemo(() => {
+    return CATALOG.filter((item) => {
+      if (filter === 'all') return true
+      if (filter === 'landing') return isLandingPart(item.id)
+      if (isLandingPart(item.id)) return false
+      if (filter === 'communications') return item.subsystem === 'communications'
+      return item.subsystem === filter
+    })
+  }, [filter])
+
+  // Landing risk computation
+  const landingRisk = useMemo(() => {
+    const site = siteOf(mission, plan)
+    const isAtmospheric = mission.id === 'mars'
+    const hasShield = craft.parts.some((p) => p.enabled && p.specId === 'heatshield')
+    const hasChute = craft.parts.some((p) => p.enabled && p.specId === 'chute')
+    const hasLegs = craft.parts.some((p) => p.enabled && p.specId === 'legs')
+    const hasDescent = craft.parts.some((p) => p.enabled && p.specId === 'descent')
+
+    let score = (site?.difficulty ?? 0.5) * 40
+    const massRatio = report.mass.totalKg / (mission.maxMassKg || 1)
+    score += Math.min(30, massRatio * 30)
+
+    if (isAtmospheric) {
+      if (!hasShield) score += 30
+      if (!hasChute) score += 25
+    } else {
+      if (!hasDescent) score += 25
+    }
+    if (!hasLegs) score += 20
+
+    if (hasShield) score -= 15
+    if (hasChute) score -= 10
+    if (hasLegs) score -= 10
+    if (hasDescent) score -= 15
+
+    const finalScore = Math.max(5, Math.min(95, Math.round(score)))
+    const level: 'Low' | 'Medium' | 'High' = finalScore < 35 ? 'Low' : finalScore < 65 ? 'Medium' : 'High'
+    return { score: finalScore, level }
+  }, [mission, plan, craft, report.mass.totalKg])
+
+  // Passed / resolved constraints
+  const passedIssues = useMemo(() => {
+    const list: { id: string; label: string }[] = []
+    if (report.cost.marginUsd >= 0) list.push({ id: 'cost', label: 'Budget within mission limit' })
+    if (report.mass.marginKg >= 0) list.push({ id: 'mass', label: 'Launch mass under launcher limit' })
+    if (report.propulsion.dvMps + 1 >= report.requiredDvMps) list.push({ id: 'dv', label: 'Trajectory delta-v satisfied' })
+    if (generation + 1 >= report.power.loadW) list.push({ id: 'power', label: 'Electrical power generation covers load' })
+    if (report.link.closes) list.push({ id: 'link', label: 'Communications link closes to Earth' })
+    const hasAllReq = mission.requiredInstruments.every((inst) =>
+      craft.parts.some((p) => p.enabled && CATALOG.find((c) => c.id === p.specId)?.instrument === inst)
+    )
+    if (hasAllReq) list.push({ id: 'inst', label: 'Required instruments fitted' })
+    if (craft.parts.some((p) => p.enabled && p.specId.startsWith('tank') && (p.fill ?? 1) > 0)) {
+      list.push({ id: 'fuel', label: 'Propellant loaded in active tanks' })
+    }
+    return list
+  }, [report, mission, craft, generation])
+
+  const fitOrSelect = (partSpecId: string) => {
+    const fitted = craft.parts.find((p) => p.specId === partSpecId && p.enabled) ?? craft.parts.find((p) => p.specId === partSpecId)
     if (fitted) {
       if (!fitted.enabled) togglePart(fitted.instanceId)
       selectInstance(fitted.instanceId)
       return
     }
-    addPart(specId)
+    addPart(partSpecId)
   }
 
-  const fittedCountForSpec = (specId: string) => craft.parts.filter((p) => p.specId === specId).length
+  const spec = CATALOG.find((item) => item.id === specId) ?? null
 
   return (
     <>
-      <FixBar show={hard > 0} onFix={autoFix} />
-      <aside className="side left">
-        <Glass className="stack-card">
-          <div className="build-tabs-bar" role="toolbar" aria-label="Part categories">
-            {BUILD_TABS.map((item) => {
-              const meta = item.id === 'all' ? null : CATEGORIES[item.id]
-              const Icon = meta ? meta.icon : Boxes
-              const count = fittedCounts[item.id] ?? 0
-              const isActive = filter === item.id
+      {/* Left Panel: Catalog Parts */}
+      <aside className="side left flat-panel" aria-label="Part Catalog">
+        <div className="panel-inner">
+          <nav className="flat-tabs-row" role="tablist" aria-label="Part categories">
+            {BUILD_TABS.map((tab) => {
+              const count = fittedCounts[tab.id] ?? 0
+              const isActive = filter === tab.id
               return (
                 <button
-                  key={item.id}
+                  key={tab.id}
                   type="button"
-                  className={`build-tab-btn ${isActive ? 'is-active' : ''}`}
-                  style={meta && isActive ? { borderColor: meta.border, color: meta.color, backgroundColor: meta.bg } : undefined}
-                  onClick={() => setFilter(item.id)}
-                  title={`Show ${item.label} parts`}
+                  role="tab"
+                  aria-selected={isActive}
+                  className={`flat-tab-item ${isActive ? 'is-active' : ''}`}
+                  onClick={() => setFilter(tab.id)}
                 >
-                  <Icon size={16} strokeWidth={2} />
-                  <span>{item.label}</span>
-                  {count > 0 && <span className="build-tab-badge">{count}</span>}
+                  <span className="tab-label">{tab.label}</span>
+                  <span className="tab-count">{count}</span>
                 </button>
               )
             })}
-          </div>
-          <div className="part-list">
-            {sections.map((section) => (
-              <div key={section.label} className="catalog-section">
-                <h3 className="section-label">{section.label}</h3>
-                {section.families.map((family) => {
-                  const index = Math.min(pick[family.id] ?? 0, family.ids.length - 1)
-                  const item = CATALOG.find((entry) => entry.id === family.ids[index])
-                  if (!item) return null
-                  return (
-                    <PartCard
-                      key={family.id}
-                      mode="catalog"
-                      item={item}
-                      count={fittedCountForSpec(item.id)}
-                      family={family}
-                      selected={selectedId === item.id}
-                      onSelect={() => fitOrSelect(item.id)}
-                      onAdd={() => addPart(item.id)}
-                      onRemove={() => {
-                        const fitted = craft.parts.find((p) => p.specId === item.id)
-                        if (fitted) removePart(fitted.instanceId)
-                      }}
-                      onInfo={() => { setAdvanced(false); setSpecId(item.id) }}
-                      onSelectVariant={(id) => {
-                        setPick((current) => ({ ...current, [family.id]: family.ids.indexOf(id) }))
-                        selectPart(id)
-                      }}
-                    />
-                  )
-                })}
-                {section.singles.map((item) => (
-                  <PartCard
-                    key={item.id}
-                    mode="catalog"
-                    item={item}
-                    count={fittedCountForSpec(item.id)}
-                    selected={selectedId === item.id}
-                    onSelect={() => fitOrSelect(item.id)}
-                    onAdd={() => addPart(item.id)}
-                    onRemove={() => {
-                      const fitted = craft.parts.find((p) => p.specId === item.id)
-                      if (fitted) removePart(fitted.instanceId)
-                    }}
-                    onInfo={() => { setAdvanced(false); setSpecId(item.id) }}
-                  />
-                ))}
-              </div>
-            ))}
-            <button
-              type="button"
-              className="word slim show-all-instruments-btn"
-              onClick={() => setMoreParts((value) => !value)}
-            >
-              <Sparkles size={14} />
-              <span>{moreParts ? 'Hide optional instruments' : 'Show all science instruments'}</span>
-            </button>
-          </div>
-        </Glass>
-      </aside>
-      <aside className="side right">
-        <Glass className="stack-card">
-          <div className="design-action-toolbar">
-            <input
-              className="craft-name-input"
-              aria-label="Call sign"
-              title="Spacecraft name"
-              value={callSign}
-              onChange={(event) => {
-                setCallSign(event.target.value)
-                rename(event.target.value)
-              }}
-            />
-            <div className="action-buttons-group">
-              <button
-                type="button"
-                className="icon-action-btn"
-                title="Generate spacecraft design"
-                aria-label="Generate design"
-                onClick={() => generate(callSign)}
-              >
-                <Sparkles size={15} />
-              </button>
-              <button
-                type="button"
-                className="icon-action-btn"
-                title="Auto arrange & aerodynamic align"
-                aria-label="Auto arrange"
-                onClick={arrange}
-              >
-                <Wand2 size={15} />
-              </button>
-              <button
-                type="button"
-                className="icon-action-btn"
-                title="Undo change (Ctrl+Z)"
-                aria-label="Undo"
-                disabled={!canUndo}
-                onClick={undo}
-              >
-                <Undo2 size={15} />
-              </button>
-              <button
-                type="button"
-                className="icon-action-btn"
-                title="Redo change (Ctrl+Y)"
-                aria-label="Redo"
-                disabled={!canRedo}
-                onClick={redo}
-              >
-                <Redo2 size={15} />
-              </button>
-            </div>
-            <button type="button" className="icon" title={`${report.issues.length} constraints`} aria-label={`${report.issues.length} constraints`} onClick={() => setIssuesOpen(true)}>
-              {hard > 0 ? <CircleAlert size={15} /> : <CircleCheck size={15} />}
-              {report.issues.length > 0 && <em className="count-pip">{report.issues.length}</em>}
-            </button>
-          </div>
-          <div className="scroll">
-            <div className="stat-cards-column">
-              {/* 1. Mass */}
-              <div className="clean-stat-card" title={JARGON_TOOLTIPS.mass}>
-                <div className="stat-card-header">
-                  <div className="stat-card-title">
-                    <Weight size={14} />
-                    <span>Mass</span>
+          </nav>
+          <div className="flat-part-rows-container">
+            {displayedParts.map((item) => {
+              const count = craft.parts.filter((p) => p.specId === item.id).length
+              const fittedPart = craft.parts.find((p) => p.specId === item.id)
+              const family = familyOf(item.id)
+              return (
+                <div key={item.id} className="flat-part-row">
+                  <div className="part-info-block" onClick={() => fitOrSelect(item.id)}>
+                    <div className="part-name-cost-line">
+                      <span className="part-title">{item.name}</span>
+                      <span className="part-cost-tag">{shortMoney(item.costUsd)}</span>
+                    </div>
+                    <div className="part-spec-sub">{plainSpec(item)}</div>
                   </div>
-                  <strong className={`stat-card-value ${report.mass.marginKg < 0 ? 'bad' : 'ok'}`}>
-                    {kg(report.mass.totalKg)} / {kg(mission.maxMassKg)}
-                  </strong>
-                </div>
-                <div className="stat-progress-track">
-                  <div
-                    className={`stat-progress-bar ${report.mass.marginKg < 0 ? 'bad' : 'ok'}`}
-                    style={{ width: `${Math.min(100, (report.mass.totalKg / mission.maxMassKg) * 100)}%` }}
-                  />
-                </div>
-              </div>
-
-              {/* 2. Speed change / Delta-v */}
-              <div className="clean-stat-card" title={JARGON_TOOLTIPS.deltav}>
-                <div className="stat-card-header">
-                  <div className="stat-card-title">
-                    <Gauge size={14} />
-                    <span>Speed change (Δv)</span>
-                  </div>
-                  <strong className={`stat-card-value ${report.propulsion.dvMps + 1 < report.requiredDvMps ? 'bad' : 'ok'}`}>
-                    {mps(report.propulsion.dvMps)} / {mps(report.requiredDvMps)}
-                  </strong>
-                </div>
-                <div className="stat-progress-track">
-                  <div
-                    className={`stat-progress-bar ${report.propulsion.dvMps + 1 < report.requiredDvMps ? 'bad' : 'ok'}`}
-                    style={{ width: `${Math.min(100, report.requiredDvMps > 0 ? (report.propulsion.dvMps / report.requiredDvMps) * 100 : 100)}%` }}
-                  />
-                </div>
-              </div>
-
-              {/* 3. Power */}
-              <div className="clean-stat-card" title={JARGON_TOOLTIPS.power}>
-                <div className="stat-card-header">
-                  <div className="stat-card-title">
-                    <Zap size={14} />
-                    <span>Power</span>
-                  </div>
-                  <strong className={`stat-card-value ${generation + 1 < report.power.loadW ? 'bad' : 'ok'}`}>
-                    {watts(generation)} / {watts(report.power.loadW)}
-                  </strong>
-                </div>
-                <div className="stat-progress-track">
-                  <div
-                    className={`stat-progress-bar ${generation + 1 < report.power.loadW ? 'bad' : 'ok'}`}
-                    style={{ width: `${Math.min(100, report.power.loadW > 0 ? (generation / report.power.loadW) * 100 : 100)}%` }}
-                  />
-                </div>
-              </div>
-
-              {/* 4. Signal strength */}
-              <div className="clean-stat-card" title={JARGON_TOOLTIPS.signal}>
-                <div className="stat-card-header">
-                  <div className="stat-card-title">
-                    <Radio size={14} />
-                    <span>Signal strength</span>
-                  </div>
-                  <strong className={`stat-card-value ${report.link.closes ? 'ok' : 'bad'}`}>
-                    {db(report.link.marginDb)}
-                  </strong>
-                </div>
-                <div className="stat-progress-track">
-                  <div
-                    className={`stat-progress-bar ${report.link.closes ? 'ok' : 'bad'}`}
-                    style={{ width: `${report.link.closes ? 100 : 35}%` }}
-                  />
-                </div>
-              </div>
-
-              {/* 5. Cost */}
-              <div className="clean-stat-card" title={JARGON_TOOLTIPS.cost}>
-                <div className="stat-card-header">
-                  <div className="stat-card-title">
-                    <DollarSign size={14} />
-                    <span>Cost</span>
-                  </div>
-                  <strong className={`stat-card-value ${report.cost.marginUsd < 0 ? 'bad' : 'ok'}`}>
-                    {shortMoney(report.cost.totalUsd)} / {shortMoney(mission.budgetUsd)}
-                  </strong>
-                </div>
-                <div className="stat-progress-track">
-                  <div
-                    className={`stat-progress-bar ${report.cost.marginUsd < 0 ? 'bad' : 'ok'}`}
-                    style={{ width: `${Math.min(100, (report.cost.totalUsd / mission.budgetUsd) * 100)}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <p className="plain-specs-breakdown">
-              <span title={JARGON_TOOLTIPS.dryMass}>Dry {kg(report.mass.dryKg)}</span> ·{' '}
-              <span title={JARGON_TOOLTIPS.propellant}>Propellant {kg(report.mass.propellantKg)}</span> ·{' '}
-              <span title={JARGON_TOOLTIPS.payload}>Payload {kg(report.mass.payloadKg)}</span> ·{' '}
-              <span title={JARGON_TOOLTIPS.isp}>Isp {report.propulsion.byPropellant[0] ? `${Math.round(report.propulsion.byPropellant[0].ispS)} s` : '—'}</span>
-            </p>
-
-            {/* Checklist: THIS MISSION NEEDS */}
-            <div className="checklist-container">
-              <h3 className="section-label">This mission needs</h3>
-              {hard === 0 ? (
-                <div className="checklist-success-banner">
-                  <CheckCircle2 size={16} className="checklist-tick" />
-                  <div>
-                    <strong>Ready to plan</strong>
-                    <p>The required parts are aboard. Drag parts on the ship to place them.</p>
-                  </div>
-                </div>
-              ) : (
-                report.issues.filter((issue) => issue.severity === 'hard').map((issue) => {
-                  const targetTab: UiCategory =
-                    issue.id.includes('landing') || issue.what.toLowerCase().includes('landing') || issue.what.toLowerCase().includes('parachute')
-                      ? 'landing'
-                      : issue.subsystem === 'power'
-                      ? 'power'
-                      : issue.subsystem === 'communications'
-                      ? 'communications'
-                      : issue.subsystem === 'science'
-                      ? 'science'
-                      : issue.subsystem === 'thermal'
-                      ? 'thermal'
-                      : issue.subsystem === 'structure'
-                      ? 'structure'
-                      : issue.subsystem === 'propulsion'
-                      ? 'propulsion'
-                      : 'fuel'
-                  const tabLabel = CATEGORIES[targetTab]?.label ?? 'Parts'
-                  return (
-                    <div key={issue.id} className="checklist-issue-card">
-                      <div className="checklist-issue-header">
-                        <AlertTriangle size={15} className="checklist-warn-icon" />
-                        <strong className="checklist-issue-title">{issue.what}</strong>
-                      </div>
-                      <p className="checklist-issue-why">{issue.change}</p>
+                  <div className="part-stepper-cell">
+                    {count === 0 ? (
                       <button
                         type="button"
-                        className="checklist-fix-jump-btn"
-                        onClick={() => setFilter(targetTab)}
-                        title={`Switch to ${tabLabel} tab to fix this`}
+                        className="flat-add-btn"
+                        onClick={() => addPart(item.id)}
+                        aria-label={`Add ${item.name}`}
                       >
-                        <span>Fix in {tabLabel}</span>
-                        <ArrowRight size={13} />
+                        Add
                       </button>
-                    </div>
-                  )
-                })
-              )}
-            </div>
-
-            {/* Collapsible Fitted Parts List */}
-            <div className="fitted-section">
-              <div className="section-header-collapsible" onClick={() => setFittedOpen(!fittedOpen)}>
-                <h3 className="section-label">Fitted ({craft.parts.length})</h3>
-                <button type="button" className="collapse-toggle-btn" aria-label={fittedOpen ? 'Collapse' : 'Expand'}>
-                  {fittedOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-                </button>
-              </div>
-              {fittedOpen && (
-                <div className="fitted-cards-list">
-                  {craft.parts.map((part) => {
-                    const fitted = CATALOG.find((item) => item.id === part.specId)
-                    if (!fitted) return null
-                    const family = familyOf(part.specId)
-                    return (
-                      <PartCard
-                        key={part.instanceId}
-                        mode="fitted"
-                        item={fitted}
-                        instanceId={part.instanceId}
-                        enabled={part.enabled}
-                        fill={part.fill}
-                        family={family}
-                        selected={selectedInstanceId === part.instanceId}
-                        onSelect={() => selectInstance(part.instanceId)}
-                        onToggle={() => togglePart(part.instanceId)}
-                        onRemove={() => removePart(part.instanceId)}
-                        onSetFill={(val) => setFill(part.instanceId, val)}
-                        onSelectVariant={(id) => setSpec(part.instanceId, id)}
+                    ) : (
+                      <div className="flat-stepper-ctrl">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const last = craft.parts.slice().reverse().find((p) => p.specId === item.id)
+                            if (last) removePart(last.instanceId)
+                          }}
+                          aria-label={`Decrease ${item.name}`}
+                        >
+                          −
+                        </button>
+                        <span className="stepper-val-num">{count}</span>
+                        <button
+                          type="button"
+                          onClick={() => addPart(item.id)}
+                          aria-label={`Increase ${item.name}`}
+                        >
+                          +
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  {count > 0 && fittedPart && item.tankCapacityKg > 0 && (
+                    <div className="flat-part-slider-row">
+                      <div className="slider-label-val">
+                        <span>Propellant fill</span>
+                        <span>{Math.round((fittedPart.fill ?? 1) * 100)}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        value={fittedPart.fill ?? 1}
+                        onChange={(e) => setFill(fittedPart.instanceId, Number(e.target.value))}
+                        aria-label="Propellant fill"
                       />
-                    )
-                  })}
+                    </div>
+                  )}
+                  {count > 0 && family && family.ids.length > 1 && (
+                    <div className="flat-part-slider-row">
+                      <div className="slider-label-val">
+                        <span>Size</span>
+                        <span>{item.name}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={family.ids.length - 1}
+                        step={1}
+                        value={Math.max(0, family.ids.indexOf(item.id))}
+                        onChange={(e) => {
+                          const newId = family.ids[Number(e.target.value)]
+                          if (newId && fittedPart) setSpec(fittedPart.instanceId, newId)
+                        }}
+                        aria-label="Size variant"
+                      />
+                    </div>
+                  )}
                 </div>
-              )}
+              )
+            })}
+          </div>
+        </div>
+      </aside>
+      {/* Right Panel: Stats, Risk, Issues, Fitted */}
+      <aside className="side right flat-panel" aria-label="Spacecraft Stats & Review">
+        <div className="panel-inner right-scroll-panel">
+          {/* Design Name & Plain Text Toolbar */}
+          <div className="design-header-block">
+            <input
+              className="flat-name-input"
+              aria-label="Design name"
+              title="Design name"
+              value={callSign}
+              onChange={(e) => {
+                setCallSign(e.target.value)
+                rename(e.target.value)
+              }}
+            />
+            <div className="plain-text-toolbar" role="toolbar" aria-label="Design actions">
+              <button
+                type="button"
+                className="toolbar-text-action"
+                onClick={undo}
+                disabled={!canUndo}
+                title="Undo (Ctrl+Z)"
+              >
+                Undo
+              </button>
+              <button
+                type="button"
+                className="toolbar-text-action"
+                onClick={redo}
+                disabled={!canRedo}
+                title="Redo (Ctrl+Y)"
+              >
+                Redo
+              </button>
+              <button
+                type="button"
+                className="toolbar-text-action"
+                onClick={arrange}
+                title="Auto-arrange parts symmetrically"
+              >
+                Auto-arrange
+              </button>
+              <button
+                type="button"
+                className="toolbar-text-action"
+                onClick={() => generate(callSign)}
+                title="Generate spacecraft design"
+              >
+                Generate
+              </button>
+            </div>
+          </div>
+          {/* 5 Stats as plain rows with 2px bars */}
+          <div className="flat-stats-section">
+            {/* 1. Mass */}
+            <div className="flat-stat-row" title={JARGON_TOOLTIPS.mass}>
+              <div className="stat-top-line">
+                <span className="stat-name">Mass</span>
+                <span className={`stat-num ${report.mass.marginKg < 0 ? 'status-bad' : 'status-ok'}`}>
+                  {report.mass.marginKg < 0 ? 'Over limit ' : 'OK '}
+                  {Math.round(report.mass.totalKg)} / {Math.round(mission.maxMassKg)} kg
+                </span>
+              </div>
+              <div className="stat-thin-track">
+                <div
+                  className={`stat-thin-bar ${report.mass.marginKg < 0 ? 'bar-bad' : 'bar-ok'}`}
+                  style={{ width: `${Math.min(100, (report.mass.totalKg / mission.maxMassKg) * 100)}%` }}
+                />
+              </div>
             </div>
 
-            {selected && (
-              <div className="pad" aria-label="Move part">
-                <Move3d size={14} />
-                <button type="button" className="icon" aria-label="Move up" onClick={() => nudgePart(selected.instanceId, 0, 0.12, 0)}><ArrowUp size={14} /></button>
-                <button type="button" className="icon" aria-label="Move down" onClick={() => nudgePart(selected.instanceId, 0, -0.12, 0)}><ArrowDown size={14} /></button>
-                <button type="button" className="icon" aria-label="Move left" onClick={() => nudgePart(selected.instanceId, -0.12, 0, 0)}><ArrowLeft size={14} /></button>
-                <button type="button" className="icon" aria-label="Move right" onClick={() => nudgePart(selected.instanceId, 0.12, 0, 0)}><ArrowRight size={14} /></button>
-                <button type="button" className="icon" aria-label="Move forward" onClick={() => nudgePart(selected.instanceId, 0, 0, 0.12)}><ChevronsUp size={14} /></button>
-                <button type="button" className="icon" aria-label="Move back" onClick={() => nudgePart(selected.instanceId, 0, 0, -0.12)}><ChevronsDown size={14} /></button>
-                <button type="button" className="icon" aria-label="Reset placement" onClick={() => resetOffset(selected.instanceId)}><RotateCcw size={14} /></button>
-                <p className="muted">{withoutLine(craft, mission, plan, selected.instanceId, report)}</p>
+            {/* 2. Delta-v */}
+            <div className="flat-stat-row" title={JARGON_TOOLTIPS.deltav}>
+              <div className="stat-top-line">
+                <span className="stat-name">Delta-v</span>
+                <span className={`stat-num ${report.propulsion.dvMps + 1 < report.requiredDvMps ? 'status-bad' : 'status-ok'}`}>
+                  {report.propulsion.dvMps + 1 < report.requiredDvMps ? 'Low ' : 'OK '}
+                  {Math.round(report.propulsion.dvMps)} / {Math.round(report.requiredDvMps)} m/s
+                </span>
+              </div>
+              <div className="stat-thin-track">
+                <div
+                  className={`stat-thin-bar ${report.propulsion.dvMps + 1 < report.requiredDvMps ? 'bar-bad' : 'bar-ok'}`}
+                  style={{ width: `${Math.min(100, report.requiredDvMps > 0 ? (report.propulsion.dvMps / report.requiredDvMps) * 100 : 100)}%` }}
+                />
+              </div>
+            </div>
+
+            {/* 3. Power */}
+            <div className="flat-stat-row" title={JARGON_TOOLTIPS.power}>
+              <div className="stat-top-line">
+                <span className="stat-name">Power</span>
+                <span className={`stat-num ${generation + 1 < report.power.loadW ? 'status-bad' : 'status-ok'}`}>
+                  {generation + 1 < report.power.loadW ? 'Deficit ' : 'OK '}
+                  {Math.round(generation)} / {Math.round(report.power.loadW)} W
+                </span>
+              </div>
+              <div className="stat-thin-track">
+                <div
+                  className={`stat-thin-bar ${generation + 1 < report.power.loadW ? 'bar-bad' : 'bar-ok'}`}
+                  style={{ width: `${Math.min(100, report.power.loadW > 0 ? (generation / report.power.loadW) * 100 : 100)}%` }}
+                />
+              </div>
+            </div>
+
+            {/* 4. Link margin */}
+            <div className="flat-stat-row" title={JARGON_TOOLTIPS.signal}>
+              <div className="stat-top-line">
+                <span className="stat-name">Link margin</span>
+                <span className={`stat-num ${report.link.closes ? 'status-ok' : 'status-bad'}`}>
+                  {report.link.closes ? 'OK ' : 'Lost '}
+                  {report.link.marginDb.toFixed(1)} dB
+                </span>
+              </div>
+              <div className="stat-thin-track">
+                <div
+                  className={`stat-thin-bar ${report.link.closes ? 'bar-ok' : 'bar-bad'}`}
+                  style={{ width: `${report.link.closes ? 100 : 30}%` }}
+                />
+              </div>
+            </div>
+
+            {/* 5. Cost */}
+            <div className="flat-stat-row" title={JARGON_TOOLTIPS.cost}>
+              <div className="stat-top-line">
+                <span className="stat-name">Cost</span>
+                <span className={`stat-num ${report.cost.marginUsd < 0 ? 'status-bad' : 'status-ok'}`}>
+                  {report.cost.marginUsd < 0 ? 'Over budget ' : 'OK '}
+                  {shortMoney(report.cost.totalUsd)} / {shortMoney(mission.budgetUsd)}
+                </span>
+              </div>
+              <div className="stat-thin-track">
+                <div
+                  className={`stat-thin-bar ${report.cost.marginUsd < 0 ? 'bar-bad' : 'bar-ok'}`}
+                  style={{ width: `${Math.min(100, (report.cost.totalUsd / mission.budgetUsd) * 100)}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Landing Risk Row */}
+            <div
+              className="flat-stat-row"
+              title="Landing risk computed from site difficulty, spacecraft mass, and landing hardware (heat shield, parachute, descent engine, legs)."
+            >
+              <div className="stat-top-line">
+                <span className="stat-name">Landing risk</span>
+                <span className={`stat-num ${landingRisk.level === 'High' ? 'status-bad' : landingRisk.level === 'Low' ? 'status-ok' : 'status-mid'}`}>
+                  {landingRisk.level} ({landingRisk.score}%)
+                </span>
+              </div>
+              <div className="stat-thin-track">
+                <div
+                  className={`stat-thin-bar ${landingRisk.level === 'High' ? 'bar-bad' : landingRisk.level === 'Low' ? 'bar-ok' : 'bar-mid'}`}
+                  style={{ width: `${landingRisk.score}%` }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Mass Breakdown & Delta Effect */}
+          <div className="flat-breakdown-card">
+            <div className="breakdown-columns">
+              <div className="bd-cell"><span className="bd-label">Dry</span> <span className="bd-val">{kg(report.mass.dryKg)}</span></div>
+              <div className="bd-cell"><span className="bd-label">Propellant</span> <span className="bd-val">{kg(report.mass.propellantKg)}</span></div>
+              <div className="bd-cell"><span className="bd-label">Payload</span> <span className="bd-val">{kg(report.mass.payloadKg)}</span></div>
+              <div className="bd-cell"><span className="bd-label">Launch</span> <span className="bd-val">{kg(report.mass.totalKg)}</span></div>
+            </div>
+            {deltaNotice && (
+              <div className="mass-delta-flash-banner" role="status">
+                {deltaNotice}
               </div>
             )}
           </div>
-        </Glass>
+
+          {/* Compact Issues List */}
+          <div className="flat-issues-section">
+            <div className="section-title-line">Issues</div>
+            {report.issues.length === 0 ? (
+              <div className="all-clear-note">
+                <span className="flat-dot green-dot">✓</span>
+                <span>All design requirements passed. Ready to plan flight.</span>
+              </div>
+            ) : (
+              report.issues.map((issue) => {
+                const targetTab =
+                  issue.id.includes('landing') || issue.what.toLowerCase().includes('landing') || issue.what.toLowerCase().includes('parachute') || issue.what.toLowerCase().includes('heat shield')
+                    ? 'landing'
+                    : issue.subsystem === 'power'
+                    ? 'power'
+                    : issue.subsystem === 'communications'
+                    ? 'communications'
+                    : issue.subsystem === 'science'
+                    ? 'science'
+                    : issue.subsystem === 'thermal'
+                    ? 'thermal'
+                    : issue.subsystem === 'structure'
+                    ? 'structure'
+                    : issue.subsystem === 'propulsion'
+                    ? 'propulsion'
+                    : 'fuel';
+                const tabLabel = BUILD_TABS.find((t) => t.id === targetTab)?.label ?? 'Parts';
+                return (
+                  <div key={issue.id} className="flat-issue-item">
+                    <span className="flat-dot red-dot" aria-hidden="true" />
+                    <div className="flat-issue-info">
+                      <div className="issue-row-title">{issue.what}</div>
+                      <div className="issue-row-detail">{issue.change}</div>
+                      <button
+                        type="button"
+                        className="issue-fix-jump"
+                        onClick={() => setFilter(targetTab)}
+                      >
+                        Fix in {tabLabel} →
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+
+            {/* Collapsed Passed Issues */}
+            {passedIssues.length > 0 && (
+              <div className="passed-collapse-group">
+                <button
+                  type="button"
+                  className="passed-collapse-toggle"
+                  onClick={() => setPassedOpen(!passedOpen)}
+                  aria-expanded={passedOpen}
+                >
+                  <span>Passed ({passedIssues.length})</span>
+                  <span>{passedOpen ? '▲' : '▼'}</span>
+                </button>
+                {passedOpen && (
+                  <div className="passed-items-list">
+                    {passedIssues.map((p) => (
+                      <div key={p.id} className="passed-item-row">
+                        <span className="flat-dot green-dot">✓</span>
+                        <span className="passed-item-label">{p.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Fitted Parts (Collapsible) */}
+          <div className="flat-fitted-section">
+            <button
+              type="button"
+              className="fitted-collapse-toggle"
+              onClick={() => setFittedOpen(!fittedOpen)}
+              aria-expanded={fittedOpen}
+            >
+              <span>Fitted parts ({craft.parts.length})</span>
+              <span>{fittedOpen ? '▲' : '▼'}</span>
+            </button>
+            {fittedOpen && (
+              <div className="fitted-items-list">
+                {craft.parts.map((part) => {
+                  const item = CATALOG.find((c) => c.id === part.specId);
+                  if (!item) return null;
+                  const partCount = craft.parts.filter((p) => p.specId === part.specId).length;
+                  return (
+                    <div key={part.instanceId} className="fitted-flat-row">
+                      <div className="fitted-desc-block" onClick={() => selectInstance(part.instanceId)}>
+                        <span className="fitted-name">{item.name}</span>
+                        <span className="fitted-spec">{plainSpec(item)}</span>
+                      </div>
+                      <div className="fitted-actions-group">
+                        <div className="flat-stepper-ctrl mini-stepper">
+                          <button
+                            type="button"
+                            onClick={() => removePart(part.instanceId)}
+                            aria-label={`Decrease ${item.name}`}
+                          >
+                            −
+                          </button>
+                          <span className="stepper-val-num">{partCount}</span>
+                          <button
+                            type="button"
+                            onClick={() => addPart(item.id)}
+                            aria-label={`Increase ${item.name}`}
+                          >
+                            +
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          className="fitted-remove-text-btn"
+                          onClick={() => removePart(part.instanceId)}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {selected && (
+            <div className="flat-nudge-pad" aria-label="Nudge part position">
+              <button type="button" onClick={() => nudgePart(selected.instanceId, 0, 0.12, 0)}>Up</button>
+              <button type="button" onClick={() => nudgePart(selected.instanceId, 0, -0.12, 0)}>Down</button>
+              <button type="button" onClick={() => nudgePart(selected.instanceId, 0, -0.12, 0)}>Left</button>
+              <button type="button" onClick={() => nudgePart(selected.instanceId, 0.12, 0, 0)}>Right</button>
+              <button type="button" onClick={() => resetOffset(selected.instanceId)}>Reset</button>
+            </div>
+          )}
+        </div>
       </aside>
+
+      {/* Recenter 3D View Button */}
       <div className="viewport-overlay-corner">
         <button
           type="button"
@@ -774,19 +882,19 @@ export function DesignScreen() {
           <span>Center</span>
         </button>
       </div>
-      <div className="plan-launch">
+
+      {/* Bottom Primary Button */}
+      <div className="bottom-plan-bar">
         <button
           type="button"
-          className={`word primary plan-main-btn ${hard > 0 ? 'is-disabled' : ''}`}
+          className={`plan-flight-main-btn ${hard > 0 ? 'is-disabled' : 'is-ready'}`}
           disabled={hard > 0}
-          title={hard > 0 ? `Fix ${hard} ${hard === 1 ? 'issue' : 'issues'} first` : 'Plan the flight'}
           onClick={() => go('plan')}
         >
-          <Route size={18} />
-          <span>{hard > 0 ? `Fix ${hard} ${hard === 1 ? 'issue' : 'issues'} first` : 'Plan the flight'}</span>
+          {hard > 0 ? `Fix ${hard} ${hard === 1 ? 'issue' : 'issues'} first` : 'Plan the flight'}
         </button>
       </div>
-      {spec && (
+            {spec && (
         <Sheet title={spec.name} onClose={() => setSpecId(null)}>
           <div className="spec-hero"><PartPreview specId={spec.id} large /></div>
           <p>{spec.summary}</p>

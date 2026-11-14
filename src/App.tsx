@@ -12,6 +12,7 @@ import type { SceneMode } from './render/world'
 import { useActiveMission, useMission, type Phase } from './store/useMission'
 import { evaluate } from './domain/validate'
 import { effectiveWarp } from './domain/time'
+import { siteOf, objectiveOf } from './domain/campaign'
 
 function shortMoney(usd: number): string {
   const abs = Math.abs(usd)
@@ -63,6 +64,9 @@ export function App() {
   const spent = report?.cost.totalUsd ?? 0
   const budget = mission?.budgetUsd ?? 1
   const budgetRatio = Math.max(0, Math.min(1, spent / budget))
+
+  const site = mission && plan ? siteOf(mission, plan) : null
+  const objective = plan ? objectiveOf(plan) : null
 
   useEffect(() => {
     applyMix(audio, volume)
@@ -179,6 +183,14 @@ export function App() {
           <b>Mission Control</b>
           <small>NASA Space Apps</small>
         </div>
+        {report && phase !== 'select' && phase !== 'credits' && (
+          <div className="budget-float" aria-label="Budget">
+            <span>Budget</span>
+            <i><b style={{ transform: `scaleX(${budgetRatio})` }} className={report.cost.marginUsd < 0 ? 'over' : ''} /></i>
+            <div className="budget-nums"><em>{shortMoney(spent)}</em><em>{shortMoney(budget)}</em></div>
+            <span>Mass {Math.round(report.mass.totalKg)} / {Math.round(mission?.maxMassKg ?? 0)} kg · Δv {Math.round(report.propulsion.dvMps)} m/s</span>
+          </div>
+        )}
         <nav className="top-nav" aria-label="Main Navigation">
           <button
             type="button"
@@ -268,12 +280,15 @@ export function App() {
         </nav>
       </header>
       )}
-      {report && phase !== 'select' && phase !== 'credits' && phase !== 'surface' && phase !== 'station' && phase !== 'pad' && phase !== 'flight' && phase !== 'landing' && phase !== 'launch' && (
-        <div className="budget-float" aria-label="Budget">
-          <span>Budget</span>
-          <i><b style={{ transform: `scaleX(${budgetRatio})` }} className={report.cost.marginUsd < 0 ? 'over' : ''} /></i>
-          <div className="budget-nums"><em>{shortMoney(spent)}</em><em>{shortMoney(budget)}</em></div>
-          <span>Mass {Math.round(report.mass.totalKg)} / {Math.round(mission?.maxMassKg ?? 0)} kg · Δv {Math.round(report.propulsion.dvMps)} m/s</span>
+      {mission && objective && site && phase === 'design' && (
+        <div className="mission-banner" role="banner" aria-label="Mission objectives">
+          <span className="banner-item"><span className="banner-dim">Mission</span> <strong>{mission.name} · {objective.title}</strong></span>
+          <span className="banner-sep">·</span>
+          <span className="banner-item"><span className="banner-dim">Landing site</span> <strong>{site.name}</strong> <span className="banner-diff">({Math.round(site.difficulty * 100)}% diff)</span></span>
+          <span className="banner-sep">·</span>
+          <span className="banner-item"><span className="banner-dim">Required</span> <strong>{mission.requiredInstruments.join(', ')}</strong></span>
+          <span className="banner-sep">·</span>
+          <span className="banner-item"><span className="banner-dim">Window</span> <strong>{mission.launchWindow}</strong></span>
         </div>
       )}
       {narrow && phase === 'design' && selectedInstanceId && (
