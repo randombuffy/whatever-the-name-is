@@ -23,16 +23,28 @@ p { margin: 0; }
     linear-gradient(180deg, rgba(0, 0, 0, 0.28), transparent 18%, transparent 78%, rgba(0, 0, 0, 0.35));
 }
 
-.float-top {
+.app-header-area {
   position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
   z-index: 4;
-  top: 14px;
-  left: 14px;
-  right: 14px;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+}
+.app-header-area > * {
+  pointer-events: auto;
+}
+
+.float-top {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  padding: 14px 14px 10px 14px;
+  min-height: 72px;
   pointer-events: none;
 }
 .float-top > * { pointer-events: auto; }
@@ -1583,30 +1595,35 @@ button.key-banner {
  * Flat Build (Design) Screen Styles
  * ========================================================================= */
 
-/* Mission Objective Banner */
+/* Mission Objective Banner - normal flow below top bar row */
 .mission-banner {
-  position: absolute;
-  top: 68px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 3;
+  position: static;
+  width: 100%;
+  box-sizing: border-box;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
+  gap: 6px 14px;
   background: #0f0f0f;
-  border: 1px solid #1f1f1f;
-  border-radius: 8px;
-  padding: 6px 16px;
+  border-top: 1px solid #1f1f1f;
+  border-bottom: 1px solid #1f1f1f;
+  border-left: 0;
+  border-right: 0;
+  border-radius: 0;
+  padding: 8px 24px;
   font-size: 12px;
   color: #ffffff;
-  white-space: nowrap;
   pointer-events: auto;
+  line-height: 1.45;
+  text-align: center;
 }
 
 .mission-banner .banner-item {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  white-space: normal;
 }
 
 .mission-banner .banner-dim {
@@ -1623,10 +1640,12 @@ button.key-banner {
   font-size: 11px;
 }
 
-/* Flat Side Panels */
+/* Flat Side Panels: flex column with min-height: 0, height = viewport minus top areas */
 .side.flat-panel {
-  top: 104px;
-  bottom: 74px;
+  position: absolute;
+  top: 130px;
+  bottom: 16px;
+  height: calc(100vh - 146px);
   width: min(340px, 34vw);
   background: #0f0f0f;
   border: 1px solid #1f1f1f;
@@ -1634,10 +1653,12 @@ button.key-banner {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  min-height: 0;
   pointer-events: auto;
   box-shadow: none;
   gap: 0;
   padding: 0;
+  z-index: 3;
 }
 
 .side.flat-panel .panel-inner {
@@ -1645,34 +1666,43 @@ button.key-banner {
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  overflow: hidden;
 }
 
-.side.flat-panel .panel-inner.right-scroll-panel {
-  padding: 12px;
-  gap: 12px;
-}
-
-/* Left Panel: Tabs */
+/* Left Panel: Category Tab Row */
 .flat-tabs-row {
   position: sticky;
   top: 0;
   z-index: 2;
   background: #0f0f0f;
   display: flex;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 12px;
-  padding: 8px 12px 0 12px;
+  padding: 8px 12px 6px 12px;
   border-bottom: 1px solid #1f1f1f;
   overflow-x: auto;
+  overflow-y: hidden;
   white-space: nowrap;
-  scrollbar-width: none;
+  scrollbar-width: thin;
+  scrollbar-color: #3a3a3a transparent;
   flex-shrink: 0;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
 }
 
 .flat-tabs-row::-webkit-scrollbar {
-  display: none;
+  display: block;
+  height: 6px;
+}
+
+.flat-tabs-row::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.flat-tabs-row::-webkit-scrollbar-thumb {
+  background: #3a3a3a;
+  border-radius: 3px;
 }
 
 .flat-tab-item {
@@ -1690,6 +1720,7 @@ button.key-banner {
   cursor: pointer;
   white-space: nowrap;
   transition: color 140ms ease;
+  flex-shrink: 0;
 }
 
 .flat-tab-item:hover {
@@ -1715,11 +1746,30 @@ button.key-banner {
   color: #8a8a8a;
 }
 
-/* Left Panel: Part Rows */
+/* Left Panel: Vertical Scrollable Part Rows */
 .flat-part-rows-container {
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  flex: 1;
   overflow-y: auto;
+  padding-bottom: 56px; /* Plan the flight button height (40px) + 16px */
+  scrollbar-width: thin;
+  scrollbar-color: #3a3a3a transparent;
+}
+
+.flat-part-rows-container::-webkit-scrollbar {
+  display: block;
+  width: 6px;
+}
+
+.flat-part-rows-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.flat-part-rows-container::-webkit-scrollbar-thumb {
+  background: #3a3a3a;
+  border-radius: 3px;
 }
 
 .flat-part-row {
@@ -1865,6 +1915,33 @@ button.key-banner {
   height: 2px;
   accent-color: #ffffff;
   background: #242424;
+}
+
+/* Right Panel: Vertical Scrollable Container */
+.side.flat-panel .panel-inner.right-scroll-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 12px 56px 12px; /* Plan the flight button height (40px) + 16px */
+  gap: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: #3a3a3a transparent;
+}
+
+.side.flat-panel .panel-inner.right-scroll-panel::-webkit-scrollbar {
+  display: block;
+  width: 6px;
+}
+
+.side.flat-panel .panel-inner.right-scroll-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.side.flat-panel .panel-inner.right-scroll-panel::-webkit-scrollbar-thumb {
+  background: #3a3a3a;
+  border-radius: 3px;
 }
 
 /* Right Panel: Header & Plain-Text Toolbar */
@@ -2176,6 +2253,18 @@ button.key-banner {
   flex-direction: column;
   max-height: 200px;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #3a3a3a transparent;
+}
+
+.fitted-items-list::-webkit-scrollbar {
+  display: block;
+  width: 6px;
+}
+
+.fitted-items-list::-webkit-scrollbar-thumb {
+  background: #3a3a3a;
+  border-radius: 3px;
 }
 
 .fitted-flat-row {
@@ -2279,6 +2368,38 @@ button.key-banner {
 .flat-nudge-pad button:hover {
   color: #ffffff;
   border-color: #444444;
+}
+
+/* Recenter Button on 3D View */
+.viewport-overlay-corner {
+  position: absolute;
+  right: 360px;
+  bottom: 24px;
+  z-index: 10;
+  pointer-events: auto;
+}
+
+.viewport-recenter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #f8fafc;
+  font-size: 12px;
+  font-weight: 600;
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  transition: all 120ms ease;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+.viewport-recenter-btn:hover {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: rgba(255, 255, 255, 0.35);
+  transform: translateY(-1px);
 }
 
 /* Primary Flight Plan Button */

@@ -178,7 +178,8 @@ export function App() {
       )}
       {hangarOpen(lost ? 'select' : phase) && <div className="vignette" />}
       {phase !== 'surface' && phase !== 'station' && phase !== 'pad' && phase !== 'flight' && phase !== 'landing' && phase !== 'launch' && (
-      <header className="float-top">
+      <header className="app-header-area">
+        <div className="float-top">
         <div className="brand-pill">
           <b>Mission Control</b>
           <small>NASA Space Apps</small>
@@ -278,18 +279,19 @@ export function App() {
             </button>
           )}
         </nav>
-      </header>
-      )}
-      {mission && objective && site && phase === 'design' && (
-        <div className="mission-banner" role="banner" aria-label="Mission objectives">
-          <span className="banner-item"><span className="banner-dim">Mission</span> <strong>{mission.name} · {objective.title}</strong></span>
-          <span className="banner-sep">·</span>
-          <span className="banner-item"><span className="banner-dim">Landing site</span> <strong>{site.name}</strong> <span className="banner-diff">({Math.round(site.difficulty * 100)}% diff)</span></span>
-          <span className="banner-sep">·</span>
-          <span className="banner-item"><span className="banner-dim">Required</span> <strong>{mission.requiredInstruments.join(', ')}</strong></span>
-          <span className="banner-sep">·</span>
-          <span className="banner-item"><span className="banner-dim">Window</span> <strong>{mission.launchWindow}</strong></span>
         </div>
+        {mission && objective && site && phase === 'design' && (
+          <div className="mission-banner" role="banner" aria-label="Mission objectives">
+            <span className="banner-item"><span className="banner-dim">Mission</span> <strong>{mission.name} · {objective.title}</strong></span>
+            <span className="banner-sep">·</span>
+            <span className="banner-item"><span className="banner-dim">Landing site</span> <strong>{site.name}</strong> <span className="banner-diff">({Math.round(site.difficulty * 100)}% diff)</span></span>
+            <span className="banner-sep">·</span>
+            <span className="banner-item"><span className="banner-dim">Required</span> <strong>{mission.requiredInstruments.join(', ')}</strong></span>
+            <span className="banner-sep">·</span>
+            <span className="banner-item"><span className="banner-dim">Window</span> <strong>{mission.launchWindow}</strong></span>
+          </div>
+        )}
+      </header>
       )}
       {narrow && phase === 'design' && selectedInstanceId && (
         <div className="touch-pad" aria-label="Move part">

@@ -46,6 +46,7 @@ const BUILD_TABS: { id: string; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'structure', label: 'Structure' },
   { id: 'propulsion', label: 'Propulsion' },
+  { id: 'engine', label: 'Engine' },
   { id: 'fuel', label: 'Fuel' },
   { id: 'power', label: 'Power' },
   { id: 'communications', label: 'Comms' },
@@ -268,6 +269,20 @@ export function BriefScreen() {
 const isLandingPart = (specId: string) => ['heatshield', 'chute', 'descent', 'legs'].includes(specId)
 
 export function DesignScreen() {
+  const tabsRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    const el = tabsRef.current
+    if (!el) return
+    const handleWheel = (e: WheelEvent) => {
+      if (e.deltaY !== 0) {
+        e.preventDefault()
+        el.scrollLeft += e.deltaY
+      }
+    }
+    el.addEventListener('wheel', handleWheel, { passive: false })
+    return () => el.removeEventListener('wheel', handleWheel)
+  }, [])
   const craft = useMission((state) => state.craft)
   const plan = useMission((state) => state.plan)
   const mission = useActiveMission()
@@ -339,6 +354,9 @@ export function DesignScreen() {
         const itemSpec = CATALOG.find((c) => c.id === p.specId)
         if (itemSpec) {
           counts[itemSpec.subsystem] = (counts[itemSpec.subsystem] ?? 0) + 1
+          if (itemSpec.subsystem === 'propulsion' && itemSpec.thrustN > 0) {
+            counts['engine'] = (counts['engine'] ?? 0) + 1
+          }
         }
       }
       counts['all'] = (counts['all'] ?? 0) + 1
@@ -375,6 +393,7 @@ export function DesignScreen() {
       if (filter === 'all') return true
       if (filter === 'landing') return isLandingPart(item.id)
       if (isLandingPart(item.id)) return false
+      if (filter === 'engine') return item.subsystem === 'propulsion' && item.thrustN > 0
       if (filter === 'communications') return item.subsystem === 'communications'
       return item.subsystem === filter
     })
@@ -446,7 +465,7 @@ export function DesignScreen() {
       {/* Left Panel: Catalog Parts */}
       <aside className="side left flat-panel" aria-label="Part Catalog">
         <div className="panel-inner">
-          <nav className="flat-tabs-row" role="tablist" aria-label="Part categories">
+          <nav ref={tabsRef} className="flat-tabs-row" role="tablist" aria-label="Part categories">
             {BUILD_TABS.map((tab) => {
               const count = fittedCounts[tab.id] ?? 0
               const isActive = filter === tab.id
@@ -457,7 +476,10 @@ export function DesignScreen() {
                   role="tab"
                   aria-selected={isActive}
                   className={`flat-tab-item ${isActive ? 'is-active' : ''}`}
-                  onClick={() => setFilter(tab.id)}
+                  onClick={(e) => {
+                    setFilter(tab.id)
+                    e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' })
+                  }}
                 >
                   <span className="tab-label">{tab.label}</span>
                   <span className="tab-count">{count}</span>
