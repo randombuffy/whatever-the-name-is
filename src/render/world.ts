@@ -12,6 +12,8 @@ export interface ViewState {
   mode: SceneMode
   craft: SpacecraftConfig | null
   selectedInstanceId: string | null
+  hoveredInstanceId?: string | null
+  hoveredSpecId?: string | null
   burning: boolean
   thrust: number
   progress: number
@@ -86,7 +88,9 @@ export class MissionWorld {
   private pad: THREE.Mesh
   private gizmo = new THREE.Group()
   private engineLight: THREE.PointLight
+  private ambientLight!: THREE.AmbientLight
   private designLamp!: THREE.DirectionalLight
+  private designFillLamp!: THREE.DirectionalLight
   private yaw = 0.12
   private pitch = 0.16
   private distance = 6.6
@@ -118,15 +122,18 @@ export class MissionWorld {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
     this.renderer.toneMappingExposure = 1.08
-    this.scene.add(new THREE.AmbientLight(0xb7c4d8, 0.22))
-    this.scene.add(new THREE.HemisphereLight(0x1a2744, 0x050505, 0.45))
+    this.ambientLight = new THREE.AmbientLight(0xd0dcee, 0.28)
+    this.scene.add(this.ambientLight)
+    this.scene.add(new THREE.HemisphereLight(0x2a3d66, 0x111622, 0.55))
     const sun = new THREE.DirectionalLight(0xfff3df, 3.4)
     sun.position.set(28, 14, 18)
-    const fill = new THREE.DirectionalLight(0x6a8cc4, 0.55)
+    const fill = new THREE.DirectionalLight(0x7da4d8, 0.65)
     fill.position.set(-12, -3, -8)
-    this.designLamp = new THREE.DirectionalLight(0xfff8ee, 0)
-    this.designLamp.position.set(6, 10, 8)
-    this.scene.add(sun, fill, this.designLamp)
+    this.designLamp = new THREE.DirectionalLight(0xfffaed, 0)
+    this.designLamp.position.set(6, 12, 10)
+    this.designFillLamp = new THREE.DirectionalLight(0xa5c4ea, 0)
+    this.designFillLamp.position.set(-10, 4, 12)
+    this.scene.add(sun, fill, this.designLamp, this.designFillLamp)
     this.engineLight = new THREE.PointLight(0xffb26b, 0, 8, 2)
     this.scene.add(this.engineLight)
 
@@ -245,7 +252,9 @@ export class MissionWorld {
       this.asteroid.rotation.x += dt * 0.04
       this.jupiter.rotation.y += dt * 0.06
     }
-    this.designLamp.intensity = view.mode === 'design' ? 2.6 : 0
+    this.ambientLight.intensity = view.mode === 'design' ? 0.68 : 0.28
+    this.designLamp.intensity = view.mode === 'design' ? 3.4 : 0
+    this.designFillLamp.intensity = view.mode === 'design' ? 2.0 : 0
     this.syncCraft(view)
     this.applyOffsets(view)
     this.attachGizmo(view)
@@ -357,9 +366,13 @@ export class MissionWorld {
   private paintSelection(view: ViewState): void {
     if (!this.craft) return
     const selected = view.mode === 'design' ? view.selectedInstanceId : null
+    const hovered = view.mode === 'design' ? (view.hoveredInstanceId ?? null) : null
+    const hoveredSpec = view.mode === 'design' ? (view.hoveredSpecId ?? null) : null
     this.craft.traverse((obj) => {
       if (obj.userData.kind === 'outline') {
-        obj.visible = Boolean(selected) && obj.userData.instanceId === selected
+        const isTarget = (Boolean(selected) && obj.userData.instanceId === selected) ||
+          (Boolean(hovered) && obj.userData.instanceId === hovered)
+        obj.visible = isTarget
         const mat = (obj as THREE.LineSegments).material
         if (mat instanceof THREE.LineBasicMaterial && obj.visible) {
           mat.opacity = this.reduced ? 1 : 0.62 + 0.38 * Math.sin(this.time * 5)
@@ -374,9 +387,19 @@ export class MissionWorld {
         mat.userData.base = mat.emissive.getHex()
         mat.userData.baseI = mat.emissiveIntensity
       }
-      const on = Boolean(selected) && mesh.userData.instanceId === selected
-      mat.emissive.set(on ? 0x9ec0ff : (mat.userData.base as number))
-      mat.emissiveIntensity = on ? 0.55 : (mat.userData.baseI as number)
+      const isSel = Boolean(selected) && mesh.userData.instanceId === selected
+      const isHov = (Boolean(hovered) && mesh.userData.instanceId === hovered) ||
+        (Boolean(hoveredSpec) && (mesh.userData.specId === hoveredSpec || obj.parent?.userData.specId === hoveredSpec))
+      if (isSel) {
+        mat.emissive.set(0x9ec0ff)
+        mat.emissiveIntensity = 0.55
+      } else if (isHov) {
+        mat.emissive.set(0xf59e0b)
+        mat.emissiveIntensity = 0.65
+      } else {
+        mat.emissive.set(mat.userData.base as number)
+        mat.emissiveIntensity = mat.userData.baseI as number
+      }
     })
   }
 
@@ -462,7 +485,7 @@ export class MissionWorld {
         this.asteroid.position.set(2.4, -0.7, -1.8)
         this.asteroid.scale.setScalar(0.16)
       }
-      this.halo.visible = true
+      this.halo.visible = false
       this.halo.position.copy(hero.position)
       this.halo.rotation.set(Math.PI / 2.4, this.time * 0.12, 0)
       this.halo.scale.setScalar(kind === 'asteroid' ? 0.52 : kind === 'europa' ? 0.58 : 0.78)
@@ -646,15 +669,15 @@ export class MissionWorld {
 
     if (view.mode === 'design' && this.framed !== 'design-side') {
       this.framed = 'design-side'
-      this.distance = 14
-      this.pitch = 0.22
-      this.yaw = 0.9
+      this.distance = 15.5
+      this.pitch = 0.18
+      this.yaw = 0.85
     } else if (view.mode !== 'design') this.framed = view.mode
     const extra = view.mode === 'menu' ? 3.4 : view.mode === 'destination' ? 2.4 : 0
     const orbitR = view.mode === 'destination' ? Math.max(8.4, this.distance + extra) : Math.max(2.4, this.distance + extra)
     if (view.mode === 'destination') this.look.set(0, 0.05, 0)
     else if (view.mode === 'menu') this.look.set(0.15, 0.35, -6.2)
-    else this.look.set(0, 0, 0)
+    else this.look.set(0, 0.65, 0)
     this.camera.position.set(
       this.look.x + Math.sin(this.yaw) * Math.cos(this.pitch) * orbitR,
       this.look.y + Math.sin(this.pitch) * orbitR,

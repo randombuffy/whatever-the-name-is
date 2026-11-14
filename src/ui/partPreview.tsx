@@ -13,7 +13,7 @@ function gl(): THREE.WebGLRenderer {
     renderer.setPixelRatio(1)
     renderer.outputColorSpace = THREE.SRGBColorSpace
     renderer.toneMapping = THREE.ACESFilmicToneMapping
-    renderer.setClearColor(0x14181e, 1)
+    renderer.setClearColor(0x1a2230, 1)
   }
   return renderer
 }
@@ -185,10 +185,12 @@ function shoot(specId: string, w: number, h: number): string {
   const view = gl()
   view.setSize(w, h, false)
   const scene = new THREE.Scene()
-  scene.add(new THREE.AmbientLight(0xd5deea, 0.75))
-  const key = new THREE.DirectionalLight(0xfff6ea, 2.4)
+  scene.add(new THREE.AmbientLight(0xdde8f6, 1.1))
+  const key = new THREE.DirectionalLight(0xfff8ee, 2.8)
   key.position.set(2.4, 3.6, 4.2)
-  scene.add(key)
+  const fill = new THREE.DirectionalLight(0x94b4dc, 1.4)
+  fill.position.set(-2.4, -1.0, 2.0)
+  scene.add(key, fill)
   const group = build(specId)
   scene.add(group)
   const box = new THREE.Box3().setFromObject(group)

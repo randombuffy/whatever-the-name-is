@@ -14,13 +14,13 @@ import { useActiveMission, useMission, type Phase } from './store/useMission'
 import { evaluate } from './domain/validate'
 import { effectiveWarp } from './domain/time'
 
-const STEPS: { id: Phase; label: string; icon: typeof Compass }[] = [
-  { id: 'select', label: 'Missions', icon: Compass },
-  { id: 'brief', label: 'Briefing', icon: Earth },
-  { id: 'design', label: 'Design', icon: Boxes },
-  { id: 'plan', label: 'Plan', icon: Route },
-  { id: 'launch', label: 'Launch', icon: Rocket },
-  { id: 'debrief', label: 'Debrief', icon: Flag },
+const STEPS: { id: Phase; label: string; tooltip: string; icon: typeof Compass }[] = [
+  { id: 'select', label: 'Missions', tooltip: 'Select destination mission', icon: Compass },
+  { id: 'brief', label: 'Goals', tooltip: 'Mission objectives and requirements', icon: Earth },
+  { id: 'design', label: 'Build', tooltip: 'Build spacecraft and configure subsystems', icon: Boxes },
+  { id: 'plan', label: 'Plan', tooltip: 'Plan orbital maneuvers and trajectory', icon: Route },
+  { id: 'launch', label: 'Launch', tooltip: 'Launch rocket from spaceport pad', icon: Rocket },
+  { id: 'debrief', label: 'Debrief', tooltip: 'Mission summary and telemetry report', icon: Flag },
 ]
 
 function shortMoney(usd: number): string {
@@ -200,26 +200,46 @@ export function App() {
                   type="button"
                   data-dock
                   className="dock-btn"
+                  title={step.tooltip}
                   aria-label={step.label}
                   aria-current={phase === step.id ? 'step' : undefined}
                   disabled={disabled}
                   onClick={() => (step.id === 'launch' ? requestLaunch() : go(step.id))}
                 >
-                  <Icon size={16} />
+                  <Icon size={18} strokeWidth={2} />
+                  <span className="dock-btn-label">{step.label}</span>
                 </button>
               )
             })
           }
-          <button type="button" data-dock className="dock-btn" aria-label="Credits" aria-current={phase === 'credits' ? 'step' : undefined} onClick={() => go('credits')}>
-            <Info size={16} />
+          <button
+            type="button"
+            data-dock
+            className="dock-btn"
+            title="Help & Info"
+            aria-label="Help"
+            aria-current={phase === 'credits' ? 'step' : undefined}
+            onClick={() => go('credits')}
+          >
+            <Info size={18} strokeWidth={2} />
+            <span className="dock-btn-label">Help</span>
           </button>
-          <button type="button" data-dock className="dock-btn" aria-label={audio ? 'Mute' : 'Sound'} aria-pressed={audio} onClick={() => setAudio(!audio)}>
-            {audio ? <Volume2 size={16} /> : <VolumeX size={16} />}
+          <button
+            type="button"
+            data-dock
+            className="dock-btn"
+            title={audio ? 'Mute audio' : 'Unmute audio'}
+            aria-label={audio ? 'Mute' : 'Sound'}
+            aria-pressed={audio}
+            onClick={() => setAudio(!audio)}
+          >
+            {audio ? <Volume2 size={18} strokeWidth={2} /> : <VolumeX size={18} strokeWidth={2} />}
+            <span className="dock-btn-label">Sound</span>
           </button>
-          <input className="mix-range" type="range" aria-label="Volume" min={0} max={1} step={0.05} value={volume} onChange={(event) => setVolume(Number(event.target.value))} />
+          <input className="mix-range" type="range" title="Volume slider" aria-label="Volume" min={0} max={1} step={0.05} value={volume} onChange={(event) => setVolume(Number(event.target.value))} />
           {narrow && (
-            <button type="button" data-dock className="dock-btn" aria-label={full ? 'Exit full screen' : 'Full screen'} onClick={toggleFull}>
-              <Expand size={16} />
+            <button type="button" data-dock className="dock-btn" title={full ? 'Exit full screen' : 'Full screen'} aria-label={full ? 'Exit full screen' : 'Full screen'} onClick={toggleFull}>
+              <Expand size={18} strokeWidth={2} />
             </button>
           )}
         </Dock>
