@@ -1,3 +1,5 @@
+import { STORAGE_BINDS } from '../domain/brand'
+
 export const FLIGHT_ACTIONS = [
   'pitchUp',
   'pitchDown',
@@ -40,7 +42,7 @@ export const DEFAULT_BINDS: FlightBinds = {
   proceed: ' ',
 }
 
-const KEY = 'mission-control-binds-v2'
+const KEY = STORAGE_BINDS
 
 export function loadBinds(): FlightBinds {
   try {

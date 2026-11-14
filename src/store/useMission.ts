@@ -10,7 +10,10 @@ import { defaultPlan, getMission, starterCraft } from '../domain/missions'
 import { outcomeOf } from '../domain/score'
 import { applyDecision, createSim, stepSim } from '../domain/simulate'
 import { WARP_MAX } from '../domain/time'
+import { migrateLegacyStorage, STORAGE_MAIN } from '../domain/brand'
 import type { ManoeuvreNode, MissionDef, MissionOutcome, MissionPlan, SimState, SpacecraftConfig } from '../domain/types'
+
+migrateLegacyStorage()
 
 export interface Checkpoint {
   id: string
@@ -204,7 +207,7 @@ export function useActiveMission() {
 const campaignStorage = (() => {
   let pending: string | null = null
   let timer = 0
-  let key = 'mission-control-v1'
+  let key = STORAGE_MAIN
   const flush = () => {
     timer = 0
     if (pending !== null) localStorage.setItem(key, pending)
@@ -706,7 +709,7 @@ export const useMission = create<MissionStore>()(
       setVolume: (volume) => set({ volume: Math.max(0, Math.min(1, volume)) }),
     }),
     {
-      name: 'mission-control-v1',
+      name: STORAGE_MAIN,
       storage: campaignStorage,
       partialize: (state) => ({
         phase: state.phase === 'station' ? (state.missionId ? 'pad' : 'select') : state.phase,

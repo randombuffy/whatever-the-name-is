@@ -216,7 +216,7 @@ export function SelectScreen({ onLaunch }: { onLaunch?: () => void }) {
     <div className="center-stage">
       <TitleBanner />
       <div className="title-gate">
-        <MissionTitle text="Mission Control" variant="hero" />
+        <MissionTitle text="AeroAestro" variant="hero" />
         <p>The rocket is on the pad. You start on the grounds, on foot.</p>
         <DifficultyPanel />
         <div className="title-actions">
@@ -1418,7 +1418,7 @@ export function CreditsScreen() {
   return (
     <div className="center-stage">
       <Glass className="pad-card credits">
-        <strong>Mission Control</strong>
+        <strong>AeroAestro</strong>
         <p>Briefing stills come from the NASA Image and Video Library. A Mars frame comes from the NASA/JPL Mars 2020 raw-image feed. Solar notes come from DONKI notifications. The asteroid count comes from the NEO feed. Each is cached for twelve hours, and the briefing stays up if a request fails. None of those feeds is the trajectory.</p>
         <p>The spacecraft is extruded the way Alexander Sanfilippo builds one: a polygon scaled and stitched, nose one way and the bell the other. Plate, foil and tile are painted on that hull. Catalog parts sit on it. https://github.com/AlexSanfilippo/ProceduralMeshGeneration</p>
         <p>Earth and Mars maps in the cruise sky are CC-BY 4.0 by Akshat. The Moon, Europa, and Jupiter maps, the grass clumps, the launch console, and the suited astronaut are the files supplied in public/3d.</p>

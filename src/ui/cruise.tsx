@@ -29,6 +29,7 @@ import type { ManoeuvreNode, ScriptItem, SimState, SpacecraftConfig } from '../d
 import { siteOf, sitesFor } from '../domain/campaign'
 import { effectiveWarp, sliderToWarp, warpLabel, warpToSlider } from '../domain/time'
 import { transferState } from '../domain/transfer'
+import { STORAGE_FLIGHT_GUIDE } from '../domain/brand'
 import { FLIGHT_ACTIONS, keyLabel, keyName, loadBinds, saveBinds, type FlightAction, type FlightBinds } from './binds'
 import { CruiseWorld, FLIGHT_CAMS, type FlightCam } from '../render/cruiseWorld'
 import { useActiveMission, useMission } from '../store/useMission'
@@ -84,7 +85,7 @@ export function CruiseScreen() {
   const [bindsOpen, setBindsOpen] = useState(false)
   const [timeline, setTimeline] = useState(false)
   const [pending, setPending] = useState<string | null>(null)
-  const [guide, setGuide] = useState(() => localStorage.getItem('mission-control-flight-guide') !== '1')
+  const [guide, setGuide] = useState(() => localStorage.getItem(STORAGE_FLIGHT_GUIDE) !== '1')
   const [binds, setBinds] = useState<FlightBinds>(() => loadBinds())
   const [capture, setCapture] = useState<FlightAction | null>(null)
   const [pose, setPose] = useState({ pitch: 0, yaw: 0, roll: 0 })
@@ -621,7 +622,7 @@ export function CruiseScreen() {
               type="button"
               aria-label="Dismiss"
               onClick={() => {
-                localStorage.setItem('mission-control-flight-guide', '1')
+                localStorage.setItem(STORAGE_FLIGHT_GUIDE, '1')
                 setGuide(false)
               }}
             >

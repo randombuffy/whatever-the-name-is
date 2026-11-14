@@ -113,7 +113,7 @@ export function Boot({ onReady }: Props) {
       <div className="boot-veil" />
       <pre className="boot-rocket">{art.join('\n')}</pre>
       <aside className="boot-card">
-        <b>Mission Control</b>
+        <b>AeroAestro</b>
         <span>
           Loading pad assets · {done}/{total}
         </span>

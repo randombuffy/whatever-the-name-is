@@ -313,7 +313,7 @@ function App({ seed, onFile, craft = null, missionId = 'mars', skin = 'voyage' }
       {skin === 'astra' ? (
         <header className={'outpost-bar' + (cinematic ? ' is-cinematic' : '')}>
           <div className="outpost-lock">
-            <strong>Mission Control</strong>
+            <strong>AeroAestro</strong>
             <small>{site.name}</small>
           </div>
           <div className="outpost-stamp">
@@ -547,7 +547,7 @@ function App({ seed, onFile, craft = null, missionId = 'mars', skin = 'voyage' }
 
       {onFile && (
         <button type="button" className={skin === 'astra' ? 'word fill outpost-file' : 'report-reopen primary-action'} style={skin === 'astra' ? undefined : { left: 16, right: 'auto' }} onClick={onFile}>
-          <span className="u">File with Mission Control</span>
+          <span className="u">File with AeroAestro</span>
         </button>
       )}
       {!cinematic && (

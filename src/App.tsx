@@ -178,7 +178,7 @@ export function App() {
       <header className="app-header-area">
         <div className="float-top">
           <div className="brand-pill">
-            <b>Mission Control</b>
+            <b>AeroAestro</b>
             <small>NASA Space Apps</small>
           </div>
           <nav className="top-nav" aria-label="Main Navigation">
