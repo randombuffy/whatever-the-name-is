@@ -1498,18 +1498,16 @@ button.key-banner {
  * Mission Control UI Redesign & Declutter Styles
  * ========================================================================= */
 
-/* Top Navigation Bar: Flex row with equal padding & gap, no overlap */
+/* Top Navigation Bar: Minimal segmented control */
 .top-nav {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
+  gap: 2px;
+  padding: 4px;
   border-radius: 14px;
-  background: rgba(17, 24, 39, 0.88);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  background: #141414;
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 /* Nav Item Button */
@@ -1518,69 +1516,67 @@ button.key-banner {
   align-items: center;
   justify-content: center;
   padding: 8px 16px;
-  border-radius: 8px;
-  border: 1px solid transparent;
+  border-radius: 10px;
+  border: none;
   background: transparent;
-  color: #cbd5e1;
-  font-family: var(--font, inherit);
-  font-size: 13px;
-  font-weight: 600;
+  color: #9a9a9a;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
   line-height: 1;
   white-space: nowrap;
   cursor: pointer;
-  transition: all 140ms ease;
+  transition: color 150ms ease;
   user-select: none;
 }
 
-/* Hover State */
+/* Hover: slightly lighter text only */
 .top-nav-btn:hover:not(:disabled):not(.active) {
-  background: rgba(255, 255, 255, 0.08);
-  color: #ffffff;
+  background: transparent;
+  color: #e5e5e5;
 }
 
-/* Active Screen Highlight: Blue box on the button itself, fitting label */
+/* Active item: near-black background (#000), white text */
 .top-nav-btn.active {
-  background: rgba(30, 58, 138, 0.45);
-  border: 1px solid #3b82f6;
+  background: #000000;
   color: #ffffff;
-  box-shadow: 0 0 12px rgba(59, 130, 246, 0.35);
   cursor: default;
 }
 
-/* Disabled State: Debrief before flight ends */
+/* Debrief / Disabled State: dimmed and disabled until a flight ends */
 .top-nav-btn:disabled {
-  color: rgba(148, 163, 184, 0.35);
-  border-color: transparent;
+  color: #444444;
   background: transparent;
   cursor: not-allowed;
   pointer-events: none;
 }
 
-/* Sound Mute Toggle: Never highlighted as an active screen */
+/* Sound Mute Toggle: never gets the active style */
 .top-nav-btn.sound-toggle-btn {
-  color: #e2e8f0;
+  color: #9a9a9a;
+  background: transparent;
 }
 
 .top-nav-btn.sound-toggle-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #ffffff;
+  color: #e5e5e5;
+  background: transparent;
 }
 
 .top-nav-btn.sound-toggle-btn.is-muted {
-  color: rgba(148, 163, 184, 0.55);
+  color: #555555;
   text-decoration: line-through;
 }
 
 .top-nav .mix-range {
-  width: 90px;
-  height: 4px;
-  margin-left: 2px;
-  accent-color: #3b82f6;
+  width: 70px;
+  height: 3px;
+  margin: 0 6px 0 2px;
+  accent-color: #9a9a9a;
   cursor: pointer;
 }
 
 .top-nav-btn.full-btn {
-  padding: 8px;
+  padding: 8px 10px;
 }
 
 /* Build Tabs: Scrollable Single Row without Wrapping */
