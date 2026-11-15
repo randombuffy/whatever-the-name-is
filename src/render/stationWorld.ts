@@ -26,7 +26,7 @@ interface Hotspot {
 }
 
 const HOTSPOTS: Hotspot[] = [
-  { point: new THREE.Vector3(0, 0.4, -9.5), radius: 3.4, action: 'mission', prompt: 'E — Open AeroAestro', place: 'Zarya module' },
+  { point: new THREE.Vector3(0, 0.4, -9.5), radius: 3.4, action: 'mission', prompt: 'E — Open Martian Cats', place: 'Zarya module' },
   { point: new THREE.Vector3(0, 1.2, 16), radius: 5.5, action: 'engineering', prompt: 'E — Board the spacecraft', place: 'Surveyor, docked' },
   { point: new THREE.Vector3(0, 0.2, 11.2), radius: 2.6, action: 'launch', prompt: 'E — Take the stack to the pad', place: 'Pressurized mating adapter' },
   { point: new THREE.Vector3(0, -2.4, 0.2), radius: 2.8, action: 'observe', prompt: 'E — Hold on the cupola', place: 'Cupola' },

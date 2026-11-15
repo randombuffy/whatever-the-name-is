@@ -46,7 +46,7 @@ export function StationScreen() {
       if (current === 'mission') setPanel(true)
       if (current === 'engineering') {
         if (!useMission.getState().missionId) {
-          setNote('Open AeroAestro in the aft module and accept a campaign first.')
+          setNote('Open Martian Cats in the aft module and accept a campaign first.')
           return
         }
         go('design')
@@ -84,7 +84,7 @@ export function StationScreen() {
       </div>
       {panel && (
         <div className="station-panel">
-          <strong>AeroAestro</strong>
+          <strong>Martian Cats</strong>
           <p>Accept one campaign. The docked ship, its mass, and its propellant carry from here through landing.</p>
           {MISSIONS.filter((mission) => mission.id === 'mars').map((mission) => (
             <button

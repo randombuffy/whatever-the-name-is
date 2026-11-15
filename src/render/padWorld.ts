@@ -1437,7 +1437,7 @@ export class PadWorld {
     this.shell(-58, 0, 28, 40, 34, 'px', 12, 18, white, glass, 'Assembly building')
     this.clad(-58, 0, 28, 40, 34, 'px', 12, 18, steel, glass, concrete)
     this.sign('ASSEMBLY', new THREE.Vector3(-43.4, 21.5, 0), Math.PI / 2)
-    this.shell(48, 38, 22, 7, 16, 'nz', 4.2, 3.2, white, glass, 'AeroAestro')
+    this.shell(48, 38, 22, 7, 16, 'nz', 4.2, 3.2, white, glass, 'Martian Cats')
     this.clad(48, 38, 22, 7, 16, 'nz', 4.2, 3.2, steel, glass, concrete)
     this.sign('CONTROL', new THREE.Vector3(48, 5.4, 29.55), Math.PI)
     this.shell(-8, 58, 22, 8, 16, 'nz', 6, 3.4, white, glass, 'Hangar')
@@ -1482,7 +1482,7 @@ export class PadWorld {
     this.dress(new THREE.Vector3(48, 0.12, 38), new THREE.Vector3(24, 0.08, 18), dark)
     for (let i = 0; i < 6; i++) this.dress(new THREE.Vector3(-58, 8 + i * 5, 17.3), new THREE.Vector3(24, 0.35, 0.35), steel)
     this.solid(new THREE.Vector3(-58, 0.75, -8), new THREE.Vector3(3.2, 1.1, 1.2), dark, 'Assembly building', false)
-    this.solid(new THREE.Vector3(48, 0.75, 40), new THREE.Vector3(2.4, 1.1, 0.8), dark, 'AeroAestro', false)
+    this.solid(new THREE.Vector3(48, 0.75, 40), new THREE.Vector3(2.4, 1.1, 0.8), dark, 'Martian Cats', false)
     this.yard(steel)
     this.lights(dark)
     this.antenna(white, steel)
@@ -1848,7 +1848,7 @@ export class PadWorld {
   }
 
   private loadRover(): void {
-    this.blocks.push({ box: new THREE.Box3(new THREE.Vector3(53.4, 0, 26.4), new THREE.Vector3(54.6, 1.8, 27.6)), place: 'AeroAestro' })
+    this.blocks.push({ box: new THREE.Box3(new THREE.Vector3(53.4, 0, 26.4), new THREE.Vector3(54.6, 1.8, 27.6)), place: 'Martian Cats' })
   }
 
   private solid(center: THREE.Vector3, size: THREE.Vector3, material: THREE.Material, place: string, collide = true): THREE.Mesh {

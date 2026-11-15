@@ -1,6 +1,6 @@
 # Info
 
-AeroAestro is the NASA Space Apps piece in this repository. The job it took is a simple one and a hard one: a mission is a set of limits, and the spacecraft you accept those limits with is the spacecraft you have to fly.
+Martian Cats is the NASA Space Apps piece in this repository. The job it took is a simple one and a hard one: a mission is a set of limits, and the spacecraft you accept those limits with is the spacecraft you have to fly.
 
 You do not pick a destination and watch a film of it. You close mass, propellant, power, the radio link, heat, and the budget. Then that same craft leaves the pad, coasts, enters, and has to live on the ground. The ledger in the hangar is the ledger in the flight. If the tank is short, the burn stops. If the antenna is small, the bits do not come home.
 

@@ -13,6 +13,7 @@ import type { SceneMode } from './render/world'
 import { useActiveMission, useMission, type Phase } from './store/useMission'
 import { effectiveWarp } from './domain/time'
 import { siteOf, objectiveOf } from './domain/campaign'
+import { APP_NAME } from './domain/brand'
 
 function sceneMode(phase: Phase): SceneMode {
   if (phase === 'design') return 'design'
@@ -166,7 +167,7 @@ export function App() {
       <header className="app-header-area">
         <div className="float-top">
           <div className="brand-pill">
-            <b>AeroAestro</b>
+            <b>{APP_NAME}</b>
             <small>NASA Space Apps</small>
           </div>
           <nav className="top-nav" aria-label="Main Navigation">

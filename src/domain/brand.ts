@@ -1,17 +1,17 @@
 /** Product name shown in the shell, boot gate, credits, and docs. */
-export const APP_NAME = 'AeroAestro'
+export const APP_NAME = 'Martian Cats'
 
 /** Required disclaimer on numbers, windows, and hardware figures. */
 export const EDU_LIMITS = 'Educational limits, not NASA specifications.'
 
-export const STORAGE_MAIN = 'aeroaestro-v1'
-export const STORAGE_BINDS = 'aeroaestro-binds-v2'
-export const STORAGE_FLIGHT_GUIDE = 'aeroaestro-flight-guide'
+export const STORAGE_MAIN = 'martian-cats-v1'
+export const STORAGE_BINDS = 'martian-cats-binds-v2'
+export const STORAGE_FLIGHT_GUIDE = 'martian-cats-flight-guide'
 
 const LEGACY = {
-  main: 'mission-control-v1',
-  binds: 'mission-control-binds-v2',
-  flightGuide: 'mission-control-flight-guide',
+  main: 'aeroaestro-v1',
+  binds: 'aeroaestro-binds-v2',
+  flightGuide: 'aeroaestro-flight-guide',
 } as const
 
 /** One-time copy so deploys under the new name keep saved campaigns. */

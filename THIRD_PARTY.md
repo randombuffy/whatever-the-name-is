@@ -1,6 +1,6 @@
 # Third-party attribution
 
-AeroAestro does not vendor the source trees of the two reference repositories. They were cloned into `reference/` for study and left out of the application bundle. What follows is the credit those studies require, plus the license text for VOIDTYPE so the notice travels with this project.
+Martian Cats does not vendor the source trees of the two reference repositories. They were cloned into `reference/` for study and left out of the application bundle. What follows is the credit those studies require, plus the license text for VOIDTYPE so the notice travels with this project.
 
 ## Shipwright
 

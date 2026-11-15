@@ -56,7 +56,7 @@ import { TitleBanner } from './TitleBanner'
 import { FAMILIES, SECTIONS, familyOf } from './families'
 import { startPlanTutorial, startDesignTutorial } from './tutorial'
 import { SiDesk } from './siDesk'
-import { EDU_LIMITS } from '../domain/brand'
+import { APP_NAME, EDU_LIMITS } from '../domain/brand'
 import { debriefVerdict } from '../domain/score'
 import SplitFlapText from './SplitFlapText'
 import { MissionRankingTable } from './MissionRankingTable'
@@ -290,7 +290,7 @@ export function SelectScreen({ onLaunch }: { onLaunch?: () => void }) {
     <div className="center-stage">
       <TitleBanner />
       <div className="title-gate">
-        <MissionTitle text="AeroAestro" variant="hero" />
+        <MissionTitle text={APP_NAME} variant="hero" />
         <p>Design the spacecraft, fly the same numbers, and see every trade-off land on the pad.</p>
         <DifficultyPanel />
         <CrewPanel />
@@ -1404,7 +1404,7 @@ function summaryOf(outcome: MissionOutcome): string {
         ? 'Flight finished. Some goals were short.'
         : 'Flight stopped early.'
   return [
-    `AeroAestro · ${outcome.craftName} · ${outcome.gradeRank ?? 'A'} ${outcome.score}/100`,
+    `${APP_NAME} · ${outcome.craftName} · ${outcome.gradeRank ?? 'A'} ${outcome.score}/100`,
     EDU_LIMITS,
     blurb,
     `Budget ${shortMoney(outcome.costUsd)} of ${shortMoney(outcome.budgetUsd)} · data ${bits(outcome.dataReturnedBits)}`,
@@ -1418,7 +1418,7 @@ export function CreditsScreen() {
   return (
     <div className="center-stage">
       <Glass className="pad-card credits">
-        <strong>AeroAestro</strong>
+        <strong>{APP_NAME}</strong>
         <p>Briefing stills come from the NASA Image and Video Library. A Mars frame comes from the NASA/JPL Mars 2020 raw-image feed. Solar notes come from DONKI notifications. The asteroid count comes from the NEO feed. Each is cached for twelve hours, and the briefing stays up if a request fails. None of those feeds is the trajectory.</p>
         <p>The spacecraft is extruded the way Alexander Sanfilippo builds one: a polygon scaled and stitched, nose one way and the bell the other. Plate, foil and tile are painted on that hull. Catalog parts sit on it. https://github.com/AlexSanfilippo/ProceduralMeshGeneration</p>
         <p>Earth and Mars maps in the cruise sky are CC-BY 4.0 by Akshat. The Moon, Europa, and Jupiter maps, the grass clumps, the launch console, and the suited astronaut are the files supplied in public/3d.</p>

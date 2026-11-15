@@ -1,4 +1,4 @@
-# AeroAestro: COMPLETE GAME TRANSFORMATION
+# Martian Cats: COMPLETE GAME TRANSFORMATION
 ## Master Implementation Prompt 02 | Full 3D Space Exploration, Spacecraft Engineering, Orbital Mechanics, Real-Time Physics and Scientific Exploration
 
 You are acting as an entire senior AAA game development studio, not a website developer.
@@ -46,7 +46,7 @@ The entire experience must be connected by one continuous simulation.
 | --- | --- | --- |
 | 1 Audit | [x] | The sixteen problems below match the game. The domain, renderer, catalog, and store were kept. Flight is the patched-conic and point-mass model this plan accepts. |
 | 2 Campaign | [x] | One craft runs pad → design → plan → launch → cruise → entry → surface → debrief. After touchdown you walk to the rover and deploy it. The station is a visit from the pad, and launch game still starts on the road. |
-| 3 Earth world | [x] | Launch game starts on the road at the center, facing the stack. The assembly bay, AeroAestro, and the hangar have framed doors that open with E. Inside are a ship, consoles, and the hangar craft. Hills, a shore, a pad fence with a gate, and the truck are part of the grounds. |
+| 3 Earth world | [x] | Launch game starts on the road at the center, facing the stack. The assembly bay, Martian Cats, and the hangar have framed doors that open with E. Inside are a ship, consoles, and the hangar craft. Hills, a shore, a pad fence with a gate, and the truck are part of the grounds. |
 | 4 Assets | [x] | NASA public-domain models are in the center and on Mars: Perseverance, Ingenuity, the Apollo lunar module, Explorer Jupiter-C as the flying booster, an astronaut, and an EVA suit. The payload hull is Shipwright. The procedural tanks remain only if Jupiter-C does not load. Sketchfab models were not added. |
 | 5 Engineering | [x] | Catalog now includes entry, landing, rover, helicopter, and the surface instruments. Standing a part down removes it from the mass and the mesh. The hangar shows dry mass, propellant, payload, and what deleting a part does to delta-v. A surface objective warns when its instruments are missing. |
 | 6 Objectives | [x] | Choosing an objective also selects its site: Jezero for water, Meridiani for atmosphere, Gale for geology, Utopia for habitation, with the matching Moon, Europa, and asteroid sites. The plan shows that kit, how many of those instruments are aboard, and the Hohmann or patched-conic transfer for the launch date. Cruise science pays a bonus only for the fitted kit, and the debrief scores that question on its own. |
@@ -140,7 +140,7 @@ The intended experience is:
 1. The player enters a realistic Earth environment.
 2. The player can physically move around the environment.
 3. The player discovers the space agency's mission facility.
-4. The player enters AeroAestro.
+4. The player enters Martian Cats.
 5. The player chooses a mission objective.
 6. The player accesses the spacecraft engineering facility.
 7. The player designs and assembles a complete spacecraft.
@@ -192,7 +192,7 @@ The environment should include:
 - Rocket assembly building.
 - Launch tower.
 - Launch pad.
-- AeroAestro hub building.
+- Martian Cats hub building.
 - Engineering and spacecraft assembly facility.
 - Rover testing area.
 - Vehicle access roads.
@@ -242,7 +242,7 @@ Use an appropriate physics system.
 
 The player should be able to:
 
-- Walk toward the AeroAestro building.
+- Walk toward the Martian Cats building.
 - Enter buildings.
 - Interact with doors.
 - Access mission consoles.
@@ -336,7 +336,7 @@ Search for appropriate assets including:
 - Satellites.
 - Antennas.
 - Launch infrastructure.
-- AeroAestro console equipment.
+- Martian Cats console equipment.
 - Astronaut or player character models.
 - Earth terrain.
 - Mars terrain.
@@ -1543,7 +1543,7 @@ Examples:
 - Measure atmospheric pressure.
 - Observe wind and dust.
 - Capture measurements over time.
-- Send the data to AeroAestro.
+- Send the data to Martian Cats.
 
 ### Objective 4: Geological mapping
 
@@ -1749,7 +1749,7 @@ Use restrained, compact interface elements.
 
 ### Visual direction
 
-- Dark AeroAestro aesthetic.
+- Dark Martian Cats aesthetic.
 - Clean typography.
 - High-quality 3D presentation.
 - Restrained blue accents.
@@ -2332,7 +2332,7 @@ Before considering this project complete, perform the following full gameplay te
 - Move the character.
 - Rotate the camera.
 - Walk through the launch facility.
-- Interact with AeroAestro.
+- Interact with Martian Cats.
 - Access the engineering facility.
 
 ### Engineering

@@ -14,7 +14,7 @@ const IDS = CATALOG.map((spec) => spec.id).join(', ')
 
 export function nimSystemPrompt(): string {
   return [
-    'You are the hangar engineer in AeroAestro, an educational NASA Space Apps mission-design game. Educational limits, not NASA specifications.',
+    'You are the hangar engineer in Martian Cats, an educational NASA Space Apps mission-design game. Educational limits, not NASA specifications.',
     'Mass, delta-v, power, link, heat, and cost are already computed by the game. Do not invent those numbers. Explain the holds using the figures you were given.',
     'Suggest only catalog part ids from this list:',
     IDS,

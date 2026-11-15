@@ -1,4 +1,4 @@
-# AeroAestro
+# Martian Cats
 
 An educational spacecraft engineering game. You accept a mission, fit a spacecraft against mass, delta-v, power, link, thermal and budget limits, then fly that same configuration. The numbers in the ledger are the numbers the simulation uses.
 
@@ -39,18 +39,18 @@ Put a key from https://api.nasa.gov/ in `.env.local`. `DEMO_KEY` works and is ra
 
 The hangar engineer on Design and Plan is SI-generated text from NVIDIA NIM. It tries `nvidia/nemotron-3.5-super-vl-120b-a12b`, then `nvidia/nemotron-3-ultra-550b-a55b`, then `nvidia/nemotron-3.5-lightning-30b-a3b`. It reads the holds the game already computed and may suggest catalog part ids or a call sign. Mass, delta-v, power, link, heat, and cost stay in `src/domain`. Replies are labelled `SI-generated · NVIDIA NIM · Nemotron`. No NASA logos, flags, or mission identifiers are generated. Code in this repository was written with Super Intelligence assistance; `SI.md` is the Space Apps disclosure.
 
-Put `NVIDIA_API_KEY` in `.env` for local play. For https://aeroaestro.vercel.app also add the same name in Vercel Project Settings → Environment Variables, then redeploy. The key is loaded only on the server (`/api/nim`). Restart `npm run dev` after you add it locally.
+Put `NVIDIA_API_KEY` in `.env` for local play. For the Vercel deploy also add the same name in Vercel Project Settings → Environment Variables, then redeploy. The key is loaded only on the server (`/api/nim`). Restart `npm run dev` after you add it locally.
 
 ## Architecture
 
-One Vite + React + TypeScript application. Three.js draws the scene. Zustand holds the mission and persists it in `localStorage` under `aeroaestro-v1`. An in-progress flight is not restored. Reloading during a flight returns you to launch commit with the same spacecraft.
+One Vite + React + TypeScript application. Three.js draws the scene. Zustand holds the mission and persists it in `localStorage` under `martian-cats-v1`. An in-progress flight is not restored. Reloading during a flight returns you to launch commit with the same spacecraft.
 
 The engineering engine lives in `src/domain` and does not import React or Three.js. Simulation time advances in fixed steps inside `stepSim`. The render loop only spends accumulated sim-seconds. A slow frame does not change the result.
 
 | Area | Path | Owns |
 | --- | --- | --- |
 | Application | `src/App.tsx`, `src/store` | Phase flow and persistence |
-| Interface | `src/ui`, `src/styles` | Screens, ledger, AeroAestro shell |
+| Interface | `src/ui`, `src/styles` | Screens, ledger, Martian Cats shell |
 | Rendering | `src/render` | Viewport, spacecraft mesh, schematic transfer |
 | Spacecraft | `src/domain/catalog.ts`, `assemble.ts`, `src/render/procShip.ts` | Specs and the extruded hull. Catalog parts sit on that hull. |
 | Engineering | `src/domain/*.ts` except missions and simulate | Mass, propulsion, power, cost, link, thermal, reliability, validation |
@@ -66,7 +66,7 @@ Both reference repositories were cloned under `reference/` (gitignored) and read
 
 **Shipwright** (Dolf Veenvliet / macouno) is the hangar name and the idea of named mounts. Its vertex tables are not in this tree. Informal permission is in that repository's README. Credit is on the Credits screen and in `THIRD_PARTY.md`.
 
-**VOIDTYPE** (Itz-Murali and Itz-Anya) is a Nuxt typing game. AeroAestro does not use its combat, typing, or neon fighter. The renderer fallback chain, the star field, and the shape of the engine flame shader follow that project's Three.js approach and were rewritten here. The attribution license is reproduced in `THIRD_PARTY.md`. Credit is in this file and on the Credits screen: https://github.com/Itz-Murali/Void-Type
+**VOIDTYPE** (Itz-Murali and Itz-Anya) is a Nuxt typing game. Martian Cats does not use its combat, typing, or neon fighter. The renderer fallback chain, the star field, and the shape of the engine flame shader follow that project's Three.js approach and were rewritten here. The attribution license is reproduced in `THIRD_PARTY.md`. Credit is in this file and on the Credits screen: https://github.com/Itz-Murali/Void-Type
 
 ## Engineering assumptions
 

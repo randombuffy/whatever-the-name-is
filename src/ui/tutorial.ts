@@ -30,7 +30,7 @@ export function startPadTutorial(): void {
         element: '.field-hud',
         popover: {
           title: 'Guidance & Beacon',
-          description: 'Follow the yellow guidance arrows towards AeroAestro to accept campaigns, or approach the launch pad tower to board your flight stack.',
+          description: 'Follow the yellow guidance arrows towards Martian Cats to accept campaigns, or approach the launch pad tower to board your flight stack.',
           side: 'top',
           align: 'start',
         },
