@@ -663,9 +663,9 @@ export const useMission = create<MissionStore>()(
         const mission = missionFrom(missionId, custom, difficulty)
         if (!sim || !craft || !mission || !plan) return
         const scored = { ...sim, sciencePoints: sim.sciencePoints + surfaceScience, dataReturnedBits: sim.dataReturnedBits + surfaceBits }
-        const outcome = outcomeOf(craft, mission, plan, scored)
-        if (campaignNote) outcome.lessons = [campaignNote, ...outcome.lessons]
         const landing = touchdown?.grade ?? 'none'
+        const outcome = outcomeOf(craft, mission, plan, scored, landing)
+        if (campaignNote) outcome.lessons = [campaignNote, ...outcome.lessons].slice(0, 2)
         const earned = badgesOf({
           launched: true,
           flew: sim.distanceFraction > 0 || sim.index > 0 || sim.status === 'complete',
@@ -689,9 +689,6 @@ export const useMission = create<MissionStore>()(
         outcome.achievements = earned
         outcome.timeline = checkpoints.map((mark) => ({ tSec: mark.tSec, label: mark.label }))
         outcome.crew = crew.map((seat) => ({ role: seat.role, name: seat.name }))
-        if (crew.length > 1) {
-          outcome.strengths = [`Crew of ${crew.length}: ${crew.map((seat) => seat.name).join(', ')}.`, ...outcome.strengths]
-        }
         const nextBadges = [...new Set([...badges, ...earned.map((badge) => badge.id)])]
         set({
           outcome,

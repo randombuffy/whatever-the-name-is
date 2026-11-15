@@ -11,8 +11,13 @@ describe('fieldSamples', () => {
     expect(new Set(samples.map((sample) => sample.name)).size).toBe(5)
     for (const sample of samples) {
       const range = Math.hypot(sample.x + 3, sample.z + 9)
-      expect(range).toBeGreaterThan(6)
-      expect(range).toBeLessThan(22)
+      expect(range).toBeGreaterThan(40)
+      expect(range).toBeLessThan(120)
+    }
+    for (let i = 0; i < samples.length; i++) {
+      for (let j = i + 1; j < samples.length; j++) {
+        expect(Math.hypot(samples[i].x - samples[j].x, samples[i].z - samples[j].z)).toBeGreaterThan(32)
+      }
     }
   })
 })

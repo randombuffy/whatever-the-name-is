@@ -57,6 +57,9 @@ import { FAMILIES, SECTIONS, familyOf } from './families'
 import { startPlanTutorial, startDesignTutorial } from './tutorial'
 import { SiDesk } from './siDesk'
 import { EDU_LIMITS } from '../domain/brand'
+import { debriefVerdict } from '../domain/score'
+import SplitFlapText from './SplitFlapText'
+import { MissionRankingTable } from './MissionRankingTable'
 
 const FILTERS: { id: Subsystem | 'all'; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -250,27 +253,6 @@ export function CrewBar() {
   )
 }
 
-export function RankBoard({ compact = false }: { compact?: boolean }) {
-  const history = useMission((state) => state.history)
-  if (history.length === 0) return null
-  const ranked = [...history].sort((a, b) => b.score - a.score).slice(0, compact ? 3 : 8)
-  return (
-    <div className={`rank-board${compact ? ' is-compact' : ''}`}>
-      <b>Mission ranking</b>
-      <ol>
-        {ranked.map((flight, index) => (
-          <li key={`${flight.finishedAt}-${flight.craftName}`}>
-            <span>{index + 1}</span>
-            <strong>{flight.craftName}</strong>
-            <em>{flight.score}</em>
-            <small>{flight.siteName ?? flight.missionId} · {flight.gradeRank ?? '—'}</small>
-          </li>
-        ))}
-      </ol>
-    </div>
-  )
-}
-
 export function DifficultyPanel({ compact = false }: { compact?: boolean }) {
   const difficulty = useMission((state) => state.difficulty)
   const setDifficulty = useMission((state) => state.setDifficulty)
@@ -312,7 +294,6 @@ export function SelectScreen({ onLaunch }: { onLaunch?: () => void }) {
         <p>Design the spacecraft, fly the same numbers, and see every trade-off land on the pad.</p>
         <DifficultyPanel />
         <CrewPanel />
-        <RankBoard compact />
         <div className="title-actions">
           <button type="button" className="word" onClick={() => { startFresh(); onLaunch?.() }}>
             <svg className="btn-mark" viewBox="0 0 16 16" aria-hidden="true">
@@ -639,11 +620,6 @@ export function DesignScreen() {
             <Meter label="Cost" value={shortMoney(report.cost.totalUsd)} ratio={report.cost.totalUsd / mission.budgetUsd} tone={report.cost.marginUsd < 0 ? 'bad' : 'ok'} />
             <p className="edu-note">{EDU_LIMITS}</p>
             <SiDesk mission={mission} craft={craft} plan={plan} report={report} />
-            <h2 className="section-label">Fix these first</h2>
-            {hard === 0 && <p className="ready">The required parts are aboard. Add a part from the left list, or drag it onto the ship.</p>}
-            {report.issues.filter((issue) => issue.severity === 'hard').slice(0, 3).map((issue) => (
-              <p key={issue.id} className="need">{issue.change}</p>
-            ))}
             <h2 className="section-label">Fitted</h2>
             {craft.parts.map((part) => {
               const fitted = CATALOG.find((item) => item.id === part.specId)
@@ -700,6 +676,21 @@ export function DesignScreen() {
                 </div>
               )
             })}
+            {hard > 0 && (
+              <div className="fix-first-block">
+                <h2 className="section-label">Fix these first</h2>
+                <ul className="fix-first-list">
+                  {report.issues.filter((issue) => issue.severity === 'hard').slice(0, 3).map((issue) => (
+                    <li key={issue.id}>{issue.what}</li>
+                  ))}
+                </ul>
+                {hard > 3 && (
+                  <button type="button" className="word slim" onClick={() => setIssuesOpen(true)}>
+                    {hard - 3} more holds
+                  </button>
+                )}
+              </div>
+            )}
             {selected && (
               <div className="pad" aria-label="Move part">
                 <Move3d size={14} />
@@ -1230,7 +1221,6 @@ export function FlightScreen() {
 export function DebriefScreen() {
   const outcome = useMission((state) => state.outcome)
   const go = useMission((state) => state.go)
-  const history = useMission((state) => state.history)
   const field = useMission((state) => state.field)
   const resumeSurface = useMission((state) => state.resumeSurface)
   const missionId = useMission((state) => state.missionId)
@@ -1239,22 +1229,17 @@ export function DebriefScreen() {
 
   const rank = outcome.gradeRank ?? (outcome.score >= 92 ? 'S' : outcome.score >= 80 ? 'A' : outcome.score >= 65 ? 'B' : outcome.score >= 50 ? 'C' : 'F')
   const leftover = outcome.budgetUsd - outcome.costUsd
-  const verdict = outcome.success ? 'You won' : outcome.partial ? 'Partial result' : 'You lost'
-  const why = outcome.success
-    ? 'The flight finished and the primary goals were met.'
-    : outcome.partial
-      ? 'The spacecraft finished, but at least one primary goal was short.'
-      : outcome.summary
-
-  const title = verdict
+  const { title, tone: verdictTone } = debriefVerdict(outcome)
+  const flapPhrase = title.toUpperCase()
+  const flapColor = verdictTone === 'win' ? '#9be7b0' : verdictTone === 'partial' ? '#f0c48a' : '#f0a090'
 
   const breakdown = outcome.scoreBreakdown ?? {
-    primaryPoints: outcome.success ? 25 : 8,
+    primaryPoints: outcome.success ? 30 : 12,
     sciencePoints: Math.min(30, Math.round(outcome.score * 0.3)),
-    dataPoints: Math.min(15, Math.round(outcome.score * 0.15)),
-    budgetPoints: Math.min(14, Math.round(outcome.score * 0.14)),
-    landingPoints: outcome.landing && outcome.landing !== 'none' ? 10 : 0,
-    anomalyPoints: Math.min(8, Math.round(outcome.score * 0.08)),
+    dataPoints: Math.min(25, Math.round(outcome.score * 0.25)),
+    budgetPoints: Math.min(15, leftover >= 0 ? 10 : 0),
+    landingPoints: 0,
+    anomalyPoints: 0,
     total: outcome.score,
   }
 
@@ -1268,11 +1253,32 @@ export function DebriefScreen() {
 
   return (
     <div className="center-stage debrief-stage">
-      <Glass className={`debrief-console result-card ${outcome.success ? 'is-win' : outcome.partial ? 'is-partial' : 'is-lose'}`}>
+      <Glass className={`debrief-console result-card ${verdictTone === 'win' ? 'is-win' : verdictTone === 'partial' ? 'is-partial' : 'is-lose'}`}>
         <div className="debrief-header">
           <div>
-            <span className="debrief-tag">AeroAestro result</span>
-            <h1 className="debrief-title">{title}</h1>
+            <span className="debrief-tag">Result</span>
+            <h1 className="debrief-title">
+              <SplitFlapText
+                key={flapPhrase}
+                text={flapPhrase}
+                loop={false}
+                intro
+                tileStyle="board"
+                padTo={14}
+                align="left"
+                fontSize={20}
+                gap={4}
+                tileRadius={5}
+                tileColor="#0f1419"
+                textColor={flapColor}
+                flipDuration={0.1}
+                stagger={0.045}
+                flipsPerChar={7}
+                glare={0.12}
+                depth={0.42}
+                order="left"
+              />
+            </h1>
             <p className="muted">{outcome.craftName}{outcome.siteName ? ` · ${outcome.siteName}` : ''}</p>
           </div>
           <div className={`debrief-rank-badge rank-${rank}`}>
@@ -1280,7 +1286,7 @@ export function DebriefScreen() {
           </div>
         </div>
 
-        <p className="result-why">{why}</p>
+        <p className="result-why">{outcome.summary}</p>
         <p className="edu-note">{EDU_LIMITS}</p>
 
         <div className="debrief-hero">
@@ -1289,118 +1295,53 @@ export function DebriefScreen() {
               <span className="debrief-summary-score">{outcome.score}</span>
               <span style={{ fontSize: '12px', color: '#64748b' }}>/ 100</span>
             </div>
-            <p>{outcome.summary}</p>
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', fontWeight: 600 }}>
-            Score
-          </span>
-          <div className="debrief-breakdown-grid">
-            <div className="debrief-cat-row">
-              <div className="debrief-cat-header">
-                <span>Primary Flight Execution</span>
-                <b>{breakdown.primaryPoints} / 25</b>
-              </div>
-              <div className="debrief-cat-bar">
-                <div className="debrief-cat-fill" style={{ width: `${(Math.max(0, breakdown.primaryPoints) / 25) * 100}%` }} />
-              </div>
+        <div className="debrief-breakdown-grid">
+          <div className="debrief-cat-row">
+            <div className="debrief-cat-header">
+              <span>Flight</span>
+              <b>{breakdown.primaryPoints} / 30</b>
             </div>
-
-            <div className="debrief-cat-row">
-              <div className="debrief-cat-header">
-                <span>Science Return Yield</span>
-                <b>{breakdown.sciencePoints} / 30</b>
-              </div>
-              <div className="debrief-cat-bar">
-                <div className="debrief-cat-fill" style={{ width: `${(Math.max(0, breakdown.sciencePoints) / 30) * 100}%`, background: '#34d399' }} />
-              </div>
+            <div className="debrief-cat-bar">
+              <div className="debrief-cat-fill" style={{ width: `${(Math.max(0, breakdown.primaryPoints) / 30) * 100}%` }} />
             </div>
-
-            <div className="debrief-cat-row">
-              <div className="debrief-cat-header">
-                <span>Telemetry & Downlink</span>
-                <b>{breakdown.dataPoints} / 15</b>
-              </div>
-              <div className="debrief-cat-bar">
-                <div className="debrief-cat-fill" style={{ width: `${(Math.max(0, breakdown.dataPoints) / 15) * 100}%`, background: '#a78bfa' }} />
-              </div>
+          </div>
+          <div className="debrief-cat-row">
+            <div className="debrief-cat-header">
+              <span>Science</span>
+              <b>{breakdown.sciencePoints} / 30</b>
             </div>
-
-            <div className="debrief-cat-row">
-              <div className="debrief-cat-header">
-                <span>Budget Discipline</span>
-                <b>{breakdown.budgetPoints >= 0 ? `+${breakdown.budgetPoints}` : breakdown.budgetPoints} / 14</b>
-              </div>
-              <div className="debrief-cat-bar">
-                <div className="debrief-cat-fill" style={{ width: `${(Math.max(0, breakdown.budgetPoints) / 14) * 100}%`, background: '#fbbf24' }} />
-              </div>
+            <div className="debrief-cat-bar">
+              <div className="debrief-cat-fill" style={{ width: `${(Math.max(0, breakdown.sciencePoints) / 30) * 100}%` }} />
             </div>
-
-            <div className="debrief-cat-row">
-              <div className="debrief-cat-header">
-                <span>Landing Precision</span>
-                <b>{breakdown.landingPoints} / 10</b>
-              </div>
-              <div className="debrief-cat-bar">
-                <div className="debrief-cat-fill" style={{ width: `${(Math.max(0, breakdown.landingPoints) / 10) * 100}%` }} />
-              </div>
+          </div>
+          <div className="debrief-cat-row">
+            <div className="debrief-cat-header">
+              <span>Data sent</span>
+              <b>{breakdown.dataPoints} / 25</b>
             </div>
-
-            <div className="debrief-cat-row">
-              <div className="debrief-cat-header">
-                <span>Operational Resilience</span>
-                <b>{breakdown.anomalyPoints} / 8</b>
-              </div>
-              <div className="debrief-cat-bar">
-                <div className="debrief-cat-fill" style={{ width: `${(Math.max(0, breakdown.anomalyPoints) / 8) * 100}%`, background: '#f43f5e' }} />
-              </div>
+            <div className="debrief-cat-bar">
+              <div className="debrief-cat-fill" style={{ width: `${(Math.max(0, breakdown.dataPoints) / 25) * 100}%` }} />
+            </div>
+          </div>
+          <div className="debrief-cat-row">
+            <div className="debrief-cat-header">
+              <span>Budget left</span>
+              <b>{Math.max(0, breakdown.budgetPoints)} / 15</b>
+            </div>
+            <div className="debrief-cat-bar">
+              <div className="debrief-cat-fill" style={{ width: `${(Math.max(0, breakdown.budgetPoints) / 15) * 100}%` }} />
             </div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', fontWeight: 600 }}>
-            What you have left
-          </span>
-          <div className="debrief-metrics-grid">
-            <div className="debrief-metric-cell">
-              <span className="debrief-metric-label">Score</span>
-              <span className="debrief-metric-val">{outcome.score} / 100</span>
-            </div>
-            <div className="debrief-metric-cell">
-              <span className="debrief-metric-label">Budget left</span>
-              <span className="debrief-metric-val">{shortMoney(leftover)}</span>
-            </div>
-            <div className="debrief-metric-cell">
-              <span className="debrief-metric-label">Fuel left</span>
-              <span className="debrief-metric-val">{kg(outcome.propellantRemainingKg, 1)}</span>
-            </div>
-            <div className="debrief-metric-cell">
-              <span className="debrief-metric-label">Fuel used</span>
-              <span className="debrief-metric-val">{kg(outcome.propellantUsedKg, 1)}</span>
-            </div>
-            <div className="debrief-metric-cell">
-              <span className="debrief-metric-label">Data returned</span>
-              <span className="debrief-metric-val">{bits(outcome.dataReturnedBits)}</span>
-            </div>
-            <div className="debrief-metric-cell">
-              <span className="debrief-metric-label">Spent / budget</span>
-              <span className="debrief-metric-val">{shortMoney(outcome.costUsd)} / {shortMoney(outcome.budgetUsd)}</span>
-            </div>
+        {outcome.lessons.length > 0 && (
+          <div className="result-lessons">
+            {outcome.lessons.map((line) => <p key={line}>{line}</p>)}
           </div>
-        </div>
-
-        <div className="result-lessons">
-          <span className="debrief-metric-label">How your choices landed</span>
-          {outcome.strengths.map((line) => <p key={line} className="result-good">{line}</p>)}
-          {outcome.mistakes.map((line) => <p key={line} className="result-bad">{line}</p>)}
-          {outcome.lessons.map((line) => <p key={line}>{line}</p>)}
-          {outcome.strengths.length + outcome.mistakes.length + outcome.lessons.length === 0 && (
-            <p>Fit the missing parts, keep mass under the launcher, and close the radio link before you fly.</p>
-          )}
-        </div>
+        )}
 
         {outcome.crew && outcome.crew.length > 1 && (
           <div className="crew-report">
@@ -1412,40 +1353,38 @@ export function DebriefScreen() {
             </ul>
           </div>
         )}
-        {history.length > 1 && <RankBoard compact />}
+        <MissionRankingTable limit={6} />
         <div className="debrief-objectives-box">
-          <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', fontWeight: 600 }}>
-            Goals
-          </span>
-          {outcome.objectives.map((item) => (
+          <p className="debrief-panel-label">Goals</p>
+          {outcome.objectives.filter((item) => item.id === 'survive' || item.id === 'science' || item.id === 'data').map((item) => (
             <div key={item.id} className="debrief-obj-row">
               {item.met ? (
                 <CircleCheck size={15} style={{ color: '#4ade80', flexShrink: 0, marginTop: '2px' }} />
               ) : (
                 <CircleAlert size={15} style={{ color: '#f87171', flexShrink: 0, marginTop: '2px' }} />
               )}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
-                <strong style={{ color: item.met ? '#f1f5f9' : '#e2e8f0', fontSize: '12px' }}>{item.label}</strong>
-                {item.detail && <span style={{ color: '#94a3b8', fontSize: '11px' }}>{item.detail}</span>}
-              </div>
+              <strong style={{ color: item.met ? '#f1f5f9' : '#e2e8f0', fontSize: '12px' }}>{item.label}</strong>
             </div>
           ))}
         </div>
 
         <div className="result-actions">
-          {!outcome.success && (
-            <button type="button" className="word fill" onClick={() => go('design')}>Try again</button>
-          )}
-          {mars && (outcome.success || outcome.partial) && (
-            <button type="button" className="word fill" onClick={() => (field ? resumeSurface() : go('surface'))}>
-              Walk the surface
-            </button>
+          {((!outcome.success) || (mars && (outcome.success || outcome.partial || outcome.score >= 65))) && (
+            <div className="result-actions-primary">
+              {!outcome.success && (
+                <button type="button" className="word fill" onClick={() => go('design')}>Try again</button>
+              )}
+              {mars && (outcome.success || outcome.partial || outcome.score >= 65) && (
+                <button type="button" className="word fill" onClick={() => (field ? resumeSurface() : go('surface'))}>
+                  Walk the surface
+                </button>
+              )}
+            </div>
           )}
           <button type="button" className="word slim" onClick={() => go('design')}>Rebuild</button>
           <button type="button" className="word slim" onClick={() => go('select')}>Home</button>
           <button type="button" className="word slim" onClick={handleCopy}>{copied ? 'Copied' : 'Copy result'}</button>
         </div>
-        {history.length > 1 && <p className="muted">{history.length} flights on this browser.</p>}
       </Glass>
     </div>
   )
@@ -1453,29 +1392,23 @@ export function DebriefScreen() {
 
 function summaryOf(outcome: MissionOutcome): string {
   const bd = outcome.scoreBreakdown
+  const { title: verdictTitle } = debriefVerdict(outcome)
   const bdLines = bd ? [
-    `SCORE BREAKDOWN:`,
-    `- Flight Execution: ${bd.primaryPoints} / 25`,
-    `- Science Return: ${bd.sciencePoints} / 30`,
-    `- Telemetry & Downlink: ${bd.dataPoints} / 15`,
-    `- Budget Discipline: ${bd.budgetPoints} / 14`,
-    `- Landing Precision: ${bd.landingPoints} / 10`,
-    `- Operational Resilience: ${bd.anomalyPoints} / 8`,
+    `Flight ${bd.primaryPoints}/30 · Science ${bd.sciencePoints}/30 · Data ${bd.dataPoints}/25 · Budget ${bd.budgetPoints}/15`,
   ] : []
+  const blurb = verdictTitle === 'You won'
+    ? 'Goals met.'
+    : verdictTitle === 'Strong run'
+      ? 'High score. One or more mission goals were still short.'
+      : outcome.partial
+        ? 'Flight finished. Some goals were short.'
+        : 'Flight stopped early.'
   return [
-    `=== AeroAestro result: ${outcome.craftName} ===`,
+    `AeroAestro · ${outcome.craftName} · ${outcome.gradeRank ?? 'A'} ${outcome.score}/100`,
     EDU_LIMITS,
-    `Rank: ${outcome.gradeRank ?? 'A'} | Overall Score: ${outcome.score}/100`,
-    `Status: ${outcome.success ? 'Mission Success' : outcome.partial ? 'Partial Completion' : 'Mission Stopped'}`,
-    outcome.siteName ? `Landing Target: ${outcome.siteName}` : '',
-    outcome.durationSec !== undefined ? `Duration: ${clock(outcome.durationSec)}` : '',
-    outcome.landing && outcome.landing !== 'none' ? `Touchdown: ${outcome.landing} (${Math.abs(outcome.landingOffset ?? 0).toFixed(0)}m offset)` : '',
-    `Propellant Left: ${kg(outcome.propellantRemainingKg, 1)} / Burnt: ${kg(outcome.propellantUsedKg, 1)}`,
-    `Delta-V Used: ${mps(outcome.dvUsedMps)}`,
-    `Telemetry Data: ${bits(outcome.dataReturnedBits)}`,
-    `Budget: ${shortMoney(outcome.costUsd)} spent of ${shortMoney(outcome.budgetUsd)} allocated`,
+    blurb,
+    `Budget ${shortMoney(outcome.costUsd)} of ${shortMoney(outcome.budgetUsd)} · data ${bits(outcome.dataReturnedBits)}`,
     ...bdLines,
-    ...(outcome.achievements && outcome.achievements.length > 0 ? [`Achievements: ${outcome.achievements.map((b) => b.name).join(', ')}`] : []),
   ].filter(Boolean).join('\n')
 }
 

@@ -636,7 +636,7 @@ export class DescentWorld {
 
   /** Speeds the descent clock. 1 is real time, 4 is the default, 16 and 50 are fast passes. */
   setPace(pace: number): void {
-    this.pace = Math.max(1, Math.min(80, pace))
+    this.pace = Math.max(1, Math.min(50, pace))
   }
 
   private dress(config: SpacecraftConfig): void {

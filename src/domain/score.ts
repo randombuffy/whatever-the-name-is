@@ -5,7 +5,23 @@ import { propulsionBudget } from './propulsion'
 import { evaluate } from './validate'
 import type { MissionDef, MissionOutcome, MissionPlan, SimState, SpacecraftConfig } from './types'
 
-export function outcomeOf(config: SpacecraftConfig, mission: MissionDef, plan: MissionPlan, sim: SimState): MissionOutcome {
+export function debriefVerdict(outcome: Pick<MissionOutcome, 'success' | 'partial' | 'score'>): {
+  title: string
+  tone: 'win' | 'partial' | 'lose'
+} {
+  if (outcome.success) return { title: 'You won', tone: 'win' }
+  if (outcome.score >= 80) return { title: 'Strong run', tone: 'win' }
+  if (outcome.partial || outcome.score >= 50) return { title: 'Partial result', tone: 'partial' }
+  return { title: 'You lost', tone: 'lose' }
+}
+
+export function outcomeOf(
+  config: SpacecraftConfig,
+  mission: MissionDef,
+  plan: MissionPlan,
+  sim: SimState,
+  landing: 'soft' | 'hard' | 'none' = 'none',
+): MissionOutcome {
   const report = evaluate(config, mission, plan)
   const propulsion = propulsionBudget(config, getSpec)
   const mass = massBudget(config, getSpec, mission.maxMassKg)
@@ -13,12 +29,14 @@ export function outcomeOf(config: SpacecraftConfig, mission: MissionDef, plan: M
   const used = Math.max(0, mass.propellantKg - remaining)
   const scienceMet = sim.sciencePoints + 1e-6 >= mission.successScience
   const dataMet = sim.dataReturnedBits + 1 >= mission.successDataBits
-  const survived = sim.status === 'complete' && !sim.failed
+  const reached =
+    (!sim.failed && (sim.status === 'complete' || sim.distanceFraction >= 0.99)) || landing !== 'none'
+  const survived = reached
   const objectives = [
-    { id: 'survive', label: 'Spacecraft completed the timeline', met: survived, detail: survived ? 'The flight reached the end of the science window.' : sim.failReason || 'The flight stopped early.' },
-    { id: 'science', label: 'Science objective', met: survived && scienceMet, detail: `${sim.sciencePoints.toFixed(0)} points collected, ${mission.successScience} required.` },
-    { id: 'data', label: 'Data returned', met: survived && dataMet, detail: `${(sim.dataReturnedBits / 1e9).toFixed(2)} Gbit returned, ${(mission.successDataBits / 1e9).toFixed(2)} Gbit required.` },
-    { id: 'optional', label: 'Extended science', met: survived && sim.sciencePoints >= mission.optionalScience, detail: `${mission.optionalScience} points marks the optional objective.` },
+    { id: 'survive', label: 'Finish the flight', met: survived, detail: survived ? 'Arrived.' : sim.failReason || 'Stopped early.' },
+    { id: 'science', label: 'Science', met: survived && scienceMet, detail: `${sim.sciencePoints.toFixed(0)} / ${mission.successScience}` },
+    { id: 'data', label: 'Data sent', met: survived && dataMet, detail: `${(sim.dataReturnedBits / 1e9).toFixed(2)} / ${(mission.successDataBits / 1e9).toFixed(2)} Gbit` },
+    { id: 'optional', label: 'Bonus science', met: survived && sim.sciencePoints >= mission.optionalScience, detail: `${sim.sciencePoints.toFixed(0)} / ${mission.optionalScience}` },
   ]
   const campaign = objectiveOf(plan)
   const kit = objectiveKit(plan.objectiveId)
@@ -28,37 +46,19 @@ export function outcomeOf(config: SpacecraftConfig, mission: MissionDef, plan: M
     id: 'campaign',
     label: campaign.title,
     met: survived && covered === kit.length,
-    detail: covered === kit.length
-      ? `${campaign.question} The kit for this question was aboard, so the science return includes the full objective bonus.`
-      : `${campaign.question} ${covered} of ${kit.length} instruments for this question were aboard, so cruise science did not get the full bonus.`,
+    detail: covered === kit.length ? 'The right instruments were aboard.' : `${covered} of ${kit.length} kit instruments aboard.`,
   })
   const primary = objectives.filter((item) => item.id !== 'optional' && item.id !== 'campaign').every((item) => item.met)
-  const mistakes: string[] = []
-  const strengths: string[] = []
   const lessons: string[] = []
-  for (const decision of sim.decisionsMade) {
-    if (decision.option === 'ignore' || decision.option === 'degrade' || decision.option === 'ride' || decision.option === 'standoff') {
-      mistakes.push(`${decision.title} was left in a degraded state. The score uses that penalty.`)
-    }
-    if (decision.option === 'correct' || decision.option === 'match' || decision.option === 'repoint' || decision.option === 'safe') {
-      strengths.push(`${decision.title} was handled with a burn or a mode change.`)
-    }
-  }
-  if (report.mass.marginKg > mission.maxMassKg * 0.15 && primary) strengths.push('Mass margin stayed comfortable without wasting the launcher.')
-  if (report.propulsion.dvMps > report.requiredDvMps * 1.25) lessons.push('A large delta-v surplus means propellant mass that could have been instruments or a cheaper tank.')
-  if (report.propulsion.dvMps < report.requiredDvMps * 1.08 && primary) strengths.push('Delta-v was sized close to the plan. That is efficient, and it leaves little room for a missed correction.')
-  if (sim.powerMode === 'safe' && sim.brownoutSec > 0) mistakes.push('The bus entered safe mode because generation could not cover the load.')
-  if (!primary && !survived) lessons.push(sim.failReason || 'Read the burn that stopped the flight and change that subsystem.')
-  if (!dataMet && survived) lessons.push('The link or the contact time could not empty the recorder. Antenna gain and transmit power are the usual levers.')
-  if (!scienceMet && survived) lessons.push('Science points come from instruments that stay powered. Duty cycle and power mode both count.')
-  if (covered < kit.length) lessons.push(`${campaign.title} is not answered by a generic camera. ${kit.length - covered} instrument${kit.length - covered === 1 ? '' : 's'} from that kit were missing, and a different question wants a different kit.`)
-  if (mistakes.length === 0 && primary) strengths.push('The scripted anomalies were absorbed without giving up the primary objectives.')
+  if (!survived) lessons.push(sim.failReason || 'The flight stopped early.')
+  else if (!scienceMet) lessons.push('Collect and send more samples, or keep the instruments powered.')
+  else if (!dataMet) lessons.push('Send the held samples and keep the radio open.')
+  else if (covered < kit.length) lessons.push(`Fit the missing ${kit.length - covered} kit instrument${kit.length - covered === 1 ? '' : 's'}.`)
 
   const costMargin = (mission.budgetUsd - report.cost.totalUsd) / mission.budgetUsd
   const massMargin = report.mass.marginKg / mission.maxMassKg
-  const optionalMet = objectives[3]?.met ?? false
 
-  const breakdown = calculateScoreBreakdown(primary, optionalMet, sim, mission, massMargin, costMargin)
+  const breakdown = calculateScoreBreakdown(sim, mission, massMargin, costMargin, landing)
   const score = breakdown.total
   const gradeRank: 'S' | 'A' | 'B' | 'C' | 'F' =
     score >= 92 ? 'S' : score >= 80 ? 'A' : score >= 65 ? 'B' : score >= 50 ? 'C' : 'F'
@@ -84,64 +84,45 @@ export function outcomeOf(config: SpacecraftConfig, mission: MissionDef, plan: M
     commsMarginDb: sim.commsMarginDb,
     reliability: report.reliability.seriesReliability,
     decisions: sim.decisionsMade,
-    lessons,
-    strengths,
-    mistakes,
+    lessons: lessons.slice(0, 2),
+    strengths: [],
+    mistakes: [],
     summary: primary
-      ? 'Primary objectives met. The score favours the science return, budget discipline and landing integrity.'
+      ? 'Goals met.'
       : survived
-        ? 'The spacecraft finished, and at least one primary objective is short.'
-        : 'The flight ended before the science window closed.',
+        ? 'The flight finished. Some goals were short.'
+        : sim.failed
+          ? sim.failReason || 'The flight stopped early.'
+          : 'The flight stopped early.',
     finishedAt: new Date().toISOString(),
   }
 }
 
 function calculateScoreBreakdown(
-  primary: boolean,
-  optional: boolean,
   sim: SimState,
   mission: MissionDef,
   massMargin: number,
-  costMargin: number
+  costMargin: number,
+  landing: 'soft' | 'hard' | 'none',
 ) {
-  if (sim.failed && sim.status === 'failed') {
-    const science = Math.round(Math.min(12, sim.sciencePoints / 10))
-    return {
-      primaryPoints: 0,
-      sciencePoints: science,
-      dataPoints: 0,
-      budgetPoints: Math.max(0, Math.round(costMargin * 10)),
-      landingPoints: 0,
-      anomalyPoints: 0,
-      total: Math.max(5, 8 + science),
-    }
-  }
+  const arrived = !sim.failed && (sim.status === 'complete' || sim.distanceFraction >= 0.99 || landing !== 'none')
+  let primaryPoints = 0
+  if (sim.failed) primaryPoints = Math.round(Math.min(10, sim.distanceFraction * 12))
+  else if (arrived) primaryPoints = sim.status === 'complete' || landing !== 'none' ? 30 : 24
+  else primaryPoints = Math.round(10 + Math.min(1, sim.distanceFraction) * 14)
+  if (massMargin > 0.08 && arrived) primaryPoints = Math.min(30, primaryPoints + 2)
 
-  // 1. Primary Flight Execution (up to 25 pts)
-  const primaryPoints = primary ? 25 : 8
+  const scienceRatio = Math.min(1, sim.sciencePoints / Math.max(1, mission.successScience))
+  const sciencePoints = Math.round(scienceRatio * 30)
 
-  // 2. Science Yield (up to 30 pts)
-  const scienceRatio = Math.min(1.5, sim.sciencePoints / Math.max(1, mission.successScience))
-  const sciencePoints = Math.round(Math.min(30, scienceRatio * 22 + (optional ? 8 : 0)))
+  const dataRatio = Math.min(1, sim.dataReturnedBits / Math.max(1, mission.successDataBits))
+  const dataPoints = Math.round(Math.sqrt(dataRatio) * 25)
 
-  // 3. Telemetry & Data Return (up to 15 pts)
-  const dataRatio = Math.min(1.2, sim.dataReturnedBits / Math.max(1, mission.successDataBits))
-  const dataPoints = Math.round(Math.min(15, dataRatio * 15))
-
-  // 4. Budget Discipline & Cost Performance (up to 14 pts, negative penalty if over budget)
-  const budgetPoints = costMargin >= 0
-    ? Math.round(Math.min(14, costMargin * 25 + 6))
-    : Math.round(Math.max(-20, costMargin * 35))
-
-  // 5. Landing & Touchdown Precision (up to 10 pts)
-  const landingPoints = sim.status === 'complete' ? 10 : 0
-
-  // 6. Operational Resilience & Anomaly Response (up to 8 pts)
-  const goodDecisions = sim.decisionsMade.filter((d) => !['ignore', 'ride', 'standoff', 'degrade'].includes(d.option)).length
-  const anomalyPoints = Math.min(8, goodDecisions * 3 + Math.max(0, Math.round(massMargin * 5)))
+  const budgetPoints = costMargin < 0 ? 0 : Math.round(Math.min(15, 10 + costMargin * 10))
+  const landingPoints = 0
 
   const total = Math.round(
-    Math.max(0, Math.min(100, primaryPoints + sciencePoints + dataPoints + budgetPoints + landingPoints + anomalyPoints))
+    Math.max(0, Math.min(100, primaryPoints + sciencePoints + dataPoints + budgetPoints + landingPoints))
   )
 
   return {
@@ -150,7 +131,7 @@ function calculateScoreBreakdown(
     dataPoints,
     budgetPoints,
     landingPoints,
-    anomalyPoints,
+    anomalyPoints: 0,
     total,
   }
 }

@@ -51,7 +51,7 @@ export function LandingScreen() {
   const mount = useRef<HTMLDivElement>(null)
   const worldRef = useRef<DescentWorld | null>(null)
   const [hud, setHud] = useState<DescentReadout | null>(null)
-  const [pace, setPace] = useState(80)
+  const [pace, setPace] = useState(50)
   const [result, setResult] = useState<'down' | 'hard' | 'crash' | null>(null)
   const [armRewind, setArmRewind] = useState(false)
   const [showConfirmed, setShowConfirmed] = useState(false)
@@ -76,7 +76,7 @@ export function LandingScreen() {
     const savedEntry = useMission.getState().descent
     if (savedEntry) world.restore(savedEntry)
     worldRef.current = world
-    world.setPace(80)
+    world.setPace(50)
     world.resize()
     let frame = 0
     let last = performance.now()
@@ -157,7 +157,7 @@ export function LandingScreen() {
             <button type="button" aria-pressed={hud?.view === 'ground'} onClick={() => worldRef.current?.setCamera('ground')}>Ground</button>
           </div>
           <div className="group">
-            {([1, 4, 16, 80] as const).map((rate) => (
+            {([1, 4, 16, 50] as const).map((rate) => (
               <button key={rate} type="button" aria-pressed={pace === rate} onClick={() => { setPace(rate); worldRef.current?.setPace(rate) }}>{rate}×</button>
             ))}
           </div>
@@ -289,6 +289,7 @@ export function SurfaceScreen() {
     let saveTick = 0
     let heard = ''
     let said = ''
+    let lastToast = ''
     setScoreBoost(false)
     const loop = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000)
@@ -322,7 +323,8 @@ export function SurfaceScreen() {
         useMission.getState().noteField({ ...world.snapshot(), camp: campRef.current })
       }
       hudTick += dt
-      if (hudTick > 0.15) {
+      if (hudTick > 0.15 || readout.toast !== lastToast) {
+        lastToast = readout.toast
         hudTick = 0
         setHud(readout)
       }
@@ -347,6 +349,22 @@ export function SurfaceScreen() {
     worldRef.current?.setCamp(camp.pieces)
   }, [camp.pieces])
 
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.repeat || event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return
+      if (event.key !== 'Enter' && event.key.toLowerCase() !== 'y') return
+      event.preventDefault()
+      const filed = worldRef.current?.report()
+      if (!filed) return
+      const snap = worldRef.current?.snapshot()
+      if (snap) useMission.getState().noteField({ ...snap, camp: campRef.current })
+      bankSurface(filed.points, filed.note, filed.bits)
+      finish()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [bankSurface, finish])
+
   const send = () => {
     if (!hud) return
     const filed = worldRef.current?.report()
@@ -359,10 +377,14 @@ export function SurfaceScreen() {
 
   const world = worldRef.current
   const sky = hud?.sky ?? 'Clear'
+  const livePrompt = hud?.prompt && !/^(WASD |Parked\.|On the surface\.|On Jezero)/.test(hud.prompt)
+    ? hud.prompt
+    : ''
   return (
       <div className={`field-stage${sky === 'Dust' ? ' is-dust' : sky === 'Flare' ? ' is-flare' : ''}`} ref={mount}>
       {hud?.mode === 'eva' && <div className="crosshair" />}
       {hud?.hint && <HuntArrow hint={hud.hint} />}
+      {hud?.toast && <div className="field-toast" role="status">{hud.toast}</div>}
       <div className="deck">
         {marsSurface && moreHud && <CampBar camp={camp} onChange={setCamp} />}
         <div className="deck-top surface-top">
@@ -391,12 +413,7 @@ export function SurfaceScreen() {
             <strong>Collect {hud?.total ?? 5} samples</strong>
             <em>{hud?.found ?? 0} of {hud?.total ?? 5} collected · {hud?.sent ?? 0} sent to Earth</em>
           </div>
-          <p className="deck-note">{hud?.prompt || siteLabel(hud)}</p>
-          {hud?.mode === 'eva' && (
-            <span className="eva-note">
-              Thin Mars air. You hear the radio in the helmet, not the wind. Educational limits, not NASA specifications.
-            </span>
-          )}
+          {livePrompt && <p className="deck-note">{livePrompt}</p>}
           {sky !== 'Clear' && (
             <div className={`hazard-chip sky-${sky.toLowerCase()}`}>
               <AlertTriangle size={13} />
@@ -433,9 +450,9 @@ export function SurfaceScreen() {
             <Read label="Radio" value={hud ? (hud.link ? 'Open' : 'Dark') : '—'} />
           </div>
           <div className="group field-actions">
-            <button type="button" className="act-sample" onClick={() => world?.sample()}>Sample</button>
-            <button type="button" className={`act-send${hud && hud.held > 0 ? ' is-ready' : ''}`} onClick={() => world?.transmit()}>Send</button>
-            <button type="button" className="act-return" onClick={send}>File return</button>
+            <button type="button" className="act-sample" onClick={() => world?.sample()}>Sample <kbd>E</kbd></button>
+            <button type="button" className={`act-send${hud && hud.held > 0 ? ' is-ready' : ''}`} onClick={() => world?.transmit()}>Send <kbd>T</kbd></button>
+            <button type="button" className="act-return" onClick={send}>File return <kbd>Y</kbd></button>
           </div>
         </div>
       </div>
@@ -443,6 +460,8 @@ export function SurfaceScreen() {
         <span className="key-hint"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>{hud?.mode === 'drive' ? 'Drive' : 'Walk'}</span></span>
         {hud?.hasRover && <span className="key-hint"><kbd>F</kbd><span>{hud.mode === 'drive' ? 'Get down' : 'Board rover'}</span></span>}
         <span className="key-hint"><kbd>E</kbd><span>Sample</span></span>
+        <span className="key-hint"><kbd>T</kbd><span>Send</span></span>
+        <span className="key-hint"><kbd>Y</kbd><span>File return</span></span>
         <span className="key-hint"><kbd>Click</kbd><span>Look</span></span>
       </div>
     </div>
@@ -635,15 +654,6 @@ function CampPreview({ kind }: { kind: string }) {
   return <svg className="camp-preview" viewBox="0 0 88 52" aria-hidden>{body}</svg>
 }
 
-function siteLabel(hud: SurfaceReadout | null): string {
-  if (!hud) return ''
-  if (hud.held > 0) return hud.label
-  if (hud.mode === 'scout') return 'Scout'
-  if (hud.assist && hud.target) return hud.target
-  if (hud.mode === 'eva') return 'Walk'
-  return 'Rover'
-}
-
 function Read({ label, value }: { label: string; value: string }) {
   return (
     <div className="meter" title={label}>
@@ -659,7 +669,7 @@ function HuntArrow({ hint }: { hint: SurfaceHint }) {
   const rot = Math.atan2(hint.nx, hint.ny) * 180 / Math.PI
   return (
     <div className="hunt-arrow" style={{ left: `${x * 100}%`, top: `${y * 100}%` }}>
-      <i style={{ transform: hint.onScreen ? 'rotate(180deg)' : `rotate(${rot}deg)` }} />
+      <i style={{ transform: hint.onScreen ? 'none' : `rotate(${rot}deg)` }} />
       <b>{hint.onScreen ? hint.name : 'Sample'}</b>
     </div>
   )

@@ -10,7 +10,7 @@ import { attachOrbiter } from './launchStack'
 import { bakeHeightsRay, flattenPad, heightFromGrid, landUrl, loadTerrain, type HeightGrid } from './landform'
 import { buildMarsGround, MARS_LANDING, MARS_SUN, type MarsGround } from './marsGround'
 import { bindWalkAstronaut, type WalkAstronaut } from './walkAstronaut'
-import { modelLoader } from './gltf'
+import { fitModel, modelLoader } from './gltf'
 import { trackMove } from '../input/moveKeys'
 import { viewRatio } from './pixels'
 
@@ -59,6 +59,7 @@ export interface SurfaceReadout {
   label: string
   zoom: number
   cue: string
+  toast: string
   dust: number
   mode: SurfaceMode
   parked: boolean
@@ -79,6 +80,14 @@ export interface SurfaceReadout {
 const CHUNK = 36
 const SEG = 16
 const loader = modelLoader()
+const RUIN_URL: Record<SampleKind, string> = {
+  core: '/3d/r1.glb',
+  crystal: '/3d/r2.glb',
+  dust: '/3d/r3.glb',
+  ice: '/3d/r4.glb',
+  metal: '/3d/r5.glb',
+}
+const ruinCache = new Map<string, THREE.Group>()
 
 interface Rock {
   x: number
@@ -153,6 +162,8 @@ export class SurfaceWorld {
   private fov = 62
   private cue = ''
   private cueFor = 0
+  private toast = ''
+  private toastFor = 0
   private notice = ''
   private noticeFor = 0
   private energy = 100
@@ -187,10 +198,11 @@ export class SurfaceWorld {
   private globeR = 0
   private clock = 0
   private weatherSim: WeatherSim = 'auto'
-  private hintDue = 15
+  private hintDue = 8
   private hintOn = false
   private hintArrow!: THREE.Group
   private readonly hintNdc = new THREE.Vector3()
+  private readonly pathPts = Array.from({ length: 13 }, () => new THREE.Vector3())
   private readonly up = new THREE.Vector3()
   private readonly fwd = new THREE.Vector3()
   private readonly right = new THREE.Vector3()
@@ -266,8 +278,8 @@ export class SurfaceWorld {
     this.blob.renderOrder = 1
     this.scene.add(this.blob)
     this.route = new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
-      new THREE.LineBasicMaterial({ color: 0xf2c14e }),
+      new THREE.BufferGeometry().setFromPoints(this.pathPts),
+      new THREE.LineBasicMaterial({ color: 0xffe14a }),
     )
     this.route.frustumCulled = false
     this.scene.add(this.route)
@@ -519,7 +531,7 @@ export class SurfaceWorld {
     this.armT = 1
     this.ping('sample')
     this.hintOn = false
-    this.hintDue = this.clock + 15
+    this.hintDue = this.clock + 8
     const left = this.openSamples().length
     if (left === 0) this.say(`Picked up ${obs.name}. All samples are in. Send each one, then File return.`)
     else this.say(`Picked up ${obs.name}. ${left} still out. Send when you can.`)
@@ -570,7 +582,9 @@ export class SurfaceWorld {
     this.energy = result.energy
     if (result.reason === 'sent') {
       this.ping('send')
-      this.say('Sent')
+      const left = this.notes.filter((item) => !item.sent).length
+      this.toast = left > 0 ? `Sent 1 sample · ${left} left` : 'Sent 1 sample · none left'
+      this.toastFor = 2.4
       return
     }
     if (!sky.comms) {
@@ -807,6 +821,8 @@ export class SurfaceWorld {
     }
     if (this.cueFor > 0) this.cueFor = Math.max(0, this.cueFor - dt)
     else this.cue = ''
+    if (this.toastFor > 0) this.toastFor = Math.max(0, this.toastFor - dt)
+    else this.toast = ''
     if (this.noticeFor > 0) this.noticeFor = Math.max(0, this.noticeFor - dt)
     else this.notice = ''
     const fog = this.scene.fog
@@ -971,6 +987,7 @@ export class SurfaceWorld {
       label: chosen ? chosen.name : sky.label,
       zoom: Math.round(this.fov),
       cue: this.cue,
+      toast: this.toast,
       dust: sky.dust,
       mode: this.mode,
       parked: this.parked,
@@ -1117,7 +1134,7 @@ export class SurfaceWorld {
 
   private nearSample(): FieldSample | null {
     const at = this.focus()
-    return this.setup.samples.find((sample) => !this.found.has(sample.id) && Math.hypot(at.x - sample.x, at.z - sample.z) < 6.8) ?? null
+    return this.setup.samples.find((sample) => !this.found.has(sample.id) && Math.hypot(at.x - sample.x, at.z - sample.z) < 5.6) ?? null
   }
 
   private syncChunks(x: number, z: number): void {
@@ -1209,7 +1226,7 @@ export class SurfaceWorld {
       const x = (shade(i, 3) - 0.5) * 160
       const z = (shade(i, 9) - 0.5) * 160
       if (Math.hypot(x, z) < 12) continue
-      if (this.setup.samples.some((sample) => Math.hypot(sample.x - x, sample.z - z) < 4.2)) continue
+      if (this.setup.samples.some((sample) => Math.hypot(sample.x - x, sample.z - z) < 6.2)) continue
       const scale = 0.35 + shade(i, 5) * (0.7 + this.setup.difficulty)
       const tall = this.setup.siteId === 'valles' || this.setup.siteId === 'boulders' ? 1.4 + shade(i, 2) : 0.7 + shade(i, 2) * 0.5
       dummy.position.set(x, this.heightAt(x, z) + scale * tall, z)
@@ -1250,101 +1267,92 @@ export class SurfaceWorld {
     })
   }
 
-  /** Distinct glowing find — color, shape, and a tall beacon so it cannot hide in the rocks. */
+  /** Ruin GLB plus a ground ring and a pin so the find stays readable at range. */
   private buildSampleStation(sample: FieldSample): THREE.Group {
     const root = new THREE.Group()
     const look = this.sampleLook(sample.kind)
-    const glow = new THREE.MeshStandardMaterial({
-      color: look.color,
-      emissive: look.glow,
-      emissiveIntensity: 1.8,
-      roughness: 0.28,
-      metalness: 0.22,
-    })
-    const ring = new THREE.Mesh(new THREE.RingGeometry(1.15, 1.7, 28), new THREE.MeshBasicMaterial({
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.72, 1.05, 28), new THREE.MeshBasicMaterial({
       color: look.color,
       transparent: true,
-      opacity: 0.92,
+      opacity: 0.88,
       side: THREE.DoubleSide,
       depthWrite: false,
     }))
     ring.rotation.x = -Math.PI / 2
     ring.position.y = 0.06
     root.add(ring)
-    const pad = new THREE.Mesh(new THREE.CircleGeometry(1.12, 20), new THREE.MeshBasicMaterial({
+    const pad = new THREE.Mesh(new THREE.CircleGeometry(0.7, 20), new THREE.MeshBasicMaterial({
       color: look.color,
       transparent: true,
-      opacity: 0.28,
+      opacity: 0.2,
       depthWrite: false,
     }))
     pad.rotation.x = -Math.PI / 2
     pad.position.y = 0.04
     root.add(pad)
-    const pole = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.05, 0.07, 3.4, 8),
-      new THREE.MeshStandardMaterial({ color: 0xf2f0ea, metalness: 0.55, roughness: 0.28, emissive: look.color, emissiveIntensity: 0.35 }),
+    const pin = new THREE.Group()
+    pin.name = 'sample-pin'
+    const stem = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.028, 0.036, 1.15, 8),
+      new THREE.MeshBasicMaterial({ color: look.color, depthTest: false }),
     )
-    pole.position.y = 1.72
-    pole.castShadow = true
-    root.add(pole)
-    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 12), glow)
-    orb.position.y = 3.55
-    root.add(orb)
-    const beam = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.16, 0.55, 3.6, 10, 1, true),
-      new THREE.MeshBasicMaterial({ color: look.glow, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide }),
+    stem.position.y = 1.85
+    const head = new THREE.Mesh(
+      new THREE.ConeGeometry(0.16, 0.38, 10),
+      new THREE.MeshBasicMaterial({ color: 0xffe14a, depthTest: false }),
     )
-    beam.position.y = 1.85
-    root.add(beam)
-    root.add(this.sampleProp(sample.kind, glow))
-    const lamp = new THREE.PointLight(look.color, 2.1, 18, 1.7)
-    lamp.position.set(0, 2.6, 0)
+    head.rotation.x = Math.PI
+    head.position.y = 2.58
+    pin.add(stem, head)
+    pin.renderOrder = 8
+    root.add(pin)
+    const lamp = new THREE.PointLight(look.color, 1.4, 16, 1.8)
+    lamp.position.set(0, 1.4, 0)
     root.add(lamp)
+    this.mountRuin(root, sample)
     this.tagSample(root, sample.id)
     return root
   }
 
-  private sampleProp(kind: SampleKind, glow: THREE.MeshStandardMaterial): THREE.Mesh {
-    if (kind === 'core') {
-      const mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 0.9, 10), glow)
-      mesh.rotation.z = 0.55
-      mesh.position.set(0.55, 0.42, 0.12)
-      mesh.castShadow = true
-      return mesh
+  private mountRuin(root: THREE.Group, sample: FieldSample): void {
+    const url = RUIN_URL[sample.kind]
+    const seat = (source: THREE.Object3D) => {
+      if (this.dead || !this.markers.includes(root)) return
+      const model = source.clone(true)
+      fitModel(model, 2.2)
+      model.traverse((obj) => {
+        const mesh = obj as THREE.Mesh
+        if (!mesh.isMesh) return
+        mesh.castShadow = true
+        mesh.receiveShadow = true
+      })
+      this.tagSample(model, sample.id)
+      root.add(model)
     }
-    if (kind === 'crystal') {
-      const mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.48, 0), glow)
-      mesh.position.set(0.5, 0.52, -0.1)
-      mesh.castShadow = true
-      return mesh
+    const cached = ruinCache.get(url)
+    if (cached) {
+      seat(cached)
+      return
     }
-    if (kind === 'dust') {
-      const mesh = new THREE.Mesh(new THREE.ConeGeometry(0.55, 0.22, 16, 1, true), glow)
-      mesh.rotation.x = Math.PI
-      mesh.position.set(0.48, 0.22, 0.08)
-      mesh.castShadow = true
-      return mesh
-    }
-    if (kind === 'ice') {
-      const mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(0.42, 0), glow)
-      mesh.position.set(0.46, 0.4, 0.06)
-      mesh.castShadow = true
-      return mesh
-    }
-    const mesh = new THREE.Mesh(new THREE.DodecahedronGeometry(0.4, 0), glow)
-    mesh.position.set(0.5, 0.38, -0.08)
-    mesh.castShadow = true
-    return mesh
+    loader.load(url, (gltf) => {
+      if (this.dead) return
+      ruinCache.set(url, gltf.scene)
+      seat(gltf.scene)
+    })
   }
 
   private makeHintArrow(): THREE.Group {
     const root = new THREE.Group()
     const mat = new THREE.MeshBasicMaterial({ color: 0xffe14a, depthTest: false })
-    const cone = new THREE.Mesh(new THREE.ConeGeometry(0.62, 1.5, 4), mat)
-    cone.rotation.x = Math.PI
-    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 1.15, 6), mat)
-    stem.position.y = 1.15
-    root.add(cone, stem)
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.36, 12, 10), mat)
+    head.position.y = 1.9
+    const needle = new THREE.Mesh(new THREE.ConeGeometry(0.2, 1.65, 8), mat)
+    needle.rotation.x = Math.PI
+    needle.position.y = 0.78
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.58, 0.055, 8, 22), mat)
+    ring.rotation.x = Math.PI / 2
+    ring.position.y = 0.06
+    root.add(head, needle, ring)
     root.renderOrder = 12
     root.visible = false
     this.scene.add(root)
@@ -1361,27 +1369,38 @@ export class SurfaceWorld {
     if (!this.hintOn && this.clock >= this.hintDue) this.hintOn = true
     const target = open[0]
     const y = this.heightAt(target.x, target.z)
-    this.hintArrow.position.set(target.x, y + 4.6 + Math.sin(this.clock * 3.2) * 0.38, target.z)
-    this.hintArrow.rotation.y = this.clock * 1.5
+    this.hintArrow.position.set(target.x, y + 2.15 + Math.sin(this.clock * 2.4) * 0.16, target.z)
     this.hintArrow.visible = this.hintOn
+    for (const mark of this.markers) {
+      const pin = mark.getObjectByName('sample-pin')
+      if (pin) pin.position.y = Math.sin(this.clock * 2.2 + mark.position.x) * 0.14
+    }
   }
 
   private hintReadout(): SurfaceHint | null {
     if (!this.hintOn) return null
     const target = this.openSamples()[0]
     if (!target) return null
-    this.hintNdc.set(target.x, this.heightAt(target.x, target.z) + 2.2, target.z).project(this.camera)
+    this.hintNdc.set(target.x, this.heightAt(target.x, target.z) + 2.4, target.z).project(this.camera)
     const onScreen = this.hintNdc.z < 1 && this.hintNdc.z > 0 && Math.abs(this.hintNdc.x) <= 0.9 && Math.abs(this.hintNdc.y) <= 0.78
     return { name: target.name, nx: this.hintNdc.x, ny: this.hintNdc.y, onScreen }
   }
 
   private poseRoute(): void {
-    const target = this.assist ? this.currentTarget() : null
-    this.route.visible = Boolean(target) && this.mode === 'drive'
+    const target = this.hintOn ? this.openSamples()[0] ?? null : (this.assist ? this.currentTarget() : null)
+    this.route.visible = Boolean(target)
     if (!target) return
+    const from = this.focus()
+    const last = this.pathPts.length - 1
     const pos = this.route.geometry.getAttribute('position') as THREE.BufferAttribute
-    pos.setXYZ(0, this.drive.x, this.heightAt(this.drive.x, this.drive.z) + 0.3, this.drive.z)
-    pos.setXYZ(1, target.x, this.heightAt(target.x, target.z) + 0.4, target.z)
+    for (let i = 0; i <= last; i++) {
+      const t = i / last
+      const x = from.x + (target.x - from.x) * t
+      const z = from.z + (target.z - from.z) * t
+      const y = this.heightAt(x, z) + 0.34
+      this.pathPts[i].set(x, y, z)
+      pos.setXYZ(i, x, y, z)
+    }
     pos.needsUpdate = true
   }
 

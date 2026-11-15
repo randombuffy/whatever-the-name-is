@@ -7,6 +7,7 @@ import { CruiseScreen } from './ui/cruise'
 import { StationScreen } from './ui/station'
 import { applyMix, playGroup, startScore, unlock } from './ui/audio'
 import { Boot } from './ui/Boot'
+import { Mix } from './ui/mix'
 import { Viewport } from './render/Viewport'
 import type { SceneMode } from './render/world'
 import { useActiveMission, useMission, type Phase } from './store/useMission'
@@ -36,7 +37,6 @@ export function App() {
   const craft = useMission((state) => state.craft)
   const audio = useMission((state) => state.audio)
   const volume = useMission((state) => state.volume)
-  const setAudio = useMission((state) => state.setAudio)
   const sim = useMission((state) => state.sim)
   const camera = useMission((state) => state.camera)
   const selectedInstanceId = useMission((state) => state.selectedInstanceId)
@@ -209,22 +209,6 @@ export function App() {
           >
             Result
           </button>
-          <button
-            type="button"
-            className={`top-nav-btn ${phase === 'credits' ? 'active' : ''}`}
-            onClick={() => go('credits')}
-          >
-            Help
-          </button>
-          <button
-            type="button"
-            className={`top-nav-btn sound-toggle-btn ${!audio ? 'is-muted' : ''}`}
-            title={audio ? 'Mute sound' : 'Unmute sound'}
-            aria-label={audio ? 'Mute sound' : 'Unmute sound'}
-            onClick={() => setAudio(!audio)}
-          >
-            Sound
-          </button>
           {narrow && (
             <button
               type="button"
@@ -266,6 +250,16 @@ export function App() {
           <span>{sim.phaseLabel || 'Coast'} · {Math.round(sim.distanceFraction * 100)}% · {effectiveWarp(rate, sim)}×</span>
         </button>
       )}
+      <div className="app-utility-dock" aria-label="Help and sound">
+        <button
+          type="button"
+          className={`utility-dock-btn ${phase === 'credits' ? 'active' : ''}`}
+          onClick={() => go('credits')}
+        >
+          Help
+        </button>
+        <Mix />
+      </div>
       <div className="overlay">
         {phase === 'station' && <StationScreen />}
         {phase === 'pad' || phase === 'launch' ? <PadScreen /> : null}

@@ -125,12 +125,12 @@ const SAMPLE_NAMES: Record<string, string[]> = {
 
 const JEZERO_SAMPLES = ['Máaz floor', 'Séítah outcrop', 'Delta carbonate', 'Fan cobble', 'Rim breccia']
 
-/** Five distinct surface finds in a ring around the lander, close enough to walk. */
+/** Five distinct surface finds on a wide ring so each marker stands alone. */
 export function fieldSamples(site: LandingSite, objectiveId: string, origin: readonly [number, number] = [0, 0]): FieldSample[] {
   const names = site.id === 'jezero' ? JEZERO_SAMPLES : (SAMPLE_NAMES[objectiveId] ?? SAMPLE_NAMES.geology)
   return names.slice(0, 5).map((name, index) => {
-    const angle = -Math.PI / 2 + index * ((Math.PI * 2) / 5) + site.difficulty * 0.18
-    const radius = 9 + (index % 3) * 3
+    const angle = -Math.PI / 2 + index * ((Math.PI * 2) / 5) + 0.48 + index * 0.14
+    const radius = 42 + index * 12 + site.difficulty * 14
     return {
       id: `${site.id}-${index}`,
       name,
