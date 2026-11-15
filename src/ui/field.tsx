@@ -14,6 +14,14 @@ import { setBed, setScoreBoost, sting } from './audio'
 import { say } from './voice'
 import { Mix } from './mix'
 import { createFieldTone } from './tone'
+import {
+  PixelArrowRightIcon,
+  PixelBuildingIcon,
+  PixelCheckIcon,
+  PixelRadioTowerIcon,
+  PixelRocketIcon,
+  PixelTrophyIcon,
+} from './pixelIcons'
 
 function descentBody(missionId: string, craft: SpacecraftConfig, limitKg: number, propellantKg: number): DescentBody {
   const mars = missionId === 'mars' || missionId === 'custom'
@@ -243,8 +251,35 @@ export function SurfaceScreen() {
   const marsSurface = mission?.id === 'mars' || mission?.id === 'custom'
   const [camp, setCamp] = useState<CampSave>(() => readCamp())
   const [moreHud, setMoreHud] = useState(false)
+  const [returnWarning, setReturnWarning] = useState<string | null>(null)
   const campRef = useRef(camp)
   campRef.current = camp
+
+  const totalSamples = hud?.total ?? 5
+  const samplesFound = hud?.found ?? 0
+  const samplesComplete = Boolean(hud && samplesFound >= totalSamples)
+  const allSamplesSent = Boolean(samplesComplete && (hud?.sent ?? 0) >= totalSamples)
+  const sampleSurveyAnnounced = useRef(false)
+  const allSentAnnounced = useRef(false)
+
+  useEffect(() => {
+    if (samplesComplete && !allSamplesSent && !sampleSurveyAnnounced.current) {
+      sampleSurveyAnnounced.current = true
+      sting('radio', useMission.getState().audio)
+      say('All surface samples collected. Transmit science telemetry to Earth.', useMission.getState().audio)
+    }
+    if (allSamplesSent && !allSentAnnounced.current) {
+      allSentAnnounced.current = true
+      sting('radio', useMission.getState().audio)
+      say('All science findings transmitted to Earth. Outpost colonization authorized.', useMission.getState().audio)
+    }
+  }, [samplesComplete, allSamplesSent])
+
+  useEffect(() => {
+    if (!returnWarning) return undefined
+    const timer = window.setTimeout(() => setReturnWarning(null), 6000)
+    return () => window.clearTimeout(timer)
+  }, [returnWarning])
 
   useEffect(() => {
     const host = mount.current
@@ -349,76 +384,124 @@ export function SurfaceScreen() {
     worldRef.current?.setCamp(camp.pieces)
   }, [camp.pieces])
 
+  const tryFileReturn = () => {
+    if (!hud) return
+    const total = hud.total ?? 5
+    const found = hud.found ?? 0
+
+    // 1. Check samples
+    if (found < total) {
+      const msg = `Mission Incomplete: Collect all ${total} geological samples first (${found}/${total} secured).`
+      setReturnWarning(msg)
+      sting('warn', useMission.getState().audio)
+      say('Sample collection incomplete. Mission finish blocked.', useMission.getState().audio)
+      return
+    }
+
+    // 1b. Check sample telemetry transmission
+    const sent = hud.sent ?? 0
+    if (sent < total) {
+      const msg = `Telemetry Pending: Transmit all ${total} collected samples to Earth first (${sent}/${total} sent). Click 'Send [T]'.`
+      setReturnWarning(msg)
+      sting('warn', useMission.getState().audio)
+      say('Sample telemetry unsent. Transmit findings to Earth before finishing mission.', useMission.getState().audio)
+      return
+    }
+
+    setReturnWarning(null)
+    const filed = worldRef.current?.report()
+    if (!filed) return
+    const snap = worldRef.current?.snapshot()
+    if (snap) useMission.getState().noteField({ ...snap, camp: campRef.current })
+    const colonizeBonus = marsSurface ? (camp.phase === 'report' ? 50 : camp.pieces.length > 2 ? 35 : camp.pieces.length > 0 ? 20 : 0) : 0
+    bankSurface(
+      filed.points + colonizeBonus,
+      `${filed.note}${colonizeBonus > 0 ? ` Mars Outpost commissioned (+${colonizeBonus} bonus pts).` : ''}`,
+      filed.bits
+    )
+    finish()
+  }
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.repeat || event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return
       if (event.key !== 'Enter' && event.key.toLowerCase() !== 'y') return
       event.preventDefault()
-      const filed = worldRef.current?.report()
-      if (!filed) return
-      const snap = worldRef.current?.snapshot()
-      if (snap) useMission.getState().noteField({ ...snap, camp: campRef.current })
-      bankSurface(filed.points, filed.note, filed.bits)
-      finish()
+      tryFileReturn()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [bankSurface, finish])
-
-  const send = () => {
-    if (!hud) return
-    const filed = worldRef.current?.report()
-    if (!filed) return
-    const snap = worldRef.current?.snapshot()
-    if (snap) useMission.getState().noteField({ ...snap, camp })
-    bankSurface(filed.points, filed.note, filed.bits)
-    finish()
-  }
+  }, [tryFileReturn])
 
   const world = worldRef.current
   const sky = hud?.sky ?? 'Clear'
   const livePrompt = hud?.prompt && !/^(WASD |Parked\.|On the surface\.|On Jezero)/.test(hud.prompt)
     ? hud.prompt
     : ''
+
   return (
-      <div className={`field-stage${sky === 'Dust' ? ' is-dust' : sky === 'Flare' ? ' is-flare' : ''}`} ref={mount}>
+    <div className={`field-stage${sky === 'Dust' ? ' is-dust' : sky === 'Flare' ? ' is-flare' : ''}`} ref={mount}>
       {hud?.mode === 'eva' && <div className="crosshair" />}
       {hud?.hint && <HuntArrow hint={hud.hint} />}
       {hud?.toast && <div className="field-toast" role="status">{hud.toast}</div>}
       <div className="deck">
-        {marsSurface && moreHud && <CampBar camp={camp} onChange={setCamp} />}
+        {marsSurface && moreHud && (
+          <CampBar
+            camp={camp}
+            onChange={(next) => setCamp(next)}
+          />
+        )}
         <div className="deck-top surface-top">
-          <div className="group">
-            <button type="button" onClick={() => world?.cycleCam()}>Camera</button>
-            {hud?.hasRover && (
-              <button type="button" aria-pressed={hud.mode === 'eva'} onClick={() => world?.toggleEgress()}>
-                {hud.mode === 'drive' ? 'Walk' : 'Board'}
-              </button>
-            )}
-            <button type="button" onClick={() => world?.nextSol()}>Next sol</button>
-            <button type="button" aria-pressed={moreHud} onClick={() => setMoreHud((on) => !on)}>More</button>
-            <Mix />
-          </div>
-          {marsSurface && moreHud && (
-            <div className="group weather-sim" role="group" aria-label="Simulate weather">
-              <button type="button" aria-pressed={hud?.weather === 'auto'} onClick={() => worldRef.current?.setWeather('auto')}>Auto</button>
-              <button type="button" aria-pressed={hud?.weather === 'clear'} onClick={() => worldRef.current?.setWeather('clear')}>Clear</button>
-              <button type="button" aria-pressed={hud?.weather === 'dust'} onClick={() => worldRef.current?.setWeather('dust')}>Dust storm</button>
-              <button type="button" aria-pressed={hud?.weather === 'flare'} onClick={() => worldRef.current?.setWeather('flare')}>Solar flare</button>
-              <button type="button" aria-pressed={hud?.weather === 'blackout'} onClick={() => worldRef.current?.setWeather('blackout')}>Blackout</button>
-            </div>
-          )}
           <div className="hunt-card">
-            <span>Sol {hud?.sol ?? 1} · Mission</span>
-            <strong>Collect {hud?.total ?? 5} samples</strong>
-            <em>{hud?.found ?? 0} of {hud?.total ?? 5} collected · {hud?.sent ?? 0} sent to Earth</em>
+            <div className="hunt-head">
+              <span className={`hunt-phase-badge${samplesComplete ? ' is-complete' : ''}`}>
+                {allSamplesSent ? (
+                  <>
+                    <PixelCheckIcon size={12} /> Science Downlinked
+                  </>
+                ) : samplesComplete ? (
+                  <>
+                    <PixelCheckIcon size={12} /> Phase 1 Secured
+                  </>
+                ) : (
+                  'Phase 1: Reconnaissance'
+                )}
+              </span>
+              <span className="hunt-sol-pill">Sol {hud?.sol ?? 1}</span>
+            </div>
+            <strong>Collect {totalSamples} Samples</strong>
+            <div className="hunt-progress-bar" role="progressbar" aria-valuenow={samplesFound} aria-valuemin={0} aria-valuemax={totalSamples}>
+              <div
+                className={`hunt-progress-fill${samplesComplete ? ' is-complete' : ''}`}
+                style={{ width: `${Math.min(100, Math.max(8, (samplesFound / Math.max(1, totalSamples)) * 100))}%` }}
+              />
+            </div>
+            <div className="hunt-stats">
+              <span><b>{samplesFound}</b> of <b>{totalSamples}</b> collected</span>
+              <span>·</span>
+              <span><b>{hud?.sent ?? 0}</b> sent to Earth</span>
+            </div>
+            {allSamplesSent ? (
+              <div className="hunt-unlocked-note">
+                <PixelRocketIcon size={14} />
+                <span>Science downlinked! Start colonizing or head to lander.</span>
+              </div>
+            ) : samplesComplete ? (
+              <div className="hunt-unlocked-note">
+                <PixelRadioTowerIcon size={14} />
+                <span>Samples secured! Click Send [T] to downlink to Earth.</span>
+              </div>
+            ) : (
+              <em className="hunt-subtext">Follow compass marker · Press <kbd>E</kbd> to sample</em>
+            )}
           </div>
+
           {livePrompt && <p className="deck-note">{livePrompt}</p>}
           {sky !== 'Clear' && (
             <div className={`hazard-chip sky-${sky.toLowerCase()}`}>
               <AlertTriangle size={13} />
               <span>
-                {sky === 'Dust' && 'Dust storm. Arrays degraded. Walking and driving crawl until it clears.'}
+                {sky === 'Dust' && 'Dust storm active. Solar arrays degraded. Driving and walking crawl until storm clears.'}
                 {sky === 'Flare' && 'Solar flare. Particle flux is high. Stay near the lander.'}
                 {sky === 'Blackout' && 'Relay blackout. No line to Earth until the orbiter returns.'}
                 {sky === 'Fault' && 'Transceiver glitch. Switching the redundant bus.'}
@@ -450,18 +533,78 @@ export function SurfaceScreen() {
             <Read label="Radio" value={hud ? (hud.link ? 'Open' : 'Dark') : '—'} />
           </div>
           <div className="group field-actions">
-            <button type="button" className="act-sample" onClick={() => world?.sample()}>Sample <kbd>E</kbd></button>
-            <button type="button" className={`act-send${hud && hud.held > 0 ? ' is-ready' : ''}`} onClick={() => world?.transmit()}>Send <kbd>T</kbd></button>
-            <button type="button" className="act-return" onClick={send}>File return <kbd>Y</kbd></button>
+            {!allSamplesSent ? (
+              <>
+                <button type="button" className="act-sample" onClick={() => world?.sample()}>Sample <kbd>E</kbd></button>
+                <div className="act-send-wrapper">
+                  {samplesComplete && !allSamplesSent && (
+                    <div className="send-guide-callout" role="tooltip">
+                      <span className="send-guide-badge">
+                        <PixelRadioTowerIcon size={12} /> Uplink Science
+                      </span>
+                      <strong>All Samples Collected!</strong>
+                      <p>Click <b>Send [T]</b> to downlink findings to Earth.</p>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    className={`act-send${hud && hud.held > 0 ? ' is-ready' : ''}${samplesComplete && !allSamplesSent ? ' is-urgent-callout' : ''}`}
+                    onClick={() => world?.transmit(true)}
+                  >
+                    Send <kbd>T</kbd>
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="field-actions-centered">
+                {marsSurface && (
+                  <button
+                    type="button"
+                    className={`act-colonize-btn${moreHud ? ' is-active' : ''}`}
+                    onClick={() => {
+                      setMoreHud((on) => !on)
+                      if (camp.phase === 'landing') {
+                        setCamp((c) => ({ ...c, phase: 'habitat' }))
+                      }
+                    }}
+                  >
+                    <PixelBuildingIcon size={15} />
+                    <span>{camp.phase === 'landing' ? 'Start Colonizing Mars (Phase 2)' : moreHud ? 'Close Outpost Planner' : 'Open Outpost Planner'}</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="act-return act-finish-game"
+                  onClick={tryFileReturn}
+                >
+                  <PixelRocketIcon size={15} />
+                  <span>Finish Game <kbd>Y</kbd></span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
+      {returnWarning && (
+        <div className="return-warning-banner" role="alert">
+          <AlertTriangle size={18} />
+          <span>{returnWarning}</span>
+          <button type="button" onClick={() => setReturnWarning(null)}>Dismiss</button>
+        </div>
+      )}
       <div className="key-row field-keys">
         <span className="key-hint"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>{hud?.mode === 'drive' ? 'Drive' : 'Walk'}</span></span>
-        {hud?.hasRover && <span className="key-hint"><kbd>F</kbd><span>{hud.mode === 'drive' ? 'Get down' : 'Board rover'}</span></span>}
-        <span className="key-hint"><kbd>E</kbd><span>Sample</span></span>
-        <span className="key-hint"><kbd>T</kbd><span>Send</span></span>
-        <span className="key-hint"><kbd>Y</kbd><span>File return</span></span>
+        {hud?.hasRover && (
+          <button
+            type="button"
+            className="key-hint key-btn-action"
+            title="Press F or click to board/exit rover"
+            onClick={() => world?.toggleEgress()}
+          >
+            <kbd>F</kbd>
+            <span>{hud.mode === 'drive' ? 'Exit Rover' : 'Board Rover'}</span>
+          </button>
+        )}
         <span className="key-hint"><kbd>Click</kbd><span>Look</span></span>
       </div>
     </div>
@@ -474,8 +617,7 @@ const CAMP_PHASES: [CampPhase, string][] = [
   ['life', 'Life support'],
   ['power', 'Power'],
   ['food', 'Food'],
-  ['survival', 'Survival'],
-  ['report', 'Report'],
+  ['report', 'Commissioned'],
 ]
 
 const NEXT_CAMP: Record<CampPhase, CampPhase> = {
@@ -483,7 +625,7 @@ const NEXT_CAMP: Record<CampPhase, CampPhase> = {
   habitat: 'life',
   life: 'power',
   power: 'food',
-  food: 'survival',
+  food: 'report',
   survival: 'report',
   report: 'report',
 }
@@ -505,7 +647,7 @@ function campReady(camp: CampSave): boolean {
     case 'life': return hasPiece(camp, 'life') && hasPiece(camp, 'water')
     case 'power': return camp.pieces.some((id) => id.startsWith('solar-') || id === 'fission')
     case 'food': return hasPiece(camp, 'food-stored') || hasPiece(camp, 'greenhouse') || hasPiece(camp, 'greenhouse-hybrid')
-    case 'survival': return camp.sol >= 4
+    case 'survival': return true
     case 'report': return true
   }
 }
@@ -528,39 +670,24 @@ function addArray(camp: CampSave): CampSave {
   return putPiece(camp, `solar-${count}`, true)
 }
 
-function clampStore(value: number): number {
-  return Math.max(0, Math.min(100, Math.round(value)))
-}
+function CampBar({
+  camp,
+  onChange,
+}: {
+  camp: CampSave
+  onChange: (next: CampSave) => void
+}) {
+  const isReady = campReady(camp)
+  const canAdvance = isReady && camp.phase !== 'report' && camp.phase !== 'landing'
 
-function advanceSol(camp: CampSave): CampSave {
-  const arrays = camp.pieces.filter((id) => id.startsWith('solar-')).length
-  const made = Math.min(100, arrays * 22 + (hasPiece(camp, 'fission') ? 46 : 0))
-  const dust = camp.storm === 'clean' ? 0.9 : camp.storm === 'shelter' ? 0.6 : 1
-  const green = hasPiece(camp, 'greenhouse') || hasPiece(camp, 'greenhouse-hybrid')
-  return {
-    ...camp,
-    sol: camp.sol + 1,
-    power: clampStore(camp.power * 0.4 + made * dust * 0.6 - 8),
-    food: clampStore(camp.food - (green ? 5 : 16)),
-    water: clampStore(camp.water - (hasPiece(camp, 'water') ? 6 : 18)),
-    air: clampStore(camp.air - (hasPiece(camp, 'life') ? 4 : 14)),
+  const handleNextPhase = () => {
+    const nextPhase = NEXT_CAMP[camp.phase]
+    const pieces = nextPhase === 'life' && !camp.pieces.includes('marker') ? [...camp.pieces, 'marker'] : camp.pieces
+    onChange({ ...camp, phase: nextPhase, pieces })
+    sting('radio', useMission.getState().audio)
+    say(`Phase complete. Proceeding to ${CAMP_PHASES.find((p) => p[0] === nextPhase)?.[1]} phase.`, useMission.getState().audio)
   }
-}
 
-function CampBar({ camp, onChange }: { camp: CampSave; onChange: (next: CampSave) => void }) {
-  const commit = (next: CampSave) => {
-    if (next.phase === 'survival' && next.sol >= 4) {
-      onChange({ ...next, phase: 'report' })
-      return
-    }
-    if (!campReady(next) || next.phase === 'report' || next.phase === 'survival') {
-      onChange(next)
-      return
-    }
-    const phase = NEXT_CAMP[next.phase]
-    const pieces = phase === 'life' && !next.pieces.includes('marker') ? [...next.pieces, 'marker'] : next.pieces
-    onChange({ ...next, phase, pieces })
-  }
   return (
     <div className="camp-bar">
       <ol>
@@ -571,49 +698,125 @@ function CampBar({ camp, onChange }: { camp: CampSave; onChange: (next: CampSave
         })}
       </ol>
       {camp.phase === 'landing' && (
-        <button type="button" className="word fill colonize-start" onClick={() => commit({ ...camp, phase: 'habitat' })}>
-          Start colonizing
+        <button
+          type="button"
+          className="word fill colonize-start"
+          onClick={() => onChange({ ...camp, phase: 'habitat' })}
+        >
+          <PixelBuildingIcon size={15} />
+          <span>Begin Outpost Construction</span>
         </button>
       )}
       <div className="camp-cards">
         {camp.phase === 'habitat' && (
           <>
-            <CampCard title="Plain habitat" detail="A cabin on the flat ground." preview="habitat" on={hasPiece(camp, 'habitat-plain')} onAdd={() => commit(pickHabitat(camp, 'habitat-plain'))} />
-            <CampCard title="Ridge habitat" detail="The same cabin against the ridge." preview="habitat" on={hasPiece(camp, 'habitat-ridge')} onAdd={() => commit(pickHabitat(camp, 'habitat-ridge'))} />
+            <CampCard
+              title="Inflatable Pressurized Dome"
+              detail="Multilayer Kevlar dome with central airlock and command quarters."
+              preview="habitat"
+              on={hasPiece(camp, 'habitat-plain')}
+              onAdd={() => onChange(pickHabitat(camp, 'habitat-plain'))}
+            />
+            <CampCard
+              title="Regolith-Shielded Bunker"
+              detail="Rigid habitat module sheltered by a 2-meter compacted Martian regolith radiation berm."
+              preview="habitat"
+              on={hasPiece(camp, 'habitat-ridge')}
+              onAdd={() => onChange(pickHabitat(camp, 'habitat-ridge'))}
+            />
           </>
         )}
         {camp.phase === 'life' && (
           <>
-            <CampCard title="Life support" detail="Air for the cabin." preview="life" on={hasPiece(camp, 'life')} onAdd={() => commit(putPiece(camp, 'life', true))} />
-            <CampCard title="Water" detail="The tank beside the cabin." preview="water" on={hasPiece(camp, 'water')} onAdd={() => commit(putPiece(camp, 'water', true))} />
+            <CampCard
+              title="Oxygen Generation System"
+              detail="Electrolysis & Sabatier CO₂ scrubber providing 98% closed-loop breathable O₂."
+              preview="life"
+              on={hasPiece(camp, 'life')}
+              onAdd={() => onChange(putPiece(camp, 'life', !hasPiece(camp, 'life')))}
+            />
+            <CampCard
+              title="Permafrost Water Extractor"
+              detail="Automated subsurface thermal drill melting glacial regolith ice into potable water."
+              preview="water"
+              on={hasPiece(camp, 'water')}
+              onAdd={() => onChange(putPiece(camp, 'water', !hasPiece(camp, 'water')))}
+            />
           </>
         )}
         {camp.phase === 'power' && (
           <>
-            <CampCard title="Battery" detail="Stores what the arrays make. Add this before the source if you want it." preview="battery" on={hasPiece(camp, 'battery')} onAdd={() => commit(putPiece(camp, 'battery', true))} />
-            <CampCard title="Solar array" detail="A wing of panels. This step can move on once one source is down." preview="solar" on={camp.pieces.some((id) => id.startsWith('solar-'))} onAdd={() => commit(addArray(camp))} />
-            <CampCard title="Reactor" detail="Power that does not care about dust." preview="reactor" on={hasPiece(camp, 'fission')} onAdd={() => commit(putPiece(camp, 'fission', true))} />
+            <CampCard
+              title="Dual Solar Array Wings"
+              detail="Deploy high-efficiency photovoltaic wings. Clean daily power."
+              preview="solar"
+              on={camp.pieces.some((id) => id.startsWith('solar-'))}
+              onAdd={() => onChange(addArray(camp))}
+            />
+            <CampCard
+              title="Kilopower Fission Reactor"
+              detail="10 kW Stirling nuclear generator; reliable power unaffected by dust storms."
+              preview="reactor"
+              on={hasPiece(camp, 'fission')}
+              onAdd={() => onChange(putPiece(camp, 'fission', !hasPiece(camp, 'fission')))}
+            />
+            <CampCard
+              title="Lithium-Ion Energy Storage"
+              detail="High-density battery bank buffering overnight power drops."
+              preview="battery"
+              on={hasPiece(camp, 'battery')}
+              onAdd={() => onChange(putPiece(camp, 'battery', !hasPiece(camp, 'battery')))}
+            />
           </>
         )}
         {camp.phase === 'food' && (
           <>
-            <CampCard title="Stored food" detail="Rations. No greenhouse." preview="food" on={hasPiece(camp, 'food-stored')} onAdd={() => commit(putPiece({ ...camp, pieces: camp.pieces.filter((id) => id !== 'greenhouse' && id !== 'greenhouse-hybrid') }, 'food-stored', true))} />
-            <CampCard title="Greenhouse" detail="A planted bay." preview="greenhouse" on={hasPiece(camp, 'greenhouse')} onAdd={() => commit(putPiece({ ...camp, pieces: camp.pieces.filter((id) => id !== 'food-stored' && id !== 'greenhouse-hybrid') }, 'greenhouse', true))} />
-            <CampCard title="Hybrid" detail="Rations plus a smaller bay." preview="greenhouse" on={hasPiece(camp, 'greenhouse-hybrid')} onAdd={() => commit(putPiece({ ...camp, pieces: camp.pieces.filter((id) => id !== 'food-stored' && id !== 'greenhouse') }, 'greenhouse-hybrid', true))} />
-          </>
-        )}
-        {camp.phase === 'survival' && (
-          <>
-            <CampCard title="Berm" detail="A ridge of soil against the flare." preview="berm" on={hasPiece(camp, 'berm')} onAdd={() => commit(putPiece(camp, 'berm', true))} />
-            <CampCard title="Next sol" detail={`Sol ${camp.sol}. Air ${camp.air}, water ${camp.water}, food ${camp.food}, power ${camp.power}.`} preview="sol" on={camp.sol >= 4} onAdd={() => commit(advanceSol(camp))} />
-            {camp.sol >= 2 && !camp.storm && <CampCard title="Shelter" detail="Ride the storm inside." preview="berm" on={false} onAdd={() => onChange({ ...camp, storm: 'shelter' })} />}
-            {camp.sol >= 2 && !camp.storm && <CampCard title="Clean the arrays" detail="Clear the dust. Costs the sol outside." preview="solar" on={false} onAdd={() => onChange({ ...camp, storm: 'clean' })} />}
+            <CampCard
+              title="Hydroponic Greenhouse"
+              detail="Automated aeroponic crop trays for fresh greens and supplemental O₂."
+              preview="greenhouse"
+              on={hasPiece(camp, 'greenhouse')}
+              onAdd={() => onChange(putPiece({ ...camp, pieces: camp.pieces.filter((id) => id !== 'food-stored' && id !== 'greenhouse-hybrid') }, 'greenhouse', true))}
+            />
+            <CampCard
+              title="Freeze-Dried Rations Depot"
+              detail="Hermetically sealed 500-day shelf-life emergency rations from Earth."
+              preview="food"
+              on={hasPiece(camp, 'food-stored')}
+              onAdd={() => onChange(putPiece({ ...camp, pieces: camp.pieces.filter((id) => id !== 'greenhouse' && id !== 'greenhouse-hybrid') }, 'food-stored', true))}
+            />
+            <CampCard
+              title="Closed-Loop Biosphere (Hybrid)"
+              detail="Combined hydroponics plus stored baseline rations for optimal nutrition redundancy."
+              preview="greenhouse"
+              on={hasPiece(camp, 'greenhouse-hybrid')}
+              onAdd={() => onChange(putPiece({ ...camp, pieces: camp.pieces.filter((id) => id !== 'food-stored' && id !== 'greenhouse') }, 'greenhouse-hybrid', true))}
+            />
           </>
         )}
         {camp.phase === 'report' && (
-          <p className="camp-stores">Sol {camp.sol} filed. Air {camp.air}, water {camp.water}, food {camp.food}, power {camp.power}. Transmit the return when you are ready.</p>
+          <div className="camp-report-banner">
+            <strong>
+              <PixelTrophyIcon size={16} />
+              <span>Mars Outpost Alpha Successfully Commissioned!</span>
+            </strong>
+            <p>Outpost established and life support loops closed. Air {camp.air}%, Water {camp.water}%, Food {camp.food}%, Power {camp.power}%. Outpost telemetry logged. Head to the Ascent Lander to Finish Game.</p>
+          </div>
         )}
       </div>
+
+      {canAdvance && (
+        <div className="camp-phase-advance">
+          <button
+            type="button"
+            className="camp-advance-btn"
+            onClick={handleNextPhase}
+          >
+            <span>Confirm Selection & Proceed to {CAMP_PHASES.find((p) => p[0] === NEXT_CAMP[camp.phase])?.[1]}</span>
+            <PixelArrowRightIcon size={14} />
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -666,11 +869,16 @@ function Read({ label, value }: { label: string; value: string }) {
 function HuntArrow({ hint }: { hint: SurfaceHint }) {
   const x = Math.min(0.92, Math.max(0.08, (hint.nx + 1) / 2))
   const y = Math.min(0.84, Math.max(0.1, (1 - hint.ny) / 2))
-  const rot = Math.atan2(hint.nx, hint.ny) * 180 / Math.PI
+  const rot = (Math.atan2(hint.nx, hint.ny) * 180) / Math.PI
+  const isLander = hint.kind === 'lander'
+  const dist = Math.round(hint.distM ?? 0)
   return (
-    <div className="hunt-arrow" style={{ left: `${x * 100}%`, top: `${y * 100}%` }}>
+    <div className={`hunt-arrow${isLander ? ' is-lander' : ''}`} style={{ left: `${x * 100}%`, top: `${y * 100}%` }}>
       <i style={{ transform: hint.onScreen ? 'none' : `rotate(${rot}deg)` }} />
-      <b>{hint.onScreen ? hint.name : 'Sample'}</b>
+      <div className="hunt-arrow-pill">
+        <b>{hint.name}</b>
+        {dist > 0 && <span className="hunt-arrow-dist">{dist} m</span>}
+      </div>
     </div>
   )
 }

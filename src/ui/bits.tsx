@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ButtonHTMLAttributes, type MouseEvent, type ReactNode } from 'react'
 import { Lock, Rocket, X } from 'lucide-react'
+import { mps } from '../domain/format'
 import TechText from './TechText'
 
 const reduceMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -60,15 +61,64 @@ export function Sheet({ title, onClose, children }: { title: string; onClose: ()
   )
 }
 
-export function Meter({ icon, label, value, ratio, tone = 'ok' }: { icon?: ReactNode; label: string; value: string; ratio: number; tone?: 'ok' | 'bad' }) {
+export function Meter({
+  icon,
+  label,
+  value,
+  ratio,
+  tone = 'ok',
+  compact = false,
+}: {
+  icon?: ReactNode
+  label: string
+  value: string
+  ratio: number
+  tone?: 'ok' | 'bad'
+  compact?: boolean
+}) {
   const width = Math.max(0.04, Math.min(1, ratio))
   return (
-    <div className={`meter${icon ? '' : ' no-icon'}`}>
+    <div className={`meter${icon ? '' : ' no-icon'}${compact ? ' is-compact' : ''}${tone === 'bad' ? ' is-bad' : ' is-ok'}`}>
       {icon ? <span className="meter-icon">{icon}</span> : null}
       <div>
         <span>{label}</span>
         <b>{value}</b>
-        <i className={tone === 'bad' ? 'bad' : ''} style={{ transform: `scaleX(${width})` }} />
+        {!compact && <i className={tone === 'bad' ? 'bad' : ''} style={{ transform: `scaleX(${width})` }} />}
+      </div>
+    </div>
+  )
+}
+
+/** Single track: available from the left, need pinned at the right; shortfall is red. */
+export function DvBudgetBar({ availableMps, neededMps }: { availableMps: number; neededMps: number }) {
+  const need = Math.max(1, neededMps)
+  const short = availableMps + 1 < neededMps
+  const haveRatio = Math.min(1, Math.max(0, availableMps / need))
+  const gapRatio = short ? Math.min(1 - haveRatio, (neededMps - availableMps) / need) : 0
+  return (
+    <div className={`dv-budget${short ? ' is-short' : ''}`}>
+      <div className="dv-budget-head">
+        <span>Delta-v</span>
+        <b>
+          {mps(availableMps)}
+          <span className="dv-budget-sep"> / </span>
+          <span className="dv-budget-need">{mps(neededMps)}</span>
+        </b>
+      </div>
+      <div
+        className={`dv-budget-track${short ? ' is-short' : ''}`}
+        role="img"
+        aria-label={`${mps(availableMps)} available of ${mps(neededMps)} needed`}
+      >
+        <i className="dv-seg have" style={{ width: `${haveRatio * 100}%` }} />
+        {gapRatio > 0.001 && (
+          <i className="dv-seg lack" style={{ left: `${haveRatio * 100}%`, width: `${gapRatio * 100}%` }} />
+        )}
+        <em className="dv-need-edge" aria-hidden />
+      </div>
+      <div className="dv-budget-legend">
+        <span>Have</span>
+        <span className="dv-budget-need">Need</span>
       </div>
     </div>
   )

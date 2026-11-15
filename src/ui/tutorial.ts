@@ -84,10 +84,10 @@ export function startDesignTutorial(): void {
       {
         element: '.hangar-actions',
         popover: {
-          title: 'Autofix & Trajectory Plan',
-          description: 'Use the AI Auto-fix to balance centre of mass and tank loads, then proceed to the Flight Plan to set departure burns.',
+          title: 'Plan the flight',
+          description: 'When the stack checks out, use Plan the flight to set the window and burns.',
           side: 'top',
-          align: 'end',
+          align: 'center',
         },
       },
     ],

@@ -30,26 +30,26 @@ import {
   Redo2,
   Rocket,
   RotateCcw,
-  Sparkles,
   Trash2,
   Undo2,
+  X,
   Zap,
 } from 'lucide-react'
-import { CATALOG, getSpec } from '../domain/catalog'
+import { CATALOG } from '../domain/catalog'
 import { CREW_ROLES, crewReady, type CrewSize } from '../domain/crew'
-import { OBJECTIVES, kitCoverage, objectiveKit, objectiveOf, siteOf, sitesFor, suggestedSite, windowExtraDv } from '../domain/campaign'
+import { windowExtraDv } from '../domain/campaign'
 import { bits, clock, db, kelvin, kg, money, mps, watts } from '../domain/format'
-import { lunarTransfer, marsTransfer, solarTransfer } from '../domain/orbit'
 import { sliderToWarp, warpLabel, warpToSlider } from '../domain/time'
 import { evaluate, requiredBurns } from '../domain/validate'
-import type { ComponentSpec, EngineeringIssue, EngineeringReport, MissionDef, MissionOutcome, MissionPlan, SpacecraftConfig, Subsystem } from '../domain/types'
+import type { ComponentSpec, EngineeringIssue, EngineeringReport, MissionDef, MissionOutcome, MissionPlan, SpacecraftConfig } from '../domain/types'
 import { loadMarsPhoto, loadNasa, loadSolarNote, type MarsFrame, type NasaContext, type SolarNote } from '../nasa/client'
 import { useActiveMission, useMission } from '../store/useMission'
 import { DifficultyCadetIcon, DifficultyCommanderIcon, DifficultySpecialistIcon } from './pixelIcons'
 import { graphicsLabel } from '../render/world'
 import { createAscent, stepAscent, ASCENT_TIME_SCALE, type AscentState } from '../domain/ascent'
 import { say, silence } from './voice'
-import { Dock, Glass, Meter, MissionTitle, Sheet, SpotButton } from './bits'
+import { Dock, DvBudgetBar, Glass, Meter, MissionTitle, Sheet, SpotButton } from './bits'
+import { PlanHoldList, relatedSpecs } from './planHolds'
 import { PartPreview } from './partPreview'
 import { DestModel } from './DestStill'
 import { TitleBanner } from './TitleBanner'
@@ -60,19 +60,8 @@ import { APP_NAME, EDU_LIMITS } from '../domain/brand'
 import { debriefVerdict } from '../domain/score'
 import SplitFlapText from './SplitFlapText'
 import { MissionRankingTable } from './MissionRankingTable'
-
-const FILTERS: { id: Subsystem | 'all'; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'structure', label: 'Bus' },
-  { id: 'propulsion', label: 'Engine' },
-  { id: 'fuel', label: 'Fuel' },
-  { id: 'power', label: 'Power' },
-  { id: 'communications', label: 'Comms' },
-  { id: 'science', label: 'Science' },
-  { id: 'thermal', label: 'Thermal' },
-]
-
-const EXTRA_PARTS = new Set(['magnetometer', 'particle', 'payload', 'soil', 'rock', 'radiation', 'arm', 'cache'])
+import { PixelBuildingIcon, PixelCheckIcon, PixelRadioTowerIcon, PixelRocketIcon, PlanetSaturnIcon } from './pixelIcons'
+import { computeNextGameImprovements, exportDebriefReportPdf } from './reportPdf'
 
 const SHORT: Record<string, string> = {
   lunar: 'Moon',
@@ -82,31 +71,39 @@ const SHORT: Record<string, string> = {
 }
 
 function shortMoney(usd: number): string {
-  const sign = usd < 0 ? '-' : ''
-  const abs = Math.abs(usd)
-  if (abs >= 1e9) return `${sign}$${(abs / 1e9).toFixed(1)}B`
-  if (abs >= 1e6) return `${sign}$${Math.round(abs / 1e6)}M`
-  if (abs >= 1e3) return `${sign}$${Math.round(abs / 1e3)}k`
-  return `${sign}$${Math.round(abs)}`
+  return money(usd)
 }
 
-function headline(spec: ComponentSpec): string {
-  if (spec.thrustN > 0) return `${mps(spec.thrustN)} ${spec.ispS}s`
-  if (spec.tankCapacityKg > 0) return `${kg(spec.tankCapacityKg)}`
-  if (spec.powerGenW > 0) return `${watts(spec.powerGenW)}`
-  if (spec.powerDrawW > 0) return `-${watts(spec.powerDrawW)}`
+function partStat(spec: ComponentSpec): string {
+  if (spec.thrustN > 0) return `${spec.thrustN} N · ${spec.ispS} s Isp`
+  if (spec.tankCapacityKg > 0) return `${kg(spec.tankCapacityKg)} vol`
+  if (spec.powerGenW > 0) return watts(spec.powerGenW)
+  if (spec.energyWh > 0) return `${spec.energyWh} Wh`
+  if (spec.antennaGainDbi > 0) return `${spec.antennaGainDbi} dBi`
   if (spec.radiatorM2 > 0) return `${spec.radiatorM2} m²`
-  if (spec.antennaGainDbi > 0) return `${db(spec.antennaGainDbi)}`
-  return `${kg(spec.massKg)}`
+  if (spec.powerDrawW > 0) return watts(spec.powerDrawW)
+  return ''
+}
+
+function PartSpecs({ spec, brief = false }: { spec: ComponentSpec; brief?: boolean }) {
+  const stat = partStat(spec)
+  if (brief) return <em>{`${kg(spec.massKg, 0)} · ${money(spec.costUsd)}`}</em>
+  return (
+    <em>
+      <span className="part-spec-main">{kg(spec.massKg, 0)} · {money(spec.costUsd)}</span>
+      {stat ? <span className="part-spec-sub">{stat}</span> : null}
+    </em>
+  )
 }
 
 function withoutLine(craft: SpacecraftConfig, mission: MissionDef, plan: MissionPlan, instanceId: string, report: EngineeringReport): string {
   const alt = evaluate({ ...craft, parts: craft.parts.filter((part) => part.instanceId !== instanceId) }, mission, plan)
   const mass = report.mass.totalKg - alt.mass.totalKg
   const dv = alt.propulsion.dvMps - report.propulsion.dvMps
-  const massText = `${Math.abs(mass).toFixed(0)} kg ${mass >= 0 ? 'lighter' : 'heavier'}`
-  const dvText = `${Math.abs(dv).toFixed(0)} m/s ${dv >= 0 ? 'more' : 'less'} delta-v`
-  return `Without this part the ship is ${massText} and has ${dvText}.`
+  const bits: string[] = []
+  if (Math.abs(mass) >= 0.5) bits.push(`${mass >= 0 ? '−' : '+'}${Math.abs(mass).toFixed(0)} kg`)
+  if (Math.abs(dv) >= 0.5) bits.push(`${dv >= 0 ? '+' : '−'}${Math.abs(dv).toFixed(0)} m/s Δv`)
+  return bits.length ? bits.join(' · ') : ''
 }
 
 function facts(spec: ComponentSpec): { label: string; value: string }[] {
@@ -458,12 +455,10 @@ export function DesignScreen() {
   const canRedo = useMission((state) => (state.craftFuture?.length ?? 0) > 0)
   const rename = useMission((state) => state.rename)
   const go = useMission((state) => state.go)
-  const [filter, setFilter] = useState<Subsystem | 'all'>('all')
   const [pick, setPick] = useState<Record<string, number>>({})
   const [callSign, setCallSign] = useState(craft?.name ?? 'Surveyor')
   const [specId, setSpecId] = useState<string | null>(null)
   const [advanced, setAdvanced] = useState(false)
-  const [moreParts, setMoreParts] = useState(false)
   const [issuesOpen, setIssuesOpen] = useState(false)
 
   useEffect(() => {
@@ -499,15 +494,14 @@ export function DesignScreen() {
 
   if (!craft || !mission || !plan) return null
   const report = evaluate(craft, mission, plan)
-  const show = (subsystem: Subsystem) => filter === 'all' || filter === subsystem
   const sections = SECTIONS.map((section) => ({
     label: section.label,
     families: section.familyIds
       .map((id) => FAMILIES.find((family) => family.id === id))
-      .filter((family): family is NonNullable<typeof family> => Boolean(family && show(family.subsystem))),
+      .filter((family): family is NonNullable<typeof family> => Boolean(family)),
     singles: section.singleIds
       .map((id) => CATALOG.find((item) => item.id === id))
-      .filter((item): item is ComponentSpec => Boolean(item && show(item.subsystem) && (moreParts || !EXTRA_PARTS.has(item.id)))),
+      .filter((item): item is ComponentSpec => Boolean(item)),
   })).filter((section) => section.families.length > 0 || section.singles.length > 0)
   const spec = CATALOG.find((item) => item.id === specId) ?? null
   const hard = report.issues.filter((issue) => issue.severity === 'hard').length
@@ -528,13 +522,6 @@ export function DesignScreen() {
       <FixBar show={hard > 0} onFix={autoFix} />
       <aside className="side left catalog">
         <Glass className="stack-card">
-          <div className="filters" role="toolbar" aria-label="Parts">
-            {FILTERS.map((item) => (
-              <button key={item.id} type="button" className="filter-chip" aria-pressed={filter === item.id} onClick={() => setFilter(item.id)}>
-                {item.label}
-              </button>
-            ))}
-          </div>
           <div className="part-list">
             {sections.map((section) => (
               <div key={section.label}>
@@ -548,7 +535,7 @@ export function DesignScreen() {
                       <PartPreview specId={item.id} />
                       <span>
                         <strong>{item.name}</strong>
-                        <em>{family.name} · {headline(item)} · {shortMoney(item.costUsd)}</em>
+                        <PartSpecs spec={item} />
                       </span>
                       <button type="button" className="icon" aria-label={`About ${item.name}`} onClick={(event) => { event.stopPropagation(); setAdvanced(false); setSpecId(item.id) }}>
                         <Info size={12} />
@@ -573,7 +560,7 @@ export function DesignScreen() {
                     <PartPreview specId={item.id} />
                     <span>
                       <strong>{item.name}</strong>
-                      <em>{headline(item)} · {shortMoney(item.costUsd)}</em>
+                      <PartSpecs spec={item} />
                     </span>
                     <button type="button" className="icon" aria-label={`About ${item.name}`} onClick={(event) => { event.stopPropagation(); setAdvanced(false); setSpecId(item.id) }}>
                       <Info size={12} />
@@ -585,14 +572,11 @@ export function DesignScreen() {
                 ))}
               </div>
             ))}
-            <button type="button" className="word slim more-parts" onClick={() => setMoreParts((value) => !value)}>
-              {moreParts ? 'Fewer parts' : 'More instruments'}
-            </button>
           </div>
         </Glass>
       </aside>
       <aside className="side right assembly">
-        <Glass className="stack-card">
+        <Glass className={`stack-card ${hard > 0 ? 'is-hold' : 'is-ready'}`}>
           <div className="name-row">
             <input
               aria-label="Call sign"
@@ -602,7 +586,7 @@ export function DesignScreen() {
                 rename(event.target.value)
               }}
             />
-            <button type="button" className="word slim generate" onClick={() => generate(callSign)}><Sparkles size={14} /> Generate</button>
+            <button type="button" className="word slim generate" onClick={() => generate(callSign)}><PlanetSaturnIcon size={14} /> Generate</button>
             <button type="button" className="icon" aria-label={`${report.issues.length} constraints`} onClick={() => setIssuesOpen(true)}>
               {hard > 0 ? <CircleAlert size={15} /> : <CircleCheck size={15} />}
               {report.issues.length > 0 && <em className="count-pip">{report.issues.length}</em>}
@@ -611,16 +595,53 @@ export function DesignScreen() {
           <div className="edit-row">
             <button type="button" className="word slim" onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)"><Undo2 size={13} /> Undo</button>
             <button type="button" className="word slim" onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Y)"><Redo2 size={13} /> Redo</button>
-            <button type="button" className="word slim" onClick={startDesignTutorial}>Help</button>
+            <button type="button" className="word slim" onClick={startDesignTutorial}>Guide</button>
           </div>
-          <div className="scroll">
-            <Meter label="Mass" value={kg(report.mass.totalKg)} ratio={report.mass.totalKg / mission.maxMassKg} tone={report.mass.marginKg < 0 ? 'bad' : 'ok'} />
-            <Meter label="Fuel / Δv" value={mps(report.propulsion.dvMps)} ratio={report.requiredDvMps > 0 ? report.propulsion.dvMps / report.requiredDvMps : 1} tone={report.propulsion.dvMps + 1 < report.requiredDvMps ? 'bad' : 'ok'} />
-            <Meter label="Power" value={watts(generation)} ratio={report.power.loadW > 0 ? generation / report.power.loadW : 1} tone={generation + 1 < report.power.loadW ? 'bad' : 'ok'} />
-            <Meter label="Cost" value={shortMoney(report.cost.totalUsd)} ratio={report.cost.totalUsd / mission.budgetUsd} tone={report.cost.marginUsd < 0 ? 'bad' : 'ok'} />
-            <p className="edu-note">{EDU_LIMITS}</p>
-            <SiDesk mission={mission} craft={craft} plan={plan} report={report} />
-            <h2 className="section-label">Fitted</h2>
+          <div className="build-top">
+            {hard > 0 && (
+              <p className="build-status is-hold">
+                This craft cannot fly yet
+                <span className="build-status-meta">{hard} warning{hard === 1 ? '' : 's'}</span>
+              </p>
+            )}
+            <Meter compact label="Mass" value={`${kg(report.mass.totalKg)} / ${kg(mission.maxMassKg)}`} ratio={report.mass.totalKg / mission.maxMassKg} tone={report.mass.marginKg < 0 ? 'bad' : 'ok'} />
+            <DvBudgetBar availableMps={report.propulsion.dvMps} neededMps={report.requiredDvMps} />
+            <Meter compact label="Power" value={`${watts(generation)} / ${watts(report.power.loadW)}`} ratio={report.power.loadW > 0 ? generation / report.power.loadW : 1} tone={generation + 1 < report.power.loadW ? 'bad' : 'ok'} />
+            <Meter compact label="Cost" value={`${money(report.cost.totalUsd)} / ${money(mission.budgetUsd)}`} ratio={report.cost.totalUsd / mission.budgetUsd} tone={report.cost.marginUsd < 0 ? 'bad' : 'ok'} />
+            {hard > 0 && (
+              <div className="build-fix-list">
+                {report.issues.filter((issue) => issue.severity === 'hard').slice(0, 3).map((issue) => {
+                  const specs = relatedSpecs(issue, craft)
+                  return (
+                    <div key={issue.id} className="build-fix-item">
+                      <div className="build-fix-label">{issue.what}</div>
+                      {specs.length > 0 && (
+                        <div className="build-fix-previews">
+                          {specs.slice(0, 3).map((spec) => (
+                            <PartPreview key={spec.id} specId={spec.id} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+            {hard > 0 ? (
+              <button type="button" className="word fill autofix build-autofix" onClick={autoFix}>
+                <PlanetSaturnIcon size={14} /> Auto-fix
+              </button>
+            ) : (
+              <button type="button" className="word fill build-plan" onClick={() => go('plan')}>
+                Plan the flight
+              </button>
+            )}
+          </div>
+          <div className="scroll build-stack">
+            <div className="build-stack-head">
+              <h2 className="section-label">Stack</h2>
+              <span className="build-stack-count">{craft.parts.length}</span>
+            </div>
             {craft.parts.map((part) => {
               const fitted = CATALOG.find((item) => item.id === part.specId)
               if (!fitted) return null
@@ -630,7 +651,7 @@ export function DesignScreen() {
                   <PartPreview specId={fitted.id} />
                   <span>
                     <strong>{family?.name ?? fitted.name}</strong>
-                    <em>{headline(fitted)} · {shortMoney(fitted.costUsd)}</em>
+                    <PartSpecs spec={fitted} brief />
                   </span>
                   <button
                     type="button"
@@ -676,21 +697,6 @@ export function DesignScreen() {
                 </div>
               )
             })}
-            {hard > 0 && (
-              <div className="fix-first-block">
-                <h2 className="section-label">Fix these first</h2>
-                <ul className="fix-first-list">
-                  {report.issues.filter((issue) => issue.severity === 'hard').slice(0, 3).map((issue) => (
-                    <li key={issue.id}>{issue.what}</li>
-                  ))}
-                </ul>
-                {hard > 3 && (
-                  <button type="button" className="word slim" onClick={() => setIssuesOpen(true)}>
-                    {hard - 3} more holds
-                  </button>
-                )}
-              </div>
-            )}
             {selected && (
               <div className="pad" aria-label="Move part">
                 <Move3d size={14} />
@@ -701,18 +707,23 @@ export function DesignScreen() {
                 <button type="button" className="icon" aria-label="Move forward" onClick={() => nudgePart(selected.instanceId, 0, 0, 0.12)}><ChevronsUp size={14} /></button>
                 <button type="button" className="icon" aria-label="Move back" onClick={() => nudgePart(selected.instanceId, 0, 0, -0.12)}><ChevronsDown size={14} /></button>
                 <button type="button" className="icon" aria-label="Reset placement" onClick={() => resetOffset(selected.instanceId)}><RotateCcw size={14} /></button>
-                <p className="muted">{withoutLine(craft, mission, plan, selected.instanceId, report)}</p>
+                {(() => {
+                  const drop = withoutLine(craft, mission, plan, selected.instanceId, report)
+                  return drop ? <p className="nudge-delta">{drop}</p> : null
+                })()}
               </div>
             )}
-          </div>
-          <div className="card-actions">
-            <button type="button" className="word" onClick={() => go('plan')}>Plan the flight</button>
+            <SiDesk mission={mission} craft={craft} plan={plan} report={report} />
           </div>
         </Glass>
       </aside>
       <div className="plan-launch hangar-actions">
-        <p>Mass {kg(report.mass.totalKg)} / {kg(mission.maxMassKg)} · {shortMoney(report.cost.totalUsd)} / {shortMoney(mission.budgetUsd)} · {hard > 0 ? `${hard} holds` : 'Clear to plan'}</p>
-        <button type="button" className="word" onClick={() => go('plan')}>Plan the flight</button>
+        <p className="hangar-actions-stats">
+          {kg(report.mass.totalKg)} / {kg(mission.maxMassKg)}
+          <span className="hangar-actions-sep">·</span>
+          {money(report.cost.totalUsd)} / {money(mission.budgetUsd)}
+        </p>
+        <button type="button" className="word build-plan" onClick={() => go('plan')}>Plan the flight</button>
       </div>
       {spec && (
         <Sheet title={spec.name} onClose={() => setSpecId(null)}>
@@ -737,7 +748,7 @@ export function DesignScreen() {
             <IssueRow key={issue.id} issue={issue} />
           ))}
           {hard > 0 && (
-            <button type="button" className="word autofix" onClick={autoFix}><Sparkles size={14} /> Auto-fix</button>
+            <button type="button" className="word autofix" onClick={autoFix}><PlanetSaturnIcon size={14} /> Auto-fix</button>
           )}
         </Sheet>
       )}
@@ -750,7 +761,7 @@ function FixBar({ show, onFix }: { show: boolean; onFix: () => void }) {
   return (
     <div className="fix-bar">
       <span>This craft cannot fly yet.</span>
-      <button type="button" className="word autofix" onClick={onFix}><Sparkles size={14} /> Auto-fix</button>
+      <button type="button" className="word autofix" onClick={onFix}><PlanetSaturnIcon size={14} /> Auto-fix</button>
     </div>
   )
 }
@@ -773,20 +784,20 @@ export function PlanScreen() {
   const craft = useMission((state) => state.craft)
   const plan = useMission((state) => state.plan)
   const setPlan = useMission((state) => state.setPlan)
-  const rate = useMission((state) => state.rate)
-  const setRate = useMission((state) => state.setRate)
   const autoFix = useMission((state) => state.autoFix)
   const go = useMission((state) => state.go)
   const armLaunch = useMission((state) => state.armLaunch)
   if (!mission || !craft || !plan) return null
   const report = evaluate(craft, mission, plan)
-  const notes = report.issues.filter((issue) => issue.severity === 'hard')
+  const hard = report.issues.filter((issue) => issue.severity === 'hard')
+  const windowDv = Math.round(windowExtraDv(mission, plan))
   return (
     <>
-      <FixBar show={notes.length > 0} onFix={autoFix} />
+      <FixBar show={hard.length > 0} onFix={autoFix} />
       <aside className="side left">
-        <Glass className="pad-card">
+        <Glass className="pad-card plan-card">
           <DifficultyPanel compact />
+          <h2 className="section-label">Capture</h2>
           <div className="choice-row">
             {mission.captureOptions.map((option) => (
               <SpotButton
@@ -800,88 +811,21 @@ export function PlanScreen() {
               </SpotButton>
             ))}
           </div>
-          <h2 className="section-label">Suggestions</h2>
-          {notes.length === 0 && <p className="ready">The plan can fly with this spacecraft.</p>}
-          {notes.map((issue) => (
-            <div key={issue.id} className="fix">
-              <strong>{issue.what}</strong>
-              <p>{issue.why}</p>
-              <p>{issue.change}</p>
-            </div>
-          ))}
-          {notes.length > 0 && (
-            <button type="button" className="word autofix" onClick={autoFix}><Sparkles size={12} /> Auto-fix</button>
-          )}
-          <SiDesk mission={mission} craft={craft} plan={plan} report={report} />
-        </Glass>
-      </aside>
-      <aside className="side right">
-        <Glass className="pad-card">
-          <Meter label="Available Δv" value={mps(report.propulsion.dvMps)} ratio={report.requiredDvMps > 0 ? report.propulsion.dvMps / report.requiredDvMps : 1} tone={report.propulsion.dvMps + 1 < report.requiredDvMps ? 'bad' : 'ok'} />
-          <Meter label="Needed Δv" value={mps(report.requiredDvMps)} ratio={1} />
-          <p className="edu-note">{EDU_LIMITS}</p>
+          <DvBudgetBar availableMps={report.propulsion.dvMps} neededMps={report.requiredDvMps} />
+          <h2 className="section-label">Trajectory</h2>
           <label className="slider">
-            <span>Reserve <b>{mps(plan.reserveDvMps)}</b></span>
-            <input type="range" min={0} max={200} step={5} value={plan.reserveDvMps} onChange={(event) => setPlan({ reserveDvMps: Number(event.target.value) })} />
-          </label>
-          <label className="slider">
-            <span>Science <b>{Math.round(plan.scienceDuty * 100)}%</b></span>
-            <input type="range" min={0.2} max={1} step={0.05} value={plan.scienceDuty} onChange={(event) => setPlan({ scienceDuty: Number(event.target.value) })} />
-          </label>
-          <label className="slider">
-            <span>Launch day <b>{(plan.launchDay ?? 0) > 0 ? `+${plan.launchDay}` : plan.launchDay ?? 0} d</b></span>
+            <span>Launch window <b>{(plan.launchDay ?? 0) > 0 ? `+${plan.launchDay}` : plan.launchDay ?? 0} d</b></span>
             <input type="range" min={-180} max={180} step={5} value={plan.launchDay ?? 0} onChange={(event) => setPlan({ launchDay: Number(event.target.value) })} />
           </label>
+          {windowDv > 0 && <p className="plan-hint">+{windowDv} m/s on Earth departure</p>}
           <label className="slider">
-            <span>Objective <b>{objectiveOf(plan).title}</b></span>
-            <input
-              type="range"
-              min={0}
-              max={OBJECTIVES.length - 1}
-              step={1}
-              value={Math.max(0, OBJECTIVES.findIndex((item) => item.id === (plan.objectiveId ?? 'water')))}
-              onChange={(event) => {
-                const objectiveId = OBJECTIVES[Number(event.target.value)].id
-                const site = suggestedSite(mission.id, objectiveId)
-                setPlan({ objectiveId, siteId: site.id })
-              }}
-            />
+            <span>Reserve Δv <b>{mps(plan.reserveDvMps)}</b></span>
+            <input type="range" min={0} max={200} step={5} value={plan.reserveDvMps} onChange={(event) => setPlan({ reserveDvMps: Number(event.target.value) })} />
           </label>
-          <p className="ready">{objectiveOf(plan).question}</p>
-          <p>
-            Kit {objectiveKit(plan.objectiveId).map((id) => getSpec(id)?.name ?? id).join(', ')}. {Math.round(kitCoverage(plan.objectiveId, craft.parts.filter((part) => part.enabled).map((part) => part.specId)) * objectiveKit(plan.objectiveId).length)} of {objectiveKit(plan.objectiveId).length} aboard. Suggested site {suggestedSite(mission.id, plan.objectiveId).name}.
-          </p>
-          <label className="slider">
-            <span>Site <b>{siteOf(mission, plan).name}</b></span>
-            <input
-              type="range"
-              min={0}
-              max={sitesFor(mission.id === 'custom' ? 'mars' : mission.id).length - 1}
-              step={1}
-              value={Math.max(0, sitesFor(mission.id === 'custom' ? 'mars' : mission.id).findIndex((item) => item.id === plan.siteId))}
-              onChange={(event) => {
-                const rows = sitesFor(mission.id === 'custom' ? 'mars' : mission.id)
-                setPlan({ siteId: rows[Number(event.target.value)].id })
-              }}
-            />
-          </label>
-          <p>{siteOf(mission, plan).note}</p>
-          <p>{transferLine(mission, plan)}</p>
-          <label className="slider">
-            <span>Sim speed <b>{warpLabel(rate)}</b></span>
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.001}
-              value={warpToSlider(rate)}
-              onChange={(event) => setRate(sliderToWarp(Number(event.target.value)))}
-            />
-          </label>
+          <p className="plan-hint">Reserve counts in required Δv.</p>
           <div className="burns">
             {requiredBurns(mission, plan).map((burn) => (
               <div key={burn.id} className="burn">
-                <i />
                 <span>{burn.label}</span>
                 <b>{mps(burn.dvMps)}</b>
               </div>
@@ -889,10 +833,23 @@ export function PlanScreen() {
           </div>
         </Glass>
       </aside>
-      <div className="plan-launch">
-        <p>Budget {shortMoney(mission.budgetUsd)} · this ship {shortMoney(report.cost.totalUsd)}</p>
-        <button type="button" className="word slim" onClick={startPlanTutorial}>Help</button>
+      <aside className="side right plan-warnings-side">
+        <Glass className="pad-card plan-card plan-parts-card">
+          <h2 className="section-label">Stack warnings</h2>
+          <div className="plan-fix-actions">
+            {hard.length > 0 && (
+              <button type="button" className="word autofix" onClick={autoFix}><PlanetSaturnIcon size={12} /> Auto-fix</button>
+            )}
+            <SiDesk mission={mission} craft={craft} plan={plan} report={report} />
+          </div>
+          <PlanHoldList notes={report.issues.filter((issue) => issue.severity === 'hard')} craft={craft} />
+        </Glass>
+      </aside>
+      <div className="plan-nav-dock">
+        <button type="button" className="word slim" onClick={startPlanTutorial}>Guide</button>
         <button type="button" className="word slim" onClick={() => go('design')}><Boxes size={16} /> Design</button>
+      </div>
+      <div className="plan-launch plan-launch-main">
         <button type="button" className="word" onClick={() => armLaunch()}><Rocket size={16} /> Launch</button>
       </div>
     </>
@@ -904,24 +861,6 @@ const COUNT_STATUS = ['Flight computer', 'Guidance', 'Power', 'Thermal', 'Commun
 function km(metres: number): string {
   if (metres >= 1000) return `${(metres / 1000).toFixed(1)} km`
   return `${Math.round(metres)} m`
-}
-
-function transferLine(mission: MissionDef, plan: MissionPlan): string {
-  const extra = Math.round(windowExtraDv(mission, plan))
-  const days = (sec: number) => `${Math.round(sec / 86400)} days`
-  if (mission.id === 'lunar') {
-    const hop = lunarTransfer()
-    if (!hop) return ''
-    return `Patched conic: TLI ${Math.round(hop.tliMps)} m/s, lunar capture ${Math.round(hop.loiMps)} m/s, ${days(hop.tofSec)}. This launch date adds ${extra} m/s.`
-  }
-  if (mission.id === 'mars') {
-    const hop = marsTransfer()
-    if (!hop) return ''
-    return `Hohmann: Earth departure ${Math.round(hop.departureMps)} m/s, Mars capture ${Math.round(hop.captureMps)} m/s, ${days(hop.tofSec)}. The window is about 26 months. This date adds ${extra} m/s.`
-  }
-  const hop = solarTransfer(mission.destinationAu)
-  if (!hop) return ''
-  return `Hohmann departure ${Math.round(hop.departureMps)} m/s, arrival excess ${Math.round(hop.vInfArrive)} m/s, ${days(hop.tofSec)}. This launch date adds ${extra} m/s.`
 }
 
 export function LaunchScreen({ onCharge, onAscent }: { charge: number; onCharge: (value: number) => void; onAscent: (state: AscentState | null) => void }) {
@@ -1007,7 +946,7 @@ export function LaunchScreen({ onCharge, onAscent }: { charge: number; onCharge:
                 </div>
               ))}
               <div className="card-actions">
-                <button type="button" className="word autofix" onClick={autoFix}><Sparkles size={12} /> Auto-fix</button>
+                <button type="button" className="word autofix" onClick={autoFix}><PlanetSaturnIcon size={12} /> Auto-fix</button>
                 <button type="button" className="word slim" onClick={() => go('design')}>
                   <PenLine size={12} /> Design
                 </button>
@@ -1224,7 +1163,7 @@ export function DebriefScreen() {
   const field = useMission((state) => state.field)
   const resumeSurface = useMission((state) => state.resumeSurface)
   const missionId = useMission((state) => state.missionId)
-  const [copied, setCopied] = useState(false)
+  const [downloading, setDownloading] = useState(false)
   if (!outcome) return null
 
   const rank = outcome.gradeRank ?? (outcome.score >= 92 ? 'S' : outcome.score >= 80 ? 'A' : outcome.score >= 65 ? 'B' : outcome.score >= 50 ? 'C' : 'F')
@@ -1243,13 +1182,18 @@ export function DebriefScreen() {
     total: outcome.score,
   }
 
-  const handleCopy = () => {
-    void navigator.clipboard?.writeText(summaryOf(outcome))
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
+  const improvements = computeNextGameImprovements(outcome)
   const mars = missionId === 'mars' || missionId === 'custom'
+
+  const handleDownloadReport = async () => {
+    if (downloading) return
+    setDownloading(true)
+    try {
+      await exportDebriefReportPdf(outcome)
+    } finally {
+      setDownloading(false)
+    }
+  }
 
   return (
     <div className="center-stage debrief-stage">
@@ -1343,6 +1287,22 @@ export function DebriefScreen() {
           </div>
         )}
 
+        {/* What to Improve in the Next Game */}
+        <div className="debrief-improvements-box">
+          <div className="debrief-improvements-header">
+            <PixelRadioTowerIcon size={15} />
+            <strong>What to improve in the next game</strong>
+          </div>
+          <ul className="debrief-improvements-list">
+            {improvements.map((tip, idx) => (
+              <li key={idx} className="debrief-improvement-item">
+                <PixelCheckIcon size={13} className="debrief-tip-icon" />
+                <span>{tip}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
         {outcome.crew && outcome.crew.length > 1 && (
           <div className="crew-report">
             <b>Flight crew</b>
@@ -1369,28 +1329,56 @@ export function DebriefScreen() {
         </div>
 
         <div className="result-actions">
-          {((!outcome.success) || (mars && (outcome.success || outcome.partial || outcome.score >= 65))) && (
-            <div className="result-actions-primary">
-              {!outcome.success && (
-                <button type="button" className="word fill" onClick={() => go('design')}>Try again</button>
-              )}
-              {mars && (outcome.success || outcome.partial || outcome.score >= 65) && (
-                <button type="button" className="word fill" onClick={() => (field ? resumeSurface() : go('surface'))}>
-                  Walk the surface
-                </button>
-              )}
-            </div>
-          )}
-          <button type="button" className="word slim" onClick={() => go('design')}>Rebuild</button>
-          <button type="button" className="word slim" onClick={() => go('select')}>Home</button>
-          <button type="button" className="word slim" onClick={handleCopy}>{copied ? 'Copied' : 'Copy result'}</button>
+          <div className="result-actions-primary">
+            <button
+              type="button"
+              className="word fill debrief-act-walk"
+              onClick={() => {
+                if (mars) {
+                  field ? resumeSurface() : go('surface')
+                } else {
+                  go('surface')
+                }
+              }}
+            >
+              <PixelBuildingIcon size={16} />
+              <span>Walk the surface</span>
+            </button>
+            <button
+              type="button"
+              className="word fill debrief-act-new"
+              onClick={() => go('select')}
+            >
+              <PixelRocketIcon size={16} />
+              <span>New mission</span>
+            </button>
+          </div>
+          <div className="result-actions-secondary">
+            <button
+              type="button"
+              className="word slim debrief-act-dl"
+              disabled={downloading}
+              onClick={handleDownloadReport}
+            >
+              <PixelRadioTowerIcon size={14} />
+              <span>{downloading ? 'Capturing Report...' : 'Download the report'}</span>
+            </button>
+            <button
+              type="button"
+              className="word slim debrief-act-print"
+              onClick={() => window.print()}
+            >
+              <PixelCheckIcon size={14} />
+              <span>Print / Save PDF</span>
+            </button>
+          </div>
         </div>
       </Glass>
     </div>
   )
 }
 
-function summaryOf(outcome: MissionOutcome): string {
+export function summaryOf(outcome: MissionOutcome): string {
   const bd = outcome.scoreBreakdown
   const { title: verdictTitle } = debriefVerdict(outcome)
   const bdLines = bd ? [
@@ -1413,12 +1401,19 @@ function summaryOf(outcome: MissionOutcome): string {
 }
 
 export function CreditsScreen() {
+  const go = useMission((state) => state.go)
+  const missionId = useMission((state) => state.missionId)
   const [gpu, setGpu] = useState('Checking the graphics device')
   useEffect(() => { setGpu(graphicsLabel()) }, [])
+  const close = () => go(missionId ? 'pad' : 'select')
   return (
     <div className="center-stage">
       <Glass className="pad-card credits">
+        <button type="button" className="icon credits-close" aria-label="Close about" onClick={close}>
+          <X size={16} />
+        </button>
         <strong>{APP_NAME}</strong>
+        <div className="credits-scroll">
         <p>Briefing stills come from the NASA Image and Video Library. A Mars frame comes from the NASA/JPL Mars 2020 raw-image feed. Solar notes come from DONKI notifications. The asteroid count comes from the NEO feed. Each is cached for twelve hours, and the briefing stays up if a request fails. None of those feeds is the trajectory.</p>
         <p>The spacecraft is extruded the way Alexander Sanfilippo builds one: a polygon scaled and stitched, nose one way and the bell the other. Plate, foil and tile are painted on that hull. Catalog parts sit on it. https://github.com/AlexSanfilippo/ProceduralMeshGeneration</p>
         <p>Earth and Mars maps in the cruise sky are CC-BY 4.0 by Akshat. The Moon, Europa, and Jupiter maps, the grass clumps, the launch console, and the suited astronaut are the files supplied in public/3d.</p>
@@ -1430,6 +1425,7 @@ export function CreditsScreen() {
         <p>The hangar engineer is SI-generated text from NVIDIA NIM. It tries nvidia/nemotron-3.5-super-vl-120b-a12b, then nvidia/nemotron-3-ultra-550b-a55b, then nvidia/nemotron-3.5-lightning-30b-a3b. It explains holds and can suggest catalog parts. Mass, delta-v, power, link, heat, and cost are still computed in the game. No NASA logos or mission marks are generated.</p>
         <p>Mission titles use TechText; spotlight cards, the dock and the starfield follow patterns from React Bits (reactbits.dev).</p>
         <p className="muted">{gpu}</p>
+        </div>
       </Glass>
     </div>
   )

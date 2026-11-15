@@ -12,7 +12,6 @@ import { Viewport } from './render/Viewport'
 import type { SceneMode } from './render/world'
 import { useActiveMission, useMission, type Phase } from './store/useMission'
 import { effectiveWarp } from './domain/time'
-import { siteOf, objectiveOf } from './domain/campaign'
 import { APP_NAME } from './domain/brand'
 
 function sceneMode(phase: Phase): SceneMode {
@@ -43,7 +42,6 @@ export function App() {
   const selectedInstanceId = useMission((state) => state.selectedInstanceId)
   const selectInstance = useMission((state) => state.selectInstance)
   const nudgePart = useMission((state) => state.nudgePart)
-  const plan = useMission((state) => state.plan)
   const mission = useActiveMission()
   const [narrow, setNarrow] = useState(() => window.matchMedia('(max-width: 900px)').matches)
   const [full, setFull] = useState(Boolean(document.fullscreenElement))
@@ -51,8 +49,6 @@ export function App() {
   const [booting, setBooting] = useState(true)
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
   const lost = phase !== 'select' && phase !== 'credits' && !mission
-  const site = mission && plan ? siteOf(mission, plan) : null
-  const objective = plan ? objectiveOf(plan) : null
 
   useEffect(() => {
     applyMix(audio, volume)
@@ -224,17 +220,6 @@ export function App() {
         </nav>
         </div>
         <CrewBar />
-        {mission && objective && site && phase === 'design' && (
-          <div className="mission-banner" role="banner" aria-label="Mission objectives">
-            <span className="banner-item"><span className="banner-dim">Mission</span> <strong>{mission.name} · {objective.title}</strong></span>
-            <span className="banner-sep">·</span>
-            <span className="banner-item"><span className="banner-dim">Landing site</span> <strong>{site.name}</strong> <span className="banner-diff">({Math.round(site.difficulty * 100)}% diff)</span></span>
-            <span className="banner-sep">·</span>
-            <span className="banner-item"><span className="banner-dim">Required</span> <strong>{mission.requiredInstruments.join(', ')}</strong></span>
-            <span className="banner-sep">·</span>
-            <span className="banner-item"><span className="banner-dim">Window</span> <strong>{mission.launchWindow}</strong></span>
-          </div>
-        )}
       </header>
       )}
       {narrow && phase === 'design' && selectedInstanceId && (
@@ -251,13 +236,13 @@ export function App() {
           <span>{sim.phaseLabel || 'Coast'} · {Math.round(sim.distanceFraction * 100)}% · {effectiveWarp(rate, sim)}×</span>
         </button>
       )}
-      <div className="app-utility-dock" aria-label="Help and sound">
+      <div className="app-utility-dock" aria-label="About and sound">
         <button
           type="button"
           className={`utility-dock-btn ${phase === 'credits' ? 'active' : ''}`}
-          onClick={() => go('credits')}
+          onClick={() => go(phase === 'credits' ? (missionId ? 'pad' : 'select') : 'credits')}
         >
-          Help
+          About
         </button>
         <Mix />
       </div>

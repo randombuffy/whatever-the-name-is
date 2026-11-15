@@ -10,8 +10,20 @@ const DEST_TEXTURES: Record<string, string> = {
   asteroid: '/planets/moon.jpg',
 }
 
+type DestFraming = {
+  cameraDistance?: number
+  fov?: number
+  scale?: number
+}
+
 /** Spinning globe, centered so the whole planet sits in frame. */
-export function DestModel({ missionId, className }: { missionId: string; className?: string }) {
+export function DestModel({
+  missionId,
+  className,
+  cameraDistance = 3.15,
+  fov = 28,
+  scale = 1,
+}: { missionId: string; className?: string } & DestFraming) {
   const host = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const el = host.current
@@ -26,8 +38,8 @@ export function DestModel({ missionId, className }: { missionId: string; classNa
     renderer.setClearColor(0x000000, 0)
     renderer.outputColorSpace = THREE.SRGBColorSpace
     const scene = new THREE.Scene()
-    const camera = new THREE.PerspectiveCamera(28, 1, 0.1, 40)
-    camera.position.set(0, 0, 3.15)
+    const camera = new THREE.PerspectiveCamera(fov, 1, 0.1, 40)
+    camera.position.set(0, 0, cameraDistance)
     camera.lookAt(0, 0, 0)
     scene.add(new THREE.AmbientLight(0xd5deee, 0.78))
     const sun = new THREE.DirectionalLight(0xfff6ea, 2.1)
@@ -55,6 +67,7 @@ export function DestModel({ missionId, className }: { missionId: string; classNa
       metalness: 0.04,
     })
     const model = new THREE.Mesh(sphereGeo, sphereMat)
+    model.scale.setScalar(scale)
     scene.add(model)
 
     const loop = () => {
@@ -76,7 +89,7 @@ export function DestModel({ missionId, className }: { missionId: string; classNa
       renderer.dispose()
       canvas.remove()
     }
-  }, [missionId])
+  }, [missionId, cameraDistance, fov, scale])
   return <div ref={host} className={className ? `dest-still ${className}` : 'dest-still'} />
 }
 

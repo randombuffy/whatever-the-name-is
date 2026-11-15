@@ -1,8 +1,9 @@
-import { useState } from 'react'
-import { Sparkles } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { X } from 'lucide-react'
+import { PlanetSaturnIcon } from './pixelIcons'
 import { getSpec } from '../domain/catalog'
 import type { EngineeringReport, MissionDef, MissionPlan, SpacecraftConfig } from '../domain/types'
-import { askNim, NIM_LABEL, type NimAdvice } from '../si/nvidia'
+import { askNim, modelLabel, type NimAdvice } from '../si/nvidia'
 import { useMission } from '../store/useMission'
 
 function craftNote(mission: MissionDef, craft: SpacecraftConfig, plan: MissionPlan, report: EngineeringReport) {
@@ -38,12 +39,26 @@ export function SiDesk({
   report: EngineeringReport
 }) {
   const addPart = useMission((state) => state.addPart)
-  const rename = useMission((state) => state.rename)
   const [ask, setAsk] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [advice, setAdvice] = useState<NimAdvice | null>(null)
   const [open, setOpen] = useState(false)
+  const hard = report.issues.filter((issue) => issue.severity === 'hard').length
+
+  const close = () => {
+    setOpen(false)
+    setError('')
+  }
+
+  useEffect(() => {
+    if (!open) return undefined
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') close()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open])
 
   const run = async (prompt: string) => {
     setBusy(true)
@@ -59,63 +74,82 @@ export function SiDesk({
     }
   }
 
-  const apply = () => {
+  const applyParts = () => {
     if (!advice) return
     for (const id of advice.add) {
       if (getSpec(id) && !craft.parts.some((part) => part.specId === id && part.enabled)) addPart(id)
     }
-    if (advice.name) rename(advice.name)
-  }
-
-  if (!open) {
-    return (
-      <button type="button" className="word slim" onClick={() => setOpen(true)}>
-        Ask hangar
-      </button>
-    )
   }
 
   return (
-    <div className="si-desk">
-      <div className="si-desk-head">
-        <b>Hangar engineer</b>
-        <span className="si-mark">{NIM_LABEL}</span>
-      </div>
-      <p className="si-note">The model only talks. Mass, delta-v, power, and cost stay on the ledger.</p>
-      <textarea
-        rows={2}
-        value={ask}
-        placeholder="Why is the link dark? What tank do I need for Mars?"
-        onChange={(event) => setAsk(event.target.value)}
-      />
-      <div className="si-actions">
-        <button type="button" className="word slim" disabled={busy} onClick={() => void run(ask || 'Explain the holds and what to fit next.')}>
-          <Sparkles size={13} /> {busy ? 'Asking NIM…' : 'Ask'}
-        </button>
-        <button type="button" className="word slim" disabled={busy} onClick={() => void run('Name this spacecraft. Keep it short. Then say the one change that closes the worst hold.')}>
-          Name it
-        </button>
-      </div>
-      {error && <p className="si-error">{error}</p>}
-      {advice && (
-        <div className="si-reply">
-          <p>{advice.brief}</p>
-          {advice.steps.length > 0 && (
-            <ol>
-              {advice.steps.map((line) => <li key={line}>{line}</li>)}
-            </ol>
-          )}
-          {advice.add.length > 0 && (
-            <p className="muted">Fit {advice.add.map((id) => getSpec(id)?.name ?? id).join(', ')}</p>
-          )}
-          {(advice.add.length > 0 || advice.name) && (
-            <button type="button" className="word slim" onClick={apply}>
-              Apply {advice.name ? `“${advice.name}”` : 'parts'}
-            </button>
-          )}
-          <span className="si-mark">{NIM_LABEL}. Not a NASA product.</span>
+    <>
+      <button type="button" className="word slim" onClick={() => setOpen(true)}>
+        Ask hangar
+      </button>
+      {open && (
+        <div className="si-pop-back" onClick={close} role="presentation">
+          <div
+            className="si-pop glass"
+            role="dialog"
+            aria-label="Hangar"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="si-pop-head">
+              <b>Hangar</b>
+              <button type="button" className="icon" aria-label="Close" onClick={close}>
+                <X size={16} />
+              </button>
+            </header>
+            <p className="si-note">Answers are suggestions only. Mass, Δv, and cost stay on the ledger.</p>
+            <textarea
+              rows={3}
+              value={ask}
+              placeholder="What is short on delta-v? Which part closes the warning?"
+              onChange={(event) => setAsk(event.target.value)}
+            />
+            <div className="si-actions">
+              <button
+                type="button"
+                className="word fill"
+                disabled={busy}
+                onClick={() => void run(ask.trim() || 'Explain the warnings and the one catalog change that helps most.')}
+              >
+                <PlanetSaturnIcon size={13} /> {busy ? 'Thinking…' : 'Ask'}
+              </button>
+              {hard > 0 && (
+                <button
+                  type="button"
+                  className="word slim"
+                  disabled={busy}
+                  onClick={() => void run('Why can this stack not fly yet? One short paragraph, then bullet fixes.')}
+                >
+                  Why not flyable?
+                </button>
+              )}
+            </div>
+            {error && <p className="si-error">{error}</p>}
+            {advice && (
+              <div className="si-reply">
+                <p>{advice.brief}</p>
+                {advice.steps.length > 0 && (
+                  <ol>
+                    {advice.steps.map((line) => <li key={line}>{line}</li>)}
+                  </ol>
+                )}
+                {advice.add.length > 0 && (
+                  <>
+                    <p className="muted">Suggested: {advice.add.map((id) => getSpec(id)?.name ?? id).join(', ')}</p>
+                    <button type="button" className="word slim" onClick={applyParts}>
+                      Add suggested parts
+                    </button>
+                  </>
+                )}
+                <span className="si-mark">{modelLabel(advice.model)}</span>
+              </div>
+            )}
+          </div>
         </div>
       )}
-    </div>
+    </>
   )
 }

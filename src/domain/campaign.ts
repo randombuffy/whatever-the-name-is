@@ -123,18 +123,30 @@ const SAMPLE_NAMES: Record<string, string[]> = {
   habitation: ['Ice table', 'Radiation shade', 'Soil oxidant', 'Shelter rock', 'Regolith brick'],
 }
 
-const JEZERO_SAMPLES = ['Máaz floor', 'Séítah outcrop', 'Delta carbonate', 'Fan cobble', 'Rim breccia']
+export const RUIN_NAMES: Record<SampleKind, string> = {
+  core: 'Ceremonial Mass Chalice',
+  crystal: 'Ancient Statuette of Mars',
+  dust: 'Ornate Gothic Chalice',
+  ice: 'The Jagiellonian Globe',
+  metal: "Jagiellonian Professor's Gown",
+}
+
+const JEZERO_SAMPLES = ['Ceremonial Mass Chalice', 'Ancient Statuette of Mars', 'Ornate Gothic Chalice', 'The Jagiellonian Globe', "Jagiellonian Professor's Gown"]
 
 /** Five distinct surface finds on a wide ring so each marker stands alone. */
 export function fieldSamples(site: LandingSite, objectiveId: string, origin: readonly [number, number] = [0, 0]): FieldSample[] {
-  const names = site.id === 'jezero' ? JEZERO_SAMPLES : (SAMPLE_NAMES[objectiveId] ?? SAMPLE_NAMES.geology)
+  const isMars = site.missionId === 'mars'
+  const names = isMars
+    ? SAMPLE_KINDS.map((kind) => RUIN_NAMES[kind])
+    : (site.id === 'jezero' ? JEZERO_SAMPLES : (SAMPLE_NAMES[objectiveId] ?? SAMPLE_NAMES.geology))
   return names.slice(0, 5).map((name, index) => {
     const angle = -Math.PI / 2 + index * ((Math.PI * 2) / 5) + 0.48 + index * 0.14
     const radius = 42 + index * 12 + site.difficulty * 14
+    const kind = SAMPLE_KINDS[index]
     return {
       id: `${site.id}-${index}`,
-      name,
-      kind: SAMPLE_KINDS[index],
+      name: isMars ? RUIN_NAMES[kind] : name,
+      kind,
       x: origin[0] + Math.cos(angle) * radius,
       z: origin[1] + Math.sin(angle) * radius,
       points: Math.round(22 * site.science * (1.08 - index * 0.06)),

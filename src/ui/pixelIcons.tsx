@@ -1,9 +1,24 @@
 /**
- * Difficulty marks from https://icones.js.org (Iconify).
+ * Difficulty & UI marks from https://icones.js.org (Iconify).
  * - streamline-ultimate:professions-man-astronaut-bold
  * - streamline-pixel:social-rewards-rating-star-2
  * - pixel:users-crown-solid
+ * - pixelarticons:alert
+ * - pixelarticons:rocket
+ * - pixelarticons:check
+ * - pixelarticons:radio-tower
+ * - pixelarticons:radio
+ * - pixelarticons:building
+ * - pixelarticons:trophy
+ * - pixelarticons:arrow-right
+ * - pixelarticons:flag
  */
+
+export type PixelIconProps = {
+  label?: string
+  className?: string
+  size?: number
+}
 
 type DiffIconProps = { label?: string }
 
@@ -49,6 +64,24 @@ export function DifficultySpecialistIcon({ label }: DiffIconProps) {
   )
 }
 
+/** pixelarticons:alert — https://icones.js.org */
+export function HoldAlertPixelIcon({ label }: DiffIconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden={!label}
+      role={label ? 'img' : undefined}
+      aria-label={label}
+      className="hold-pixel-icon"
+    >
+      <path
+        fill="currentColor"
+        d="M12 1.67L2 20.33h20L12 1.67zm1 14.33h-2v-2h2v2zm0-4h-2V8h2v4z"
+      />
+    </svg>
+  )
+}
+
 export function DifficultyCommanderIcon({ label }: DiffIconProps) {
   return (
     <svg
@@ -62,6 +95,187 @@ export function DifficultyCommanderIcon({ label }: DiffIconProps) {
       <path
         fill="currentColor"
         d="M23 17v3h-1v1h-6v-1h1v-4h-1v-1h-1v-1h5v1h1v1h1v1zM12 3v1h-1v1h-1V4H9V3H8v1H7v1H6V4H5V3H4v7h1v1h1v1h5v-1h1v-1h1V3zm-1 6h-1v1H7V9H6V7h5z"
+      />
+    </svg>
+  )
+}
+
+/** pixelarticons:rocket — https://icones.js.org */
+export function PixelRocketIcon({ label, className, size = 16 }: PixelIconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      aria-hidden={!label}
+      role={label ? 'img' : undefined}
+      aria-label={label}
+      className={`pixel-icon ${className ?? ''}`.trim()}
+    >
+      <path
+        fill="currentColor"
+        d="M10 2h4v2h-4V2zm-2 2h2v2H8V4zm8 0h-2v2h2V4zm-6 2h4v2h-4V6zm-2 2h2v2H8V8zm8 0h-2v2h2V8zm-8 2h2v2H8v-2zm8 0h-2v2h2v-2zM6 12h2v2H6v-2zm10 0h2v2h-2v-2zM4 14h2v2H4v-2zm14 0h2v2h-2v-2zM2 16h2v2H2v-2zm16 0h2v2h-2v-2zM2 18h2v2H2v-2zm16 0h2v2h-2v-2zM6 20h2v2H6v-2zm8 0h2v2h-2v-2zM8 22h8v2H8v-2z"
+      />
+    </svg>
+  )
+}
+
+/** pixelarticons:check — https://icones.js.org */
+export function PixelCheckIcon({ label, className, size = 14 }: PixelIconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      aria-hidden={!label}
+      role={label ? 'img' : undefined}
+      aria-label={label}
+      className={`pixel-icon ${className ?? ''}`.trim()}
+    >
+      <path
+        fill="currentColor"
+        d="M20 6h-2v2h-2v2h-2v2h-2v2H12v2H10v-2H8v-2H6v-2H4V8H2v8h2v2h2v2h2v2h2v-2h2v-2h2v-2h2v-2h2V6z"
+      />
+    </svg>
+  )
+}
+
+/** pixelarticons:radio-tower — https://icones.js.org */
+export function PixelRadioTowerIcon({ label, className, size = 15 }: PixelIconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      aria-hidden={!label}
+      role={label ? 'img' : undefined}
+      aria-label={label}
+      className={`pixel-icon ${className ?? ''}`.trim()}
+    >
+      <path
+        fill="currentColor"
+        d="M22 2h-2v2h2v12h-2v2h2v-2h2V4h-2zM2 4H0v12h2v2h2v-2H2zm0 0V2h2v2zm4 2H4v8h2zm0 0V4h2v2zm4 0h4v2h-4zm0 6H8V8h2zm4 0h-4v2H8v4H6v4h2v-4h2v-4h4v4h2v4h2v-4h-2v-4h-2zm0 0h2V8h-2zm6-6h-2V4h-2v2h2v8h2z"
+      />
+    </svg>
+  )
+}
+
+/** pixelarticons:radio — https://icones.js.org */
+export function PixelRadioIcon({ label, className, size = 15 }: PixelIconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      aria-hidden={!label}
+      role={label ? 'img' : undefined}
+      aria-label={label}
+      className={`pixel-icon ${className ?? ''}`.trim()}
+    >
+      <path
+        fill="currentColor"
+        d="M17 3H7v2H5v2H3v10h2v2h2v2h10v-2h2v-2h2V7h-2V5h-2V3zm0 2v2h2v10h-2v2H7v-2H5V7h2V5h10zm-9 4h2v2H8V9zm4 0h4v2h-4V9zM8 13h8v2H8v-2z"
+      />
+    </svg>
+  )
+}
+
+/** pixelarticons:building — https://icones.js.org */
+export function PixelBuildingIcon({ label, className, size = 16 }: PixelIconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      aria-hidden={!label}
+      role={label ? 'img' : undefined}
+      aria-label={label}
+      className={`pixel-icon ${className ?? ''}`.trim()}
+    >
+      <path
+        fill="currentColor"
+        d="M4 20h16v2H4zm16-10h2v10h-2zM2 10h2v10H2zm2-2h2v2H4zm2-2h2v2H6zm2-2h2v2H8zm2-2h4v2h-4zm4 2h2v2h-2zm2 2h2v2h-2zm2 2h2v2h-2zM8 14h2v6H8zm2-2h4v2h-4zm4 2h2v6h-2z"
+      />
+    </svg>
+  )
+}
+
+/** pixelarticons:trophy — https://icones.js.org */
+export function PixelTrophyIcon({ label, className, size = 16 }: PixelIconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      aria-hidden={!label}
+      role={label ? 'img' : undefined}
+      aria-label={label}
+      className={`pixel-icon ${className ?? ''}`.trim()}
+    >
+      <path
+        fill="currentColor"
+        d="M5 3h14v2H5V3zm2 4h10v2H7V7zm2 4h6v2H9v-2zm2 4h2v2h-2v-2zm-4 4h10v2H7v-2z"
+      />
+    </svg>
+  )
+}
+
+/** pixelarticons:arrow-right — https://icones.js.org */
+export function PixelArrowRightIcon({ label, className, size = 14 }: PixelIconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      aria-hidden={!label}
+      role={label ? 'img' : undefined}
+      aria-label={label}
+      className={`pixel-icon ${className ?? ''}`.trim()}
+    >
+      <g fill="currentColor">
+        <path d="M4 11v2h16v-2zm12 2v2h2v-2zm-2 2v2h2v-2zm-2 2v2h2v-2zm4-6V9h2v2z" />
+        <path d="M14 15V7h2v8zm-2 2V5h2v12z" />
+      </g>
+    </svg>
+  )
+}
+
+/** pixelarticons:flag — https://icones.js.org */
+export function PixelFlagIcon({ label, className, size = 16 }: PixelIconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      aria-hidden={!label}
+      role={label ? 'img' : undefined}
+      aria-label={label}
+      className={`pixel-icon ${className ?? ''}`.trim()}
+    >
+      <path
+        fill="currentColor"
+        d="M6 2h2v2h3v2h2V4h8v11h-2v2h-3v2h-2v-2H8v5H6V2zm2 2v11h3v2h2v-2h3V6H11V4H8z"
+      />
+    </svg>
+  )
+}
+
+/** streamline-ultimate:astronomy-planet-saturn-1-bold — https://icones.js.org */
+export function PlanetSaturnIcon({ label, className, size = 14 }: PixelIconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      aria-hidden={!label}
+      role={label ? 'img' : undefined}
+      aria-label={label}
+      className={`streamline-icon ${className ?? ''}`.trim()}
+      style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}
+    >
+      <path
+        fill="currentColor"
+        d="M23.457.551a1.07 1.07 0 0 0-1.508 0L.56 21.941a1.07 1.07 0 0 0 0 1.509a1.07 1.07 0 0 0 1.507 0l3.712-3.744q.917.54 1.925.877l8.45-8.449a.802.802 0 0 1 1.133 1.134l-7.69 7.765q.666.09 1.337.085c7.822-.01 12.7-8.483 8.78-15.252l-.031-.053l3.743-3.754a1.07 1.07 0 0 0 .032-1.508M4.184 8.038a.802.802 0 1 1 1.134 1.134L1.04 13.45c.33 1.232.893 2.39 1.657 3.412L16.87 2.69C10.507-1.846 1.62 2.205.872 9.982q-.045.471-.046.944v.502Z"
       />
     </svg>
   )

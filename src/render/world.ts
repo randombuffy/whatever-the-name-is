@@ -481,8 +481,9 @@ export class MissionWorld {
         this.jupiter.scale.set(1.8, 1.7, 1.8)
       }
       if (kind === 'mars') {
-        this.asteroid.visible = true
-        this.asteroid.position.set(3.4, -0.6, -3.2)
+      const lay = destinationHeroLayout(kind)
+      hero.position.copy(lay.pos)
+      hero.scale.setScalar(lay.scale)
         this.asteroid.scale.setScalar(0.32)
       }
       this.halo.visible = false
@@ -557,8 +558,14 @@ export class MissionWorld {
       this.craft.rotation.set(0.2, 0.6, 0)
       return
     }
-    this.craft.scale.setScalar(view.mode === 'destination' ? 0.55 : 0.5)
-    this.craft.position.set(view.mode === 'destination' ? 2.5 : 4.15, view.mode === 'destination' ? -0.15 : -1.25, view.mode === 'destination' ? 1.1 : -4.4)
+    if (view.mode === 'destination') {
+      this.craft.scale.setScalar(0.66)
+      this.craft.position.set(0.55, 0.08, 0.22)
+      this.craft.rotation.set(0, this.reduced ? 0.52 : this.time * 0.18, 0)
+      return
+    }
+    this.craft.scale.setScalar(0.5)
+    this.craft.position.set(4.15, -1.25, -4.4)
     this.craft.rotation.set(0, this.reduced ? 0.4 : this.time * 0.22, 0)
   }
 
@@ -671,8 +678,8 @@ export class MissionWorld {
       this.yaw = 0.85
     } else if (view.mode !== 'design') this.framed = view.mode
     const extra = view.mode === 'menu' ? 3.4 : 0
-    const orbitR = view.mode === 'destination' ? 5.2 : Math.max(2.4, this.distance + extra)
-    if (view.mode === 'destination') this.look.set(-0.65, 0.2, 0)
+    const orbitR = view.mode === 'destination' ? Math.max(7.2, this.distance) : Math.max(2.4, this.distance + extra)
+    if (view.mode === 'destination') this.look.set(-0.35, 0.06, 0.02)
     else if (view.mode === 'menu') this.look.set(0.15, 0.35, -6.2)
     else this.look.set(0, 0.65, 0)
     this.camera.position.set(
@@ -826,10 +833,19 @@ function bodyKind(missionId: string, mode: SceneMode): string {
   return 'moon'
 }
 
+function destinationHeroLayout(kind: string): { pos: THREE.Vector3; scale: number } {
+  if (kind === 'mars') return { pos: new THREE.Vector3(-2.45, 0.02, -0.5), scale: 0.74 }
+  if (kind === 'europa') return { pos: new THREE.Vector3(-2.2, 0.04, -0.45), scale: 0.8 }
+  if (kind === 'asteroid') return { pos: new THREE.Vector3(-1.85, 0.02, -0.35), scale: 0.58 }
+  if (kind === 'moon') return { pos: new THREE.Vector3(-2.1, 0.02, -0.4), scale: 0.68 }
+  return { pos: new THREE.Vector3(-2.35, 0.02, -0.48), scale: 0.72 }
+}
+
 function createRenderer(canvas: HTMLCanvasElement): THREE.WebGLRenderer {
+
   const attempts: THREE.WebGLRendererParameters[] = [
-    { antialias: true, powerPreference: 'high-performance', stencil: false },
-    { antialias: false, powerPreference: 'default', stencil: false },
+    { antialias: true, powerPreference: 'high-performance', stencil: false, preserveDrawingBuffer: true },
+    { antialias: false, powerPreference: 'default', stencil: false, preserveDrawingBuffer: true },
   ]
   let last: unknown = new Error('WebGL is not available')
   for (const attempt of attempts) {

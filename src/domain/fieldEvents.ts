@@ -12,7 +12,7 @@ export interface FieldSol {
 
 export function fieldSol(sol: number, air: boolean, steady: boolean, difficulty: number): FieldSol {
   const day = Math.max(1, Math.floor(sol))
-  const storm = air && day % 5 === 0
+  const storm = air && (day % 5 === 0 || day === 3)
   const flare = day % 9 === 0
   const comms = day % 4 !== 0
   const fault = day % 7 === 0

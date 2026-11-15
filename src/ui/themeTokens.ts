@@ -5,7 +5,6 @@ import {
   Fuel,
   Zap,
   Radio,
-  Sparkles,
   Thermometer,
   ArrowDownToLine,
   Anchor,
@@ -22,6 +21,7 @@ import {
   Compass,
 } from 'lucide-react'
 import type { ComponentSpec } from '../domain/types'
+import { PlanetSaturnIcon } from './pixelIcons'
 
 export type UiCategory =
   | 'structure'
@@ -89,7 +89,7 @@ export const CATEGORIES: Record<UiCategory, CategoryMeta> = {
     color: '#a855f7',
     bg: 'rgba(168, 85, 247, 0.16)',
     border: 'rgba(168, 85, 247, 0.35)',
-    icon: Sparkles,
+    icon: PlanetSaturnIcon,
   },
   thermal: {
     id: 'thermal',

@@ -16,7 +16,6 @@ import {
   Play,
   Power,
   Rocket,
-  Settings,
   Video,
   RotateCcw,
 } from 'lucide-react'
@@ -24,18 +23,17 @@ import { AU_M } from '../domain/constants'
 import { computeOrbitIntercept } from '../domain/orbit'
 import { evaluate } from '../domain/validate'
 import { getSpec } from '../domain/catalog'
-import { burnSeconds, cruiseOrbit, nodeMagnitude } from '../domain/nodes'
-import type { ManoeuvreNode, ScriptItem, SimState, SpacecraftConfig } from '../domain/types'
+import type { SimState, SpacecraftConfig } from '../domain/types'
 import { siteOf, sitesFor } from '../domain/campaign'
+import { mps } from '../domain/format'
 import { effectiveWarp, sliderToWarp, warpLabel, warpToSlider } from '../domain/time'
 import { transferState } from '../domain/transfer'
 import { EDU_LIMITS, STORAGE_FLIGHT_GUIDE } from '../domain/brand'
-import { FLIGHT_ACTIONS, keyLabel, keyName, loadBinds, saveBinds, type FlightAction, type FlightBinds } from './binds'
+import { keyLabel, keyName, loadBinds, type FlightAction, type FlightBinds } from './binds'
 import { CruiseWorld, FLIGHT_CAMS, type FlightCam } from '../render/cruiseWorld'
 import { useActiveMission, useMission } from '../store/useMission'
 import { setBed, setScoreBoost, sting } from './audio'
 import { say, sayOnce } from './voice'
-import { Mix } from './mix'
 import { createEngineTone } from './tone'
 
 const BIND_ICON: Record<FlightAction, typeof Gauge> = {
@@ -71,28 +69,27 @@ export function CruiseScreen() {
   const decide = useMission((state) => state.decide)
   const finish = useMission((state) => state.finish)
   const go = useMission((state) => state.go)
-  const setPlan = useMission((state) => state.setPlan)
   const checkpoints = useMission((state) => state.checkpoints)
   const restoreCheckpoint = useMission((state) => state.restoreCheckpoint)
-  const ascentFuelFrac = useMission((state) => state.ascentFuelFrac)
-
   const [camera, setCamera] = useState<FlightCam>('free')
-  const [details, setDetails] = useState(false)
+  const difficulty = useMission((state) => state.difficulty)
+  const [details, setDetails] = useState(() => difficulty === 'commander')
   const [throttle, setThrottle] = useState(1)
   const [engines, setEngines] = useState(true)
   const [stable, setStable] = useState(true)
   const [hudOn, setHudOn] = useState(true)
-  const [bindsOpen, setBindsOpen] = useState(false)
   const [timeline, setTimeline] = useState(false)
   const [pending, setPending] = useState<string | null>(null)
   const [guide, setGuide] = useState(false)
   const [lagNote, setLagNote] = useState('')
-  const difficulty = useMission((state) => state.difficulty)
-  const [binds, setBinds] = useState<FlightBinds>(() => loadBinds())
-  const [capture, setCapture] = useState<FlightAction | null>(null)
+  const [binds] = useState<FlightBinds>(() => loadBinds())
   const [pose, setPose] = useState({ pitch: 0, yaw: 0, roll: 0 })
   const decisionId = sim?.decision?.id ?? ''
   const failed = Boolean(sim?.failed)
+
+  useEffect(() => {
+    if (difficulty === 'commander') setDetails(true)
+  }, [difficulty])
 
   useEffect(() => {
     if (!decisionId) return
@@ -154,7 +151,6 @@ export function CruiseScreen() {
   const stableRef = useRef(stable)
   const levelRef = useRef(false)
   const bindsRef = useRef(binds)
-  const captureRef = useRef(capture)
   const engineHeld = useRef(false)
   const manualHold = useRef(false)
   cameraRef.current = camera
@@ -162,7 +158,6 @@ export function CruiseScreen() {
   enginesRef.current = engines
   stableRef.current = stable
   bindsRef.current = binds
-  captureRef.current = capture
   const missionRef = useRef(mission)
   const planRef = useRef(plan)
   missionRef.current = mission
@@ -292,19 +287,6 @@ export function CruiseScreen() {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const name = keyName(event)
-      if (captureRef.current && event.type === 'keydown' && !event.repeat) {
-        event.preventDefault()
-        const action = captureRef.current
-        setBinds((current) => {
-          const taken = FLIGHT_ACTIONS.find((item) => item !== action && current[item] === name)
-          if (taken) return current
-          const next = { ...current, [action]: name }
-          saveBinds(next)
-          return next
-        })
-        setCapture(null)
-        return
-      }
       if (event.type === 'keydown') keys.current.add(name)
       else keys.current.delete(name)
       if (event.type !== 'keydown' || event.repeat) return
@@ -365,8 +347,10 @@ export function CruiseScreen() {
   const report = evaluate(craft, mission, plan)
   const propNow = sim.propellant.chemical + sim.propellant.electric + sim.propellant['cold-gas']
   const massNow = report.mass.dryKg + propNow
-  const numbers = instruments(sim, craft, massNow, report.mass.propellantKg, report.propulsion.dvMps, pose, throttle, engines, mission.id, mission.destinationAu, ascentFuelFrac)
-  const engine = mainEngine(craft)
+  const numbers = instruments(sim, craft, massNow, report.mass.propellantKg, report.propulsion.dvMps, pose, throttle, engines, mission.id, mission.destinationAu)
+  const transferPct = Math.round(sim.distanceFraction * 100)
+  const advanced = difficulty !== 'cadet'
+  const showLeftPanel = hudOn && details && advanced
   const done = sim.status === 'complete' || sim.status === 'failed'
   const site = siteOf(mission, plan)
   const leg = sim.distanceFraction < 0.08 ? 'Leaving Earth' : sim.distanceFraction < 0.82 ? 'Coasting' : 'Arrival'
@@ -385,22 +369,53 @@ export function CruiseScreen() {
             ? 'Leaving Earth. The transfer is opening.'
             : leg === 'Arrival'
               ? 'Mars is ahead. Confirm the landing site when you are ready.'
-              : 'Coasting. The yellow path is the transfer.'
+              : 'Coasting on the transfer arc.'
 
   return (
     <div className="field-stage" ref={mount}>
       <div className="deck">
-        <div className="ascent-layer">
-          <b>Cruise</b>
-          <span>{leg} · {mission.name}</span>
-          <span>{destRange} to {mission.destination} · {earthRange} from Earth</span>
-          <span>{etaLine(sim, effectiveWarp(rate, sim))}</span>
-          <div className="journey-track" aria-label="Transfer progress">
-            <i style={{ transform: `scaleX(${Math.max(0.04, Math.min(1, sim.distanceFraction))})` }} />
+        <div className="cruise-left-stack">
+          <div className="ascent-layer cruise-card">
+            <div className="cruise-head">
+              <b>Cruise</b>
+              <span className="cruise-leg">{leg}</span>
+            </div>
+            <div className="cruise-progress" aria-label="Transfer progress">
+              <div className="cruise-progress-meta">
+                <span>Transfer</span>
+                <strong>{transferPct}%</strong>
+              </div>
+              <div className="journey-track cruise-track">
+                <i style={{ transform: `scaleX(${Math.max(0.02, Math.min(1, sim.distanceFraction))})` }} />
+              </div>
+            </div>
+            {advanced && <span className="cruise-mission">{mission.name}</span>}
+            {advanced && (
+              <span className="cruise-range">{destRange} to {mission.destination} · {earthRange} from Earth</span>
+            )}
+            {advanced && <span className="cruise-eta">{etaLine(sim, effectiveWarp(rate, sim))}</span>}
           </div>
+          {showLeftPanel && (
+            <aside className="ascent-side left cruise-details">
+              <div className="cruise-details-header">
+                <strong className="cruise-details-title">Telemetry</strong>
+                <span className="telemetry-live-badge">Live</span>
+              </div>
+              <div className="cruise-details-list">
+                <DetailRow label="Speed" value={numbers.speed} />
+                <DetailRow label="Acceleration" value={`${numbers.accel} m/s²`} />
+                <DetailRow label="Propellant" value={`${numbers.fuel} kg`} />
+                <DetailRow label="Total Mass" value={`${numbers.mass} kg`} />
+                <DetailRow label="Δv Remaining" value={`${numbers.dv} m/s`} />
+                <DetailRow label={`To ${mission.destination}`} value={destRange} />
+                <DetailRow label="From Earth" value={earthRange} />
+                <DetailRow label="Light Delay" value={numbers.delay} />
+              </div>
+            </aside>
+          )}
         </div>
-        <div className="ascent-tools">
-          <div className="chip-row warp-row">
+        <div className="ascent-tools cruise-tools">
+          <div className="chip-row warp-row cruise-warp">
             <span>Time</span>
             <label className="warp-slider" title="Flight clock from 1× to 1,000,000×">
               <span>{warpLabel(effectiveWarp(rate, sim))}</span>
@@ -447,7 +462,6 @@ export function CruiseScreen() {
               setPaused(next)
             }}>{paused ? 'Run' : 'Hold'}</button>
             <button type="button" className="hud-chip" aria-pressed={engines} onClick={() => queueCommand(() => setEngines((value) => !value))}>Engines</button>
-            <Mix />
           </div>
         </div>
         <aside className="ascent-fuel">
@@ -459,89 +473,31 @@ export function CruiseScreen() {
           <span>{numbers.fuel} kg</span>
           <span>Throttle {Math.round(throttle * 100)}%</span>
         </aside>
-        {hudOn && details && (
-          <aside className="ascent-side left cruise-details">
-            <span>Q {numbers.q} Pa</span>
-            <span>Accel {numbers.accel} m/s²</span>
-            <span>Propellant {numbers.fuel} kg</span>
-            <span>Mass {numbers.mass} kg</span>
-            <span>Δv {numbers.dv} m/s</span>
-            <span>Apo {numbers.apo}</span>
-            <span>Peri {numbers.peri}</span>
-            <span>Earth {earthRange}</span>
-            <span>{mission.destination} {destRange}</span>
-            <span>Light {numbers.delay}</span>
-            {intercept && (
-              <>
-                <span>{intercept.inSoi ? 'Captured' : 'Transfer coast'}</span>
-                <span>Rel {(intercept.relativeSpeedMps / 1000).toFixed(2)} km/s</span>
-              </>
-            )}
-            <div className="throttle">
-              <Flame size={14} />
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.01}
-                value={throttle}
-                aria-label="Throttle"
-                onChange={(event) => {
-                  const value = Number(event.target.value)
-                  throttleRef.current = value
-                  setThrottle(value)
-                }}
-              />
-            </div>
-            <div className="group">
-              <button type="button" aria-label={paused ? 'Run' : 'Hold'} aria-pressed={paused} onClick={() => {
-                const next = !paused
-                manualHold.current = next
-                setPaused(next)
-              }}>
-                {paused ? <Play size={16} /> : <Pause size={16} />}
-              </button>
-              <button type="button" aria-label="Engines" aria-pressed={engines} onClick={() => setEngines((value) => !value)}>
-                <Power size={16} />
-              </button>
-              <button type="button" aria-label="Stability" aria-pressed={stable} onClick={() => setStable((value) => !value)}>
-                <Lock size={16} />
-              </button>
-              <button type="button" aria-label="Bindings" aria-pressed={bindsOpen} onClick={() => { setBindsOpen((value) => !value); setCapture(null) }}>
-                <Settings size={16} />
-              </button>
-              <button type="button" aria-label="Timeline" aria-pressed={timeline} onClick={() => setTimeline((value) => !value)}>
-                <RotateCcw size={16} />
-              </button>
-              <button type="button" aria-label="Center" onClick={() => go('pad')}>
-                <House size={16} />
-              </button>
-            </div>
-            <Mix />
-          </aside>
-        )}
-        <div className="ascent-read">
-          <div><span>Time</span><b>T+ {clock(sim.tSec)}</b></div>
-          <div><span>Range</span><b>{destRange}</b></div>
-          <div><span>Earth delay</span><b>{numbers.delay}</b></div>
+        <div className="ascent-read cruise-read">
+          <div className="cruise-stat"><span>Time</span><b>T+ {clock(sim.tSec)}</b></div>
+          <div className="cruise-stat"><span>Speed</span><b>{numbers.speed}</b></div>
+          {advanced && <div className="cruise-stat"><span>Range</span><b>{destRange}</b></div>}
+          {advanced && <div className="cruise-stat"><span>Earth delay</span><b>{numbers.delay}</b></div>}
         </div>
         <div className="ascent-call">
           {lagNote || cruiseCall}
           {difficulty === 'commander' && <small> Light-time lag is on. {EDU_LIMITS}</small>}
         </div>
-        <button type="button" className="ascent-details" aria-pressed={details} onClick={() => setDetails((on) => !on)}>
-          Details {details ? 'On' : 'Off'}
-        </button>
-        {hudOn && (
-          <NodeBar
-            sim={sim}
-            missionId={mission.id}
-            destAu={mission.destinationAu}
-            massKg={massNow}
-            thrustN={engine?.thrustN ?? 0}
-            ispS={engine?.ispS ?? 0}
-          />
-        )}
+        <div className="ascent-details-toggle-dock">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={details}
+            className={`cruise-switch-toggle${details ? ' is-on' : ''}`}
+            onClick={() => setDetails((on) => !on)}
+            title="Toggle flight telemetry"
+          >
+            <span className="cruise-switch-track">
+              <span className="cruise-switch-thumb" />
+            </span>
+            <span className="cruise-switch-text">Telemetry {details ? 'ON' : 'OFF'}</span>
+          </button>
+        </div>
         {done && (
           <button type="button" className="deck-go" aria-label={sim.failed ? 'Debrief' : 'Entry'} onClick={() => (sim.failed ? finish() : go('landing'))}>
             {sim.failed ? <House size={18} /> : <Rocket size={18} />}
@@ -549,23 +505,11 @@ export function CruiseScreen() {
         )}
         {(sim.distanceFraction > 0.88 || (done && !sim.failed) || arrivalReady) && !sim.failed && !sim.decision && (
           <div className="deck-choice arrival-card">
-            <strong>Landing site</strong>
-            <div>
-              {sitesFor(mission.id === 'custom' ? 'mars' : mission.id).map((row) => (
-                <button
-                  key={row.id}
-                  type="button"
-                  aria-pressed={(plan.siteId ?? sitesFor(mission.id === 'custom' ? 'mars' : mission.id)[0]?.id) === row.id}
-                  title={row.note}
-                  onClick={() => setPlan({ siteId: row.id })}
-                >
-                  {row.name}
-                </button>
-              ))}
-              <button type="button" className="word fill" onClick={initiateLanding}>
-                Enter at {siteOf(mission, plan).name}
-              </button>
-            </div>
+            <strong>Approach</strong>
+            <p className="plan-hint">Target {siteOf(mission, plan).name}</p>
+            <button type="button" className="word fill" onClick={initiateLanding}>
+              Begin entry
+            </button>
           </div>
         )}
         {timeline && (
@@ -648,19 +592,6 @@ export function CruiseScreen() {
             </button>
           </div>
         )}
-        {bindsOpen && (
-          <div className="deck-bind">
-            {FLIGHT_ACTIONS.map((action) => {
-              const Icon = BIND_ICON[action]
-              return (
-                <button key={action} type="button" aria-pressed={capture === action} onClick={() => setCapture(action)}>
-                  <Icon size={14} />
-                  <kbd>{keyLabel(binds[action])}</kbd>
-                </button>
-              )
-            })}
-          </div>
-        )}
         {sim.failed && (
           <div className="result-overlay is-lose" role="alertdialog">
             <b>You lost</b>
@@ -680,6 +611,15 @@ export function CruiseScreen() {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="cruise-detail-row">
+      <span>{label}</span>
+      <b>{value}</b>
     </div>
   )
 }
@@ -730,12 +670,10 @@ function instruments(
   engines: boolean,
   missionId: string,
   destAu: number,
-  ascentFuelFrac = 1,
 ) {
   const track = transferState(missionId, destAu, sim.distanceFraction, sim.tSec)
   const lunar = missionId === 'lunar'
   const frame = lunar ? 'relative to Earth' : 'heliocentric'
-  const kmh = Math.round(track.speed * 3.6)
   const prop = sim.propellant.chemical + sim.propellant.electric + sim.propellant['cold-gas']
   const fitted = craft.parts.reduce((sum, part) => {
     if (!part.enabled) return sum
@@ -746,16 +684,15 @@ function instruments(
   const thrust = engines && sim.burning ? fitted * throttle : 0
   const tank = Math.max(propellantKg, 1)
   const cruiseRatio = Math.min(1, Math.max(0, prop / tank))
-  const launchFrac = Math.min(1, Math.max(0.02, ascentFuelFrac))
   const accel = massKg > 0 ? thrust / massKg : 0
   const delay = track.lightSec >= 90 ? `${(track.lightSec / 60).toFixed(1)}m` : `${track.lightSec.toFixed(0)}s`
   return {
-    speed: `${(track.speed / 1000).toFixed(2)} km/s`,
+    speed: mps(track.speed),
     speedMs: track.speed,
-    speedTitle: `${frame} speed at this point on the transfer. ${Math.round(track.speed).toLocaleString()} m/s, ${kmh.toLocaleString()} km/h. Not an average, and not miles.`,
+    speedTitle: `${frame} speed at this point on the transfer.`,
     frame,
-    vertical: `${(track.radial / 1000).toFixed(2)} km/s`,
-    horizontal: `${(track.horizontal / 1000).toFixed(2)} km/s`,
+    vertical: mps(track.radial),
+    horizontal: mps(track.horizontal),
     altitude: span(track.altitudeM),
     apo: span(track.apoM),
     peri: span(track.periM),
@@ -763,7 +700,7 @@ function instruments(
     accel: accel.toFixed(2),
     q: track.qPa >= 1000 ? `${(track.qPa / 1000).toFixed(1)}` : track.qPa.toFixed(0),
     fuel: `${prop.toFixed(0)}`,
-    fuelRatio: Math.min(1, cruiseRatio * launchFrac),
+    fuelRatio: cruiseRatio,
     mass: `${Math.round(massKg)}`,
     power: `${Math.round(sim.powerGenW - sim.powerLoadW)}`,
     dv: `${Math.max(0, Math.round(dvBudget - sim.dvUsedMps))}`,
@@ -771,80 +708,10 @@ function instruments(
     nav: `${sim.commsMarginDb.toFixed(0)}`,
     delay,
     temp: `${Math.round(sim.temperatureK)}`,
-    approach: `${(track.speed / 1000).toFixed(2)} km/s · ${span(track.altitudeM)}`,
+    approach: `${mps(track.speed)} · ${span(track.altitudeM)}`,
     rangeDestM: track.rangeDestM,
     rangeEarthM: track.rangeEarthM,
   }
-}
-
-function mainEngine(craft: SpacecraftConfig): { thrustN: number; ispS: number } | null {
-  let best: { thrustN: number; ispS: number } | null = null
-  for (const part of craft.parts) {
-    if (!part.enabled) continue
-    const spec = getSpec(part.specId)
-    if (!spec?.feedsMainEngine || !(spec.thrustN > 0)) continue
-    if (!best || spec.thrustN > best.thrustN) best = { thrustN: spec.thrustN, ispS: spec.ispS }
-  }
-  return best
-}
-
-function upcomingBurn(sim: SimState): Extract<ScriptItem, { type: 'burn' }> | null {
-  const item = sim.script.slice(sim.index).find((entry) => entry.type === 'burn')
-  return item && item.type === 'burn' ? item : null
-}
-
-function NodeBar({
-  sim,
-  missionId,
-  destAu,
-  massKg,
-  thrustN,
-  ispS,
-}: {
-  sim: SimState
-  missionId: string
-  destAu: number
-  massKg: number
-  thrustN: number
-  ispS: number
-}) {
-  const setNode = useMission((state) => state.setNode)
-  const burn = upcomingBurn(sim)
-  if (!burn || sim.status === 'complete' || sim.status === 'failed') return null
-  const armed = sim.node && sim.node.burnId === burn.id ? sim.node : null
-  const axes: ManoeuvreNode = armed ?? { burnId: burn.id, prograde: burn.dv, radial: 0, normal: 0 }
-  const picture = cruiseOrbit(missionId, destAu, sim.distanceFraction, sim.tSec, axes)
-  const seconds = burnSeconds(ispS, thrustN, massKg, nodeMagnitude(axes))
-  const nudge = (axis: 'prograde' | 'radial' | 'normal', delta: number) => {
-    setNode({ ...axes, burnId: burn.id, [axis]: Math.round(axes[axis] + delta) })
-  }
-  const predicted = picture?.predicted
-  return (
-    <div className="node-bar" aria-label="Manoeuvre node">
-      <b>{armed ? 'Armed' : 'Planned'} · {burn.label}</b>
-      <Axis label="Prograde" value={axes.prograde} step={50} onStep={(delta) => nudge('prograde', delta)} />
-      <Axis label="Radial" value={axes.radial} step={25} onStep={(delta) => nudge('radial', delta)} />
-      <Axis label="Normal" value={axes.normal} step={25} onStep={(delta) => nudge('normal', delta)} />
-      <button type="button" onClick={() => setNode(null)}>Reset</button>
-      {predicted && (
-        <span title="Elements if this burn is made at the current point">
-          Apo {span(predicted.apoM)} · Peri {span(predicted.periM)} · i {(predicted.incRad * 180 / Math.PI).toFixed(2)}°
-          {Number.isFinite(predicted.periodSec) ? ` · ${(predicted.periodSec / 86400).toFixed(1)} d` : ' · escape'}
-          {seconds !== null ? ` · burn ${(seconds / 60).toFixed(0)} min` : ''}
-        </span>
-      )}
-    </div>
-  )
-}
-
-function Axis({ label, value, step, onStep }: { label: string; value: number; step: number; onStep: (delta: number) => void }) {
-  return (
-    <span className="node-axis">
-      <button type="button" aria-label={`${label} down`} onClick={() => onStep(-step)}>-</button>
-      <em title={label}>{label.slice(0, 3)} {Math.round(value)}</em>
-      <button type="button" aria-label={`${label} up`} onClick={() => onStep(step)}>+</button>
-    </span>
-  )
 }
 
 function span(metres: number): string {

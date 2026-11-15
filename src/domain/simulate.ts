@@ -90,7 +90,7 @@ export function buildScript(mission: MissionDef, plan: MissionPlan): ScriptItem[
         for (const event of cruiseEvents) script.push({ type: 'decision', eventId: event.id })
         script.push({ type: 'coast', sec: burn.coastAfterSec - first, label: 'Continue coast', fractionFrom: 0.45, fractionTo: 1 })
       } else {
-        script.push({ type: 'coast', sec: burn.coastAfterSec, label: 'Coast', fractionFrom: 0.2, fractionTo: 1 })
+        script.push({ type: 'coast', sec: burn.coastAfterSec, label: 'Coast', fractionFrom: 0.02, fractionTo: 1 })
       }
     }
   })
@@ -177,7 +177,7 @@ export function stepSim(state: SimState, config: SpacecraftConfig, mission: Miss
       const elapsed = next.segmentElapsed + dt
       next.distanceFraction = item.fractionFrom + Math.min(1, item.sec > 0 ? elapsed / item.sec : 1) * span
     } else {
-      next.distanceFraction = 1
+      next.distanceFraction = Math.min(1, Math.max(next.distanceFraction, 0.995))
     }
     next.segmentElapsed += dt
     if (next.segmentElapsed >= item.sec - 0.1) {

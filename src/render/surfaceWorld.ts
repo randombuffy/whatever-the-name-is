@@ -10,6 +10,7 @@ import { attachOrbiter } from './launchStack'
 import { bakeHeightsRay, flattenPad, heightFromGrid, landUrl, loadTerrain, type HeightGrid } from './landform'
 import { buildMarsGround, MARS_LANDING, MARS_SUN, type MarsGround } from './marsGround'
 import { bindWalkAstronaut, type WalkAstronaut } from './walkAstronaut'
+import { createPetCat, type PetCat } from './petCat'
 import { fitModel, modelLoader } from './gltf'
 import { trackMove } from '../input/moveKeys'
 import { viewRatio } from './pixels'
@@ -43,6 +44,8 @@ export interface SurfaceHint {
   nx: number
   ny: number
   onScreen: boolean
+  distM: number
+  kind?: 'sample' | 'lander'
 }
 
 export interface SurfaceReadout {
@@ -198,8 +201,10 @@ export class SurfaceWorld {
   private globeR = 0
   private clock = 0
   private weatherSim: WeatherSim = 'auto'
-  private hintDue = 8
-  private hintOn = false
+  private calamityTimer = 25 + Math.random() * 20
+  private activeCalamity: 'dust' | 'flare' | 'blackout' | null = null
+  private calamityDuration = 0
+  private hintOn = true
   private hintArrow!: THREE.Group
   private readonly hintNdc = new THREE.Vector3()
   private readonly pathPts = Array.from({ length: 13 }, () => new THREE.Vector3())
@@ -236,7 +241,7 @@ export class SurfaceWorld {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
     this.renderer.shadowMap.enabled = true
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
+    this.renderer.shadowMap.type = THREE.PCFShadowMap
     const mars = setup.missionId === 'mars' || setup.missionId === 'custom'
     this.scene.background = new THREE.Color(mars ? 0x8a6a58 : this.colors.skyTop)
     this.scene.fog = mars
@@ -249,7 +254,7 @@ export class SurfaceWorld {
     this.sun = new THREE.DirectionalLight(mars ? 0xfff4e6 : 0xfff1df, mars ? 3.55 : 2.9)
     if (mars) this.renderer.toneMappingExposure = 1.18
     this.sun.castShadow = true
-    this.sun.shadow.mapSize.set(2048, 2048)
+    this.sun.shadow.mapSize.set(1024, 1024)
     this.sun.shadow.camera.near = 1
     this.sun.shadow.camera.far = 160
     this.sun.shadow.camera.left = -22
@@ -321,24 +326,25 @@ export class SurfaceWorld {
       this.seat(this.heli, this.heliAt.x, this.heliAt.z)
       this.layoutField()
     } else {
-    const terrainUrl = landUrl(setup.missionId)
-    if (terrainUrl) {
-      this.chunkRoot.visible = false
-      loadTerrain(terrainUrl, 1400, this.scene, (mesh) => {
-        if (this.dead) return
-        this.groundMesh = mesh
-        this.heightGrid = bakeHeightsRay(mesh, 680, 72)
-        flattenPad(this.heightGrid, 14)
-        this.seat(this.lander, 0, 0)
-        this.seat(this.rover, this.drive.x, this.drive.z)
-        this.seat(this.heli, 7, 5)
+      const terrainUrl = landUrl(setup.missionId)
+      if (terrainUrl) {
+        this.chunkRoot.visible = false
+        loadTerrain(terrainUrl, 1400, this.scene, (mesh) => {
+          if (this.dead) return
+          this.groundMesh = mesh
+          this.heightGrid = bakeHeightsRay(mesh, 680, 72)
+          flattenPad(this.heightGrid, 14)
+          this.seat(this.lander, 0, 0)
+          this.seat(this.rover, this.drive.x, this.drive.z)
+          this.seat(this.heli, 7, 5)
+          this.layoutField()
+        }, setup.siteId, true)
+      } else {
+        this.chunkRoot.visible = true
         this.layoutField()
-      }, setup.siteId, true)
-    } else {
-      this.chunkRoot.visible = true
-      this.layoutField()
+      }
     }
-    }
+    this.loadPetCat()
     canvas.addEventListener('click', this.onClick)
     canvas.addEventListener('wheel', this.onWheel, { passive: false })
     document.addEventListener('pointerlockchange', this.onLock)
@@ -530,11 +536,10 @@ export class SurfaceWorld {
     if (mark) mark.visible = false
     this.armT = 1
     this.ping('sample')
-    this.hintOn = false
-    this.hintDue = this.clock + 8
+    this.hintOn = true
     const left = this.openSamples().length
-    if (left === 0) this.say(`Picked up ${obs.name}. All samples are in. Send each one, then File return.`)
-    else this.say(`Picked up ${obs.name}. ${left} still out. Send when you can.`)
+    if (left === 0) this.say(`Survey complete! Picked up ${obs.name}. All 5 samples in. Return to the Lander to establish the Outpost or finish the game.`)
+    else this.say(`Picked up ${obs.name}. ${left} remaining. Follow the compass marker.`)
   }
 
   capture(): void {
@@ -573,26 +578,36 @@ export class SurfaceWorld {
     this.say('Image stored.')
   }
 
-  transmit(): void {
+  transmit(sendAll = false): void {
     const sky = this.condition()
-    const room = contactBytes(this.setup.uplinkBps, sky.comms)
-    const used = this.notes.filter((item) => item.sent && item.sol === this.sol).reduce((sum, item) => sum + item.bytes, 0)
-    const result = sendChosen(this.notes, this.pick, Math.max(0, room - used), this.energy)
-    this.notes = result.notes
-    this.energy = result.energy
-    if (result.reason === 'sent') {
+    let countSent = 0
+    while (true) {
+      const room = contactBytes(this.setup.uplinkBps, sky.comms)
+      const used = this.notes.filter((item) => item.sent && item.sol === this.sol).reduce((sum, item) => sum + item.bytes, 0)
+      const result = sendChosen(this.notes, this.pick, Math.max(0, room - used), this.energy)
+      if (result.reason === 'sent') {
+        countSent++
+        this.notes = result.notes
+        this.energy = result.energy
+        if (!sendAll && countSent >= 1) break
+      } else {
+        if (countSent === 0) {
+          if (!sky.comms) {
+            this.ping('blackout')
+            this.say('No relay in view this sol.')
+            return
+          }
+          this.say(result.reason === 'power' ? 'Need more charge to send.' : result.reason === 'empty' ? 'Nothing to send yet.' : 'Relay window too short.')
+        }
+        break
+      }
+    }
+    if (countSent > 0) {
       this.ping('send')
       const left = this.notes.filter((item) => !item.sent).length
-      this.toast = left > 0 ? `Sent 1 sample · ${left} left` : 'Sent 1 sample · none left'
+      this.toast = left > 0 ? `Transmitted ${countSent} sample${countSent > 1 ? 's' : ''} · ${left} left` : `Transmitted ${countSent} sample${countSent > 1 ? 's' : ''} · All sent!`
       this.toastFor = 2.4
-      return
     }
-    if (!sky.comms) {
-      this.ping('blackout')
-      this.say('No relay in view this sol.')
-      return
-    }
-    this.say(result.reason === 'power' ? 'Need more charge to send.' : result.reason === 'empty' ? 'Nothing to send yet.' : 'Relay window too short.')
   }
 
   cycleHold(): void {
@@ -648,6 +663,38 @@ export class SurfaceWorld {
       this.intro += stepDt
       if (this.intro > 3.2 || this.keys.size > 0) this.introDone = true
     }
+
+    if ((this.setup.missionId === 'mars' || this.setup.missionId === 'custom') && this.weatherSim === 'auto') {
+      if (this.activeCalamity) {
+        this.calamityDuration -= stepDt
+        if (this.calamityDuration <= 0) {
+          this.activeCalamity = null
+          this.calamityTimer = 40 + Math.random() * 35
+          this.say('Weather clearing. Conditions nominal.')
+        }
+      } else {
+        this.calamityTimer -= stepDt
+        if (this.calamityTimer <= 0) {
+          const roll = Math.random()
+          if (roll < 0.65) {
+            this.activeCalamity = 'dust'
+            this.calamityDuration = 5 + Math.random() * 4.5
+            this.ping('storm')
+            this.say('Dust squall passing overhead. Visibility reduced.')
+          } else if (roll < 0.85) {
+            this.activeCalamity = 'flare'
+            this.calamityDuration = 5 + Math.random() * 2.5
+            this.ping('storm')
+            this.say('Solar particle squall detected. Comms degraded.')
+          } else {
+            this.activeCalamity = 'blackout'
+            this.calamityDuration = 5 + Math.random() * 2.5
+            this.ping('storm')
+            this.say('Orbital shadow blackout. Uplink temporary drop.')
+          }
+        }
+      }
+    }
     if (this.mode === 'drive') this.driveRover(stepDt)
     else if (this.mode === 'eva') this.walkSuit(stepDt)
     else this.flyHeli(stepDt)
@@ -696,6 +743,7 @@ export class SurfaceWorld {
       if (Array.isArray(mat)) mat.forEach((item) => item.dispose())
       else mat.dispose()
     })
+    this.petCat?.dispose()
     this.renderer.dispose()
   }
 
@@ -745,9 +793,11 @@ export class SurfaceWorld {
     const moving = forward !== 0 || strafe !== 0
     const gravity = Math.max(0.04, this.setup.gravity)
     const sky = this.condition()
-    let pace = (this.oxygen > 8 ? 6.4 : 3.2) * Math.sqrt(gravity / 3.71)
-    if (sky.storm) pace *= 0.16
-    else if (sky.flare) pace *= 0.6
+    const sprint = this.keys.has('shift') || this.keys.has('Shift')
+    const basePace = sprint ? 14.5 : 9.8
+    let pace = (this.oxygen > 8 ? basePace : basePace * 0.5) * Math.sqrt(gravity / 3.71)
+    if (sky.storm) pace *= 0.25
+    else if (sky.flare) pace *= 0.7
     const grade = this.grade(this.foot.x, this.foot.z)
     const slope = Math.hypot(grade.x, grade.z)
     const crawl = 1 - Math.min(0.32, slope * 0.4)
@@ -886,6 +936,21 @@ export class SurfaceWorld {
       this.walkBody.setClip(this.hop > 0.04 ? 'air' : climbing || moving ? 'walk' : 'idle')
       this.walkBody.tick(sky.storm ? dt * 0.42 : dt)
     }
+    if (this.petCat) {
+      const moving = this.keys.has('w') || this.keys.has('s') || this.keys.has('a') || this.keys.has('d')
+      const target = this.mode === 'eva'
+        ? { x: this.foot.x, y: fy, z: this.foot.z, yaw: this.lookYaw, hop: this.hop }
+        : { x: this.drive.x, y: this.heightAt(this.drive.x, this.drive.z), z: this.drive.z, yaw: this.drive.yaw }
+      const movingTarget = this.mode === 'eva' ? moving : Math.abs(this.drive.speed) > 0.1
+      this.petCat.tick(
+        sky.storm ? dt * 0.65 : dt,
+        target,
+        movingTarget,
+        (x, z) => this.heightAt(x, z),
+        (x, z) => this.normalAt(x, z),
+      )
+      this.petCat.setVisible(this.mode === 'eva' || this.mode === 'drive')
+    }
     const homeY = this.heightAt(7, 5)
     if (this.mode === 'scout') {
       this.heli.position.set(this.heliAt.x, this.heightAt(this.heliAt.x, this.heliAt.z) + 7.5, this.heliAt.z)
@@ -1013,6 +1078,13 @@ export class SurfaceWorld {
     else if (this.weatherSim === 'dust') next = { storm: true, dust: 0.88, comms: true, wheel: 0.4, fault: false, flare: false, label: 'Dust' }
     else if (this.weatherSim === 'flare') next = { storm: false, dust: 0.22, comms: false, wheel: 0, fault: false, flare: true, label: 'Flare' }
     else if (this.weatherSim === 'blackout') next = { storm: false, dust: 0.08, comms: false, wheel: 0, fault: false, flare: false, label: 'Blackout' }
+    else if (this.activeCalamity) {
+      if (this.activeCalamity === 'dust') next = { storm: true, dust: 0.85, comms: true, wheel: 0.35, fault: false, flare: false, label: 'Dust' }
+      else if (this.activeCalamity === 'flare') next = { storm: false, dust: 0.22, comms: false, wheel: 0, fault: false, flare: true, label: 'Flare' }
+      else if (this.activeCalamity === 'blackout') next = { storm: false, dust: 0.08, comms: false, wheel: 0, fault: false, flare: false, label: 'Blackout' }
+    } else {
+      next = { storm: false, dust: 0.04, comms: true, wheel: 0, fault: false, flare: false, label: 'Clear' }
+    }
     const fault = next.fault || (this.sol === 1 && this.setup.entryFault && this.weatherSim === 'auto')
     const wheel = this.setup.damaged ? Math.max(next.wheel, 0.55) : next.wheel
     const label = next.label !== 'Clear' ? next.label : fault ? 'Fault' : wheel > 0.2 ? 'Wheel' : 'Clear'
@@ -1048,12 +1120,13 @@ export class SurfaceWorld {
     return this.drive
   }
 
+  private tempNormal = new THREE.Vector3(0, 1, 0)
   private normalAt(x: number, z: number): THREE.Vector3 {
-    if (this.globeR <= 0) return new THREE.Vector3(0, 1, 0)
+    if (this.globeR <= 0) return this.tempNormal.set(0, 1, 0)
     const radius = this.globeR
     const flat = Math.min(Math.hypot(x, z), radius * 0.96)
     const lift = Math.sqrt(Math.max(1, radius * radius - flat * flat))
-    return new THREE.Vector3(x, lift, z).normalize()
+    return this.tempNormal.set(x, lift, z).normalize()
   }
 
   private groundMesh: THREE.Object3D | null = null
@@ -1360,17 +1433,24 @@ export class SurfaceWorld {
   }
 
   private tickHint(): void {
+    this.hintOn = true
     const open = this.openSamples()
-    if (open.length === 0) {
-      this.hintOn = false
+    const allSent = this.notes.filter((item) => !item.sent).length === 0 && this.found.size >= this.setup.samples.length
+    if (open.length > 0) {
+      const target = open[0]
+      const y = this.heightAt(target.x, target.z)
+      this.hintArrow.position.set(target.x, y + 2.15 + Math.sin(this.clock * 2.4) * 0.16, target.z)
+      this.hintArrow.visible = true
+    } else if (allSent && this.lander) {
+      // Direct player back to Ascent Lander only AFTER all collected samples are transmitted
+      const lx = this.lander.position.x
+      const lz = this.lander.position.z
+      const ly = this.heightAt(lx, lz)
+      this.hintArrow.position.set(lx, ly + 3.8 + Math.sin(this.clock * 2.4) * 0.16, lz)
+      this.hintArrow.visible = true
+    } else {
       this.hintArrow.visible = false
-      return
     }
-    if (!this.hintOn && this.clock >= this.hintDue) this.hintOn = true
-    const target = open[0]
-    const y = this.heightAt(target.x, target.z)
-    this.hintArrow.position.set(target.x, y + 2.15 + Math.sin(this.clock * 2.4) * 0.16, target.z)
-    this.hintArrow.visible = this.hintOn
     for (const mark of this.markers) {
       const pin = mark.getObjectByName('sample-pin')
       if (pin) pin.position.y = Math.sin(this.clock * 2.2 + mark.position.x) * 0.14
@@ -1379,15 +1459,31 @@ export class SurfaceWorld {
 
   private hintReadout(): SurfaceHint | null {
     if (!this.hintOn) return null
-    const target = this.openSamples()[0]
-    if (!target) return null
-    this.hintNdc.set(target.x, this.heightAt(target.x, target.z) + 2.4, target.z).project(this.camera)
-    const onScreen = this.hintNdc.z < 1 && this.hintNdc.z > 0 && Math.abs(this.hintNdc.x) <= 0.9 && Math.abs(this.hintNdc.y) <= 0.78
-    return { name: target.name, nx: this.hintNdc.x, ny: this.hintNdc.y, onScreen }
+    const from = this.focus()
+    const open = this.openSamples()
+    const allSent = this.notes.filter((item) => !item.sent).length === 0 && this.found.size >= this.setup.samples.length
+    if (open.length > 0) {
+      const target = open[0]
+      const distM = Math.hypot(target.x - from.x, target.z - from.z)
+      this.hintNdc.set(target.x, this.heightAt(target.x, target.z) + 2.4, target.z).project(this.camera)
+      const onScreen = this.hintNdc.z < 1 && this.hintNdc.z > 0 && Math.abs(this.hintNdc.x) <= 0.9 && Math.abs(this.hintNdc.y) <= 0.78
+      return { name: target.name, nx: this.hintNdc.x, ny: this.hintNdc.y, onScreen, distM, kind: 'sample' }
+    }
+    if (allSent && this.lander) {
+      const lx = this.lander.position.x
+      const lz = this.lander.position.z
+      const distM = Math.hypot(lx - from.x, lz - from.z)
+      this.hintNdc.set(lx, this.heightAt(lx, lz) + 3.8, lz).project(this.camera)
+      const onScreen = this.hintNdc.z < 1 && this.hintNdc.z > 0 && Math.abs(this.hintNdc.x) <= 0.9 && Math.abs(this.hintNdc.y) <= 0.78
+      return { name: 'Ascent Lander', nx: this.hintNdc.x, ny: this.hintNdc.y, onScreen, distM, kind: 'lander' }
+    }
+    return null
   }
 
   private poseRoute(): void {
-    const target = this.hintOn ? this.openSamples()[0] ?? null : (this.assist ? this.currentTarget() : null)
+    const open = this.openSamples()
+    const allSent = this.notes.filter((item) => !item.sent).length === 0 && this.found.size >= this.setup.samples.length
+    const target = open.length > 0 ? open[0] : (allSent && this.lander ? { x: this.lander.position.x, z: this.lander.position.z } : null)
     this.route.visible = Boolean(target)
     if (!target) return
     const from = this.focus()
@@ -1490,6 +1586,18 @@ export class SurfaceWorld {
   }
 
   private walkBody: WalkAstronaut | null = null
+  private petCat: PetCat | null = null
+
+  private loadPetCat(): void {
+    const fy = this.heightAt(this.foot.x + 1.6, this.foot.z + 0.8)
+    this.petCat = createPetCat({
+      worldType: 'mars',
+      initialPos: { x: this.foot.x + 1.6, y: fy, z: this.foot.z + 0.8 },
+      initialYaw: this.lookYaw,
+      scale: 0.85,
+    })
+    this.scene.add(this.petCat.root)
+  }
 
   private loadSuit(): void {
     loader.load('/3d/walking_astronaut.glb', (gltf) => {
@@ -1503,6 +1611,11 @@ export class SurfaceWorld {
         }
       })
       this.suit.add(this.walkBody.root)
+      const helmetLamp = new THREE.PointLight(0xfff5ea, 1.8, 12, 1.4)
+      helmetLamp.position.set(0, 1.72, 0.5)
+      const suitFillLamp = new THREE.PointLight(0xf8eedf, 1.0, 8, 1.8)
+      suitFillLamp.position.set(0, 1.1, -0.4)
+      this.suit.add(helmetLamp, suitFillLamp)
     })
   }
 

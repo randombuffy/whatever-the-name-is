@@ -10,6 +10,7 @@ import { MARS_ORBIT_AU } from '../domain/constants'
 import { trackMove } from '../input/moveKeys'
 import { modelLoader, seatSphere } from './gltf'
 import { bindWalkAstronaut, type WalkAstronaut } from './walkAstronaut'
+import { createPetCat, type PetCat } from './petCat'
 import { useMission } from '../store/useMission'
 import { viewRatio } from './pixels'
 import { makeStarfield, tickStarfield } from './starfield'
@@ -152,6 +153,7 @@ export class PadWorld {
   private controlAt = new THREE.Vector3(-32, 0, 46)
   private chevrons: THREE.Mesh[] = []
   private walkBody: WalkAstronaut | null = null
+  private petCat: PetCat | null = null
   private ascentView: AscentView = 'cinematic'
   private viewLocked = false
   private crewStowed = false
@@ -235,6 +237,17 @@ export class PadWorld {
     this.leftArm = legs.leftArm
     this.rightArm = legs.rightArm
     this.scene.add(this.crew)
+    this.petCat = createPetCat({
+      worldType: 'earth',
+      initialPos: {
+        x: this.feet.x + 1.6,
+        y: this.groundAt(this.feet.x + 1.6, this.feet.z + 0.8),
+        z: this.feet.z + 0.8,
+      },
+      initialYaw: this.faceYaw,
+      scale: 0.85,
+    })
+    this.scene.add(this.petCat.root)
     this.buildTransport()
     this.buildPeople()
     this.scene.add(this.camera)
@@ -368,6 +381,7 @@ export class PadWorld {
     this.dust?.geometry.dispose()
     const dustMat = this.dust?.material
     if (dustMat && !Array.isArray(dustMat)) dustMat.dispose()
+    this.petCat?.dispose()
     this.renderer.dispose()
   }
 
@@ -835,6 +849,21 @@ export class PadWorld {
       this.walkBody.setClip(!this.grounded ? 'air' : moving ? 'walk' : 'idle')
       this.walkBody.setVisible(!this.firstPerson)
       this.walkBody.tick(dt)
+    }
+    if (this.petCat) {
+      const astronautTarget = {
+        x: this.driving ? this.carPos.x : this.feet.x,
+        y: this.driving ? this.carPos.y : this.feet.y,
+        z: this.driving ? this.carPos.z : this.feet.z,
+        yaw: this.driving ? this.carYaw : this.faceYaw,
+      }
+      this.petCat.tick(
+        dt,
+        astronautTarget,
+        this.driving ? Math.abs(this.carSpeed) > 0.1 : moving,
+        (x, z) => this.groundAt(x, z),
+      )
+      this.petCat.setVisible(!this.crewStowed)
     }
     this.aimCamera(dt)
     this.aimGuide()

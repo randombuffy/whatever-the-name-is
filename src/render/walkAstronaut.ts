@@ -44,22 +44,36 @@ function paintSpecGloss(gltf: GLTF): void {
   const count = parser.json.textures?.length ?? 0
   void Promise.all(Array.from({ length: count }, (_, index) => parser.getDependency('texture', index))).then((textures) => {
     const painted = (parser.json.materials ?? []).map((def: {
+      name?: string
       extensions?: { KHR_materials_pbrSpecularGlossiness?: SpecGloss }
       normalTexture?: { index: number }
       occlusionTexture?: { index: number }
-    }) => {
+    }, index: number) => {
       const spec = def.extensions?.KHR_materials_pbrSpecularGlossiness
       const diffuse = spec?.diffuseTexture ? textures[spec.diffuseTexture.index] : null
       if (diffuse) diffuse.colorSpace = THREE.SRGBColorSpace
       const gloss = spec?.specularGlossinessTexture ? textures[spec.specularGlossinessTexture.index] : null
-      const color = spec?.diffuseFactor
-      const shine = spec?.specularFactor ? Math.max(spec.specularFactor[0], spec.specularFactor[1], spec.specularFactor[2]) : 0.12
+
+      const isVisor = index === 1 || def.name === 'material_1'
+      if (isVisor) {
+        // Vibrant gold/amber reflective astronaut visor
+        return new THREE.MeshStandardMaterial({
+          color: new THREE.Color(0xffb833),
+          metalness: 0.88,
+          roughness: 0.12,
+          emissive: new THREE.Color(0x3a2004),
+          side: THREE.DoubleSide,
+        })
+      }
+
+      // Bright, vibrant clean white EVA space suit fabric (low metalness to avoid absorbing 72% light)
       return new THREE.MeshStandardMaterial({
-        color: color ? new THREE.Color(color[0], color[1], color[2]) : 0xffffff,
+        color: new THREE.Color(0xffffff),
         map: diffuse,
         roughnessMap: gloss ?? null,
-        roughness: spec ? Math.max(0.18, 1 - (spec.glossinessFactor ?? 0.5)) : 0.55,
-        metalness: Math.min(0.72, shine),
+        roughness: 0.42,
+        metalness: 0.05,
+        emissive: new THREE.Color(0x1a1816),
         normalMap: def.normalTexture ? textures[def.normalTexture.index] : null,
         aoMap: def.occlusionTexture ? textures[def.occlusionTexture.index] : null,
         side: THREE.DoubleSide,
@@ -99,7 +113,7 @@ export function bindWalkAstronaut(gltf: GLTF, height = 1.85): WalkAstronaut {
     }
     const action = mixer.clipAction(clip)
     action.enabled = true
-    action.timeScale = name === 'walk' ? 5.3 : 4.2
+    action.timeScale = name === 'walk' ? 6.2 : 4.2
     action.setLoop(THREE.LoopRepeat, Infinity)
     actions[name] = action
   }

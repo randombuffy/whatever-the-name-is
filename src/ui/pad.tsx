@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { earthCoast } from '../domain/dynamics'
 import { R_EARTH_M } from '../domain/constants'
 import { getMission, MISSIONS } from '../domain/missions'
-import { BOOSTER, createAscent, stepAscent, ASCENT_TIME_SCALE, type AscentInput, type AscentState } from '../domain/ascent'
+import { BOOSTER, UPPER, createAscent, stepAscent, ASCENT_TIME_SCALE, type AscentInput, type AscentState } from '../domain/ascent'
 import { evaluate } from '../domain/validate'
 import type { EngineeringIssue } from '../domain/types'
 import { PadWorld, type AscentView, type PadAction, type PadContact } from '../render/padWorld'
@@ -13,9 +13,12 @@ import { useActiveMission, useMission } from '../store/useMission'
 import { createEngineTone } from './tone'
 import { loopFile, playGroup, playJump, playLand, playStep, setBed, setScoreBoost, sting } from './audio'
 import { Mix } from './mix'
-import { DestModel, DestStill, destStillUrl } from './DestStill'
+import { DestModel } from './DestStill'
 import { trackMove } from '../input/moveKeys'
 import { resetVoice, say, sayOnce, silence } from './voice'
+import { PixelRocketIcon, PlanetSaturnIcon } from './pixelIcons'
+import { relatedSpecs } from './planHolds'
+import { PartPreview } from './partPreview'
 
 const CHECKS = ['Flight computer', 'Guidance', 'Power', 'Thermal', 'Communications', 'Propulsion', 'Tanks', 'Weather', 'Payload', 'Hold']
 
@@ -199,7 +202,19 @@ export function PadScreen() {
       if (ascent.current?.phase === 'orbit') {
         orbitHold.current += dt
         if (orbitHold.current > 0.45) {
-          commit(ascent.current.propellantKg / Math.max(1, BOOSTER.propellantKg))
+          const cruiseTargetPct = 19
+          const finalFuelPct = Math.max(
+            0,
+            Math.min(
+              100,
+              Math.round(
+                cruiseTargetPct +
+                  (Math.max(0, ascent.current.propellantKg - 16_000) / Math.max(1, UPPER.propellantKg - 16_000)) *
+                    (40 - cruiseTargetPct)
+              )
+            )
+          )
+          commit(finalFuelPct / 100)
           return
         }
       }
@@ -313,7 +328,26 @@ export function PadScreen() {
     if (missionsOpen || nextStep || hold || panel) document.exitPointerLock()
   }, [missionsOpen, nextStep, hold, panel])
 
-  const fuelPct = readout ? Math.max(0, Math.min(100, Math.round((readout.propellantKg / Math.max(1, BOOSTER.propellantKg)) * 100))) : 0
+  const cruiseTargetPct = 19
+  const fuelPct = readout
+    ? Math.max(
+        0,
+        Math.min(
+          100,
+          Math.round(
+            readout.boosterGone
+              ? cruiseTargetPct +
+                (Math.max(0, readout.propellantKg - 16_000) / Math.max(1, UPPER.propellantKg - 16_000)) *
+                  (40 - cruiseTargetPct)
+              : cruiseTargetPct +
+                21 +
+                (Math.max(0, readout.propellantKg - UPPER.propellantKg) /
+                  Math.max(1, BOOSTER.propellantKg - UPPER.propellantKg)) *
+                  (100 - cruiseTargetPct - 21)
+          )
+        )
+      )
+    : 0
   const layer = readout ? atmosphereLayer(readout.altitudeM) : null
 
   return (
@@ -354,7 +388,7 @@ export function PadScreen() {
       {(hud.action === 'countdown' || hud.action === 'destination') && count === null && !readout && !missionsOpen && (
         <button type="button" className="key-banner" onClick={() => (hud.action === 'countdown' ? beginCountdown() : setMissionsOpen(true))}>
           <kbd>E</kbd>
-          <span>{hud.action === 'countdown' ? 'Begin the countdown' : mission ? 'Flight Control' : 'Mars Destination'}</span>
+          <span>{hud.action === 'countdown' ? 'Begin the countdown' : mission ? 'Flight control' : 'Mars campaign'}</span>
         </button>
       )}
       {count !== null && count > 0 && (
@@ -374,10 +408,9 @@ export function PadScreen() {
         </div>
       )}
       {missionsOpen && (
-        <div className="director missions mars-gate">
+        <div className="director missions mars-gate" role="dialog" aria-labelledby="mars-gate-title">
           <div className="mars-gate-stage">
-            <DestStill src={destStillUrl('mars')} className="mars-gate-bg" />
-            <DestModel missionId="mars" className="mars-gate-globe" />
+            <DestModel missionId="mars" className="mars-gate-globe" cameraDistance={4.35} fov={34} scale={0.92} />
           </div>
           <strong>{mission ? `${mission.name} Flight Control` : 'Mars Campaign'}</strong>
           <p>
@@ -402,7 +435,7 @@ export function PadScreen() {
                 </button>
                 <button
                   type="button"
-                  className="word fill"
+                  className="word fill pad-launch-btn"
                   style={{ background: '#0284c7', borderColor: '#38bdf8' }}
                   onClick={() => {
                     setMissionsOpen(false)
@@ -410,7 +443,8 @@ export function PadScreen() {
                     beginCountdown()
                   }}
                 >
-                  🚀 Launch Mission
+                  <PixelRocketIcon size={15} />
+                  <span>Launch Mission</span>
                 </button>
               </>
             ) : (
@@ -495,9 +529,15 @@ export function PadScreen() {
             )}
           </aside>
           <div className="ascent-read">
-            <div><span>Time</span><b>T+ {clock(readout.tSec)}</b></div>
-            <div><span>Altitude</span><b>{(readout.altitudeM / 1000).toFixed(1)} km</b></div>
-            <div><span>Speed</span><b>{Math.round(readout.velocityMps)} m/s</b></div>
+            <div className="ascent-stat"><span>Time</span><b>T+ {clock(readout.tSec)}</b></div>
+            <div className="ascent-stat"><span>Altitude</span><b>{(readout.altitudeM / 1000).toFixed(1)} km</b></div>
+            <div className="ascent-stat"><span>Speed</span><b>{Math.round(readout.velocityMps)} m/s</b></div>
+            {details && (
+              <div className="ascent-stat"><span>Dyn. Pressure</span><b>{Math.round(readout.qPa)} Pa</b></div>
+            )}
+            {details && (
+              <div className="ascent-stat"><span>Mach</span><b>{readout.mach.toFixed(2)}</b></div>
+            )}
           </div>
           <div className="ascent-call" title={details ? coastLine(readout) : undefined}>{climbStatus(readout)}</div>
           <div className="radar radar-corner" title="Flight-path radar">
@@ -519,19 +559,44 @@ export function PadScreen() {
               />
             </svg>
           </div>
-          <button type="button" className="ascent-details" aria-pressed={details} onClick={() => setDetails((on) => !on)}>
-            Details {details ? 'On' : 'Off'}
-          </button>
+          <div className="ascent-details-toggle-dock">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={details}
+              className={`cruise-switch-toggle${details ? ' is-on' : ''}`}
+              onClick={() => setDetails((on) => !on)}
+              title="Toggle flight details"
+            >
+              <span className="cruise-switch-track">
+                <span className="cruise-switch-thumb" />
+              </span>
+              <span className="cruise-switch-text">Details {details ? 'ON' : 'OFF'}</span>
+            </button>
+          </div>
         </>
       )}
       {hold && (
-        <div className="station-panel">
+        <div className="station-panel pad-nogo-panel">
           <strong>No-go</strong>
-          <p>The stack stays on the pad until these are closed. Escape also holds a countdown that has already started.</p>
-          {hold.map((issue) => (
-            <p key={issue.id}><strong>{issue.what}</strong> {issue.why} {issue.change}</p>
-          ))}
-          <button type="button" className="word autofix" onClick={() => {
+          <div className="pad-nogo-list">
+            {hold.slice(0, 3).map((issue) => {
+              const specs = craft ? relatedSpecs(issue, craft) : []
+              return (
+                <div key={issue.id} className="pad-nogo-item">
+                  <div className="pad-nogo-label">{issue.what}</div>
+                  {specs.length > 0 && (
+                    <div className="pad-nogo-previews">
+                      {specs.slice(0, 3).map((spec) => (
+                        <PartPreview key={spec.id} specId={spec.id} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          <button type="button" className="word autofix pad-nogo-autofix" onClick={() => {
             autoFix()
             const state = useMission.getState()
             const active = state.missionId === 'custom' ? state.custom : getMission(state.missionId ?? '')
@@ -544,9 +609,9 @@ export function PadScreen() {
             }
             setHold(null)
             say('Auto-fix closed the holds. The spacecraft is ready to launch.', state.audio, 0.92)
-          }}>Auto-fix</button>
-          <button type="button" className="word" onClick={() => { setHold(null); go('design') }}>Engineering</button>
-          <button type="button" className="word" onClick={() => setHold(null)}>Close</button>
+          }}>
+            <PlanetSaturnIcon size={14} /> Auto-fix
+          </button>
         </div>
       )}
       {panel && (
