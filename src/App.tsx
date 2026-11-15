@@ -248,8 +248,6 @@ export function App() {
             <span className="banner-item"><span className="banner-dim">Required</span> <strong>{mission.requiredInstruments.join(', ')}</strong></span>
             <span className="banner-sep">·</span>
             <span className="banner-item"><span className="banner-dim">Window</span> <strong>{mission.launchWindow}</strong></span>
-            <span className="banner-sep">·</span>
-            <span className="banner-item muted">Educational limits, not NASA specifications.</span>
           </div>
         )}
       </header>

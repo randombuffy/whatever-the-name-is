@@ -665,7 +665,7 @@ export function CruiseScreen() {
           <div className="result-overlay is-lose" role="alertdialog">
             <b>You lost</b>
             <p>{sim.failReason || 'The transfer stopped before arrival.'}</p>
-            <p className="muted">{EDU_LIMITS}</p>
+            <p className="edu-note">{EDU_LIMITS}</p>
             <div className="result-actions">
               <button type="button" className="word fill" onClick={() => finish()}>See result</button>
             </div>

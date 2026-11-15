@@ -62,7 +62,7 @@ export function PadScreen() {
   const worldRef = useRef<PadWorld | null>(null)
   const warpRef = useRef(1)
   const [warp, setWarp] = useState(1)
-  const [view, setView] = useState<AscentView>('chase')
+  const [view, setView] = useState<AscentView>('cinematic')
   const [details, setDetails] = useState(false)
   const [missionsOpen, setMissionsOpen] = useState(false)
   const [nextStep, setNextStep] = useState(false)
@@ -464,7 +464,7 @@ export function PadScreen() {
             </div>
             <div className="chip-row">
               <span>Camera</span>
-              {(['chase', 'side', 'tower', 'nose', 'cinematic'] as const).map((mode) => (
+              {(['cinematic', 'chase', 'side', 'tower', 'nose'] as const).map((mode) => (
                 <button
                   key={mode}
                   type="button"

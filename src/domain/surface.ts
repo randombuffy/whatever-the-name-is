@@ -63,22 +63,23 @@ export function stepDrive(state: DriveState, input: DriveInput, dt: number): Dri
   const step = Math.min(0.05, Math.max(0, dt))
   const along = input.gradX * Math.sin(state.yaw) + input.gradZ * Math.cos(state.yaw)
   const slope = Math.hypot(input.gradX, input.gradZ)
-  const slip = Math.min(1, slope / 0.7 + input.rough * 0.25)
-  const traction = 1 - slip * 0.55
-  const force = 240 + input.massKg * 0.35
+  const slip = Math.min(1, slope / 1.15 + input.rough * 0.18)
+  const traction = 1 - slip * 0.38
+  const force = 320 + input.massKg * 0.28
   const throttle = input.park ? 0 : Math.max(-1, Math.min(1, input.throttle))
-  let accel = (throttle * force * traction) / Math.max(20, input.massKg)
-  accel -= input.gravity * along * 0.9
+  const mass = Math.max(20, input.massKg)
+  let accel = (throttle * force * traction) / mass
+  accel -= input.gravity * along * (0.38 + mass / 900)
   if (input.brake) accel -= Math.sign(state.speed || throttle) * 5
-  const cap = input.boost ? 11 : 7.2
-  let speed = input.park ? state.speed * Math.exp(-step * 14) : (state.speed + accel * step) * Math.exp(-step * (0.55 + input.rough * 0.35))
+  const cap = input.boost ? 12 : 8.4
+  let speed = input.park ? state.speed * Math.exp(-step * 14) : (state.speed + accel * step) * Math.exp(-step * (0.48 + input.rough * 0.28))
   speed = Math.max(-0.8, Math.min(cap, speed))
   if (input.park && Math.abs(speed) < 0.08) speed = 0
   else if (!input.park && Math.abs(speed) < 0.02 && Math.abs(throttle) < 0.05) speed = 0
   const steer = input.park ? 0 : Math.max(-1, Math.min(1, input.steer))
-  const turn = steer * Math.min(1.4, Math.abs(speed) / 1.1) * (1.05 - slip * 0.4)
+  const turn = steer * Math.min(1.6, Math.abs(speed) / 1.05) * (1.08 - slip * 0.28)
   const yaw = state.yaw + turn * step * (speed >= 0 ? 1 : -1)
-  const slide = input.park ? 0 : slip * input.gravity * 0.12 * step
+  const slide = input.park ? 0 : slip * input.gravity * 0.06 * step
   return {
     x: state.x + Math.sin(yaw) * speed * step - input.gradX * slide,
     z: state.z + Math.cos(yaw) * speed * step - input.gradZ * slide,

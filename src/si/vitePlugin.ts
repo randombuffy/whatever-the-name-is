@@ -1,5 +1,5 @@
 import type { Plugin } from 'vite'
-import { completeNim, NIM_MODEL } from './nimServer'
+import { completeNim } from './nimServer'
 
 type NodeReq = {
   method?: string
@@ -45,7 +45,7 @@ export function nvidiaNimPlugin(apiKey: string | undefined): Plugin {
     try {
       const body = JSON.parse((await readBody(req)) || '{}') as { note?: unknown; ask?: string }
       const advice = await completeNim(apiKey, body.note, String(body.ask ?? ''))
-      send(res, 200, { advice, model: NIM_MODEL })
+      send(res, 200, { advice, model: advice.model })
     } catch (error) {
       send(res, 502, { error: error instanceof Error ? error.message : 'NVIDIA NIM failed' })
     }

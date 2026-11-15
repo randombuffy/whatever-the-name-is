@@ -103,34 +103,41 @@ export function landingChance(massKg: number, limitKg: number, site: LandingSite
   return Math.min(0.97, Math.max(0.06, chance))
 }
 
+export type SampleKind = 'core' | 'crystal' | 'dust' | 'ice' | 'metal'
+
 export interface FieldSample {
   id: string
   name: string
+  kind: SampleKind
   x: number
   z: number
   points: number
 }
 
+const SAMPLE_KINDS: SampleKind[] = ['core', 'crystal', 'dust', 'ice', 'metal']
+
 const SAMPLE_NAMES: Record<string, string[]> = {
-  water: ['Delta mudstone', 'Carbonate vein', 'Lakebed silt'],
-  atmosphere: ['Dust column', 'Pressure log', 'Wind streak'],
-  geology: ['Layer contact', 'Vein fill', 'Impact breccia'],
-  habitation: ['Ice table', 'Radiation shade', 'Soil oxidant'],
+  water: ['Delta mudstone', 'Carbonate vein', 'Lakebed silt', 'Shore cobble', 'Clay lens'],
+  atmosphere: ['Dust column', 'Pressure log', 'Wind streak', 'Ice cloud', 'Salt crust'],
+  geology: ['Layer contact', 'Vein fill', 'Impact breccia', 'Basalt float', 'Conglomerate'],
+  habitation: ['Ice table', 'Radiation shade', 'Soil oxidant', 'Shelter rock', 'Regolith brick'],
 }
 
-const JEZERO_SAMPLES = ['Máaz floor', 'Séítah outcrop', 'Delta carbonate']
+const JEZERO_SAMPLES = ['Máaz floor', 'Séítah outcrop', 'Delta carbonate', 'Fan cobble', 'Rim breccia']
 
-export function fieldSamples(site: LandingSite, objectiveId: string): FieldSample[] {
+/** Five distinct surface finds in a ring around the lander, close enough to walk. */
+export function fieldSamples(site: LandingSite, objectiveId: string, origin: readonly [number, number] = [0, 0]): FieldSample[] {
   const names = site.id === 'jezero' ? JEZERO_SAMPLES : (SAMPLE_NAMES[objectiveId] ?? SAMPLE_NAMES.geology)
-  return names.map((name, index) => {
-    const angle = index * 2.2 + site.difficulty * 3
-    const radius = 14 + index * 9
+  return names.slice(0, 5).map((name, index) => {
+    const angle = -Math.PI / 2 + index * ((Math.PI * 2) / 5) + site.difficulty * 0.18
+    const radius = 9 + (index % 3) * 3
     return {
       id: `${site.id}-${index}`,
       name,
-      x: Math.cos(angle) * radius,
-      z: Math.sin(angle) * radius,
-      points: Math.round(18 * site.science * (1.1 - index * 0.12)),
+      kind: SAMPLE_KINDS[index],
+      x: origin[0] + Math.cos(angle) * radius,
+      z: origin[1] + Math.sin(angle) * radius,
+      points: Math.round(22 * site.science * (1.08 - index * 0.06)),
     }
   })
 }

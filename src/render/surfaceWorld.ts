@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import type { FieldSample } from '../domain/campaign'
+import type { FieldSample, SampleKind } from '../domain/campaign'
 import { contactBytes, kindFor, observe, returnedBits, returnedScience, sendChosen, type Observation } from '../domain/evidence'
 import { fieldSol } from '../domain/fieldEvents'
 import type { FieldSave } from '../domain/save'
@@ -38,6 +38,13 @@ export interface SurfaceSetup {
   resume?: FieldSave
 }
 
+export interface SurfaceHint {
+  name: string
+  nx: number
+  ny: number
+  onScreen: boolean
+}
+
 export interface SurfaceReadout {
   speed: number
   slopeDeg: number
@@ -46,6 +53,8 @@ export interface SurfaceReadout {
   sol: number
   held: number
   sent: number
+  found: number
+  total: number
   link: boolean
   label: string
   zoom: number
@@ -64,6 +73,7 @@ export interface SurfaceReadout {
   lost: boolean
   sky: string
   weather: WeatherSim
+  hint: SurfaceHint | null
 }
 
 const CHUNK = 36
@@ -177,6 +187,10 @@ export class SurfaceWorld {
   private globeR = 0
   private clock = 0
   private weatherSim: WeatherSim = 'auto'
+  private hintDue = 15
+  private hintOn = false
+  private hintArrow!: THREE.Group
+  private readonly hintNdc = new THREE.Vector3()
   private readonly up = new THREE.Vector3()
   private readonly fwd = new THREE.Vector3()
   private readonly right = new THREE.Vector3()
@@ -257,6 +271,7 @@ export class SurfaceWorld {
     )
     this.route.frustumCulled = false
     this.scene.add(this.route)
+    this.hintArrow = this.makeHintArrow()
     this.globeR = 0
     this.lander = new THREE.Group()
     this.scene.add(this.lander)
@@ -467,7 +482,7 @@ export class SurfaceWorld {
   sample(): void {
     const here = this.nearSample()
     if (!here) {
-      this.say('Walk to a glowing rock and press E.')
+      this.say('Walk to a glowing marker and press E.')
       return
     }
     const cost = 4
@@ -503,7 +518,11 @@ export class SurfaceWorld {
     if (mark) mark.visible = false
     this.armT = 1
     this.ping('sample')
-    this.say(`Picked up ${obs.name}.`)
+    this.hintOn = false
+    this.hintDue = this.clock + 15
+    const left = this.openSamples().length
+    if (left === 0) this.say(`Picked up ${obs.name}. All samples are in. Send each one, then File return.`)
+    else this.say(`Picked up ${obs.name}. ${left} still out. Send when you can.`)
   }
 
   capture(): void {
@@ -624,6 +643,7 @@ export class SurfaceWorld {
     this.poseVehicles(stepDt)
     this.poseDust(focus.x, focus.z, stepDt)
     this.poseRoute()
+    this.tickHint()
     this.frame()
     if (this.marsGround) this.pinLander()
     if (this.marsGround) {
@@ -654,6 +674,14 @@ export class SurfaceWorld {
     this.rockMat?.dispose()
     this.marsGround?.dispose()
     disposeCraft(this.lander)
+    this.hintArrow.traverse((obj) => {
+      const mesh = obj as THREE.Mesh
+      if (!mesh.isMesh) return
+      mesh.geometry.dispose()
+      const mat = mesh.material
+      if (Array.isArray(mat)) mat.forEach((item) => item.dispose())
+      else mat.dispose()
+    })
     this.renderer.dispose()
   }
 
@@ -675,6 +703,9 @@ export class SurfaceWorld {
     const sky = this.condition()
     if (sky.storm) throttle *= 0.18
     else if (sky.flare) throttle *= 0.62
+    const mag = Math.hypot(grade.x, grade.z)
+    const cap = 0.42
+    const scale = mag > cap ? cap / mag : 1
     const next = stepDrive(this.drive, {
       throttle,
       steer,
@@ -683,9 +714,9 @@ export class SurfaceWorld {
       boost: this.keys.has('shift'),
       massKg: this.setup.roverMassKg ?? 80,
       gravity: this.setup.gravity,
-      rough: 0.15 + this.setup.difficulty * 0.7 + (this.parked ? 0 : this.condition().wheel),
-      gradX: grade.x,
-      gradZ: grade.z,
+      rough: 0.12 + this.setup.difficulty * 0.35 + (this.parked ? 0 : this.condition().wheel),
+      gradX: grade.x * scale,
+      gradZ: grade.z * scale,
     }, dt)
     this.odometer += Math.abs(next.speed) * dt
     this.drive = next
@@ -705,10 +736,11 @@ export class SurfaceWorld {
     else if (sky.flare) pace *= 0.6
     const grade = this.grade(this.foot.x, this.foot.z)
     const slope = Math.hypot(grade.x, grade.z)
-    const nx = this.foot.x + (Math.sin(this.lookYaw) * forward + Math.cos(this.lookYaw) * strafe) * pace * (1 - Math.min(0.65, slope)) * dt
-    const nz = this.foot.z + (Math.cos(this.lookYaw) * forward - Math.sin(this.lookYaw) * strafe) * pace * (1 - Math.min(0.65, slope)) * dt
+    const crawl = 1 - Math.min(0.32, slope * 0.4)
+    const nx = this.foot.x + (Math.sin(this.lookYaw) * forward + Math.cos(this.lookYaw) * strafe) * pace * crawl * dt
+    const nz = this.foot.z + (Math.cos(this.lookYaw) * forward - Math.sin(this.lookYaw) * strafe) * pace * crawl * dt
     const blocked = this.hits(nx, nz, 0.42, this.hop)
-    const steep = this.hop < 0.28 && !this.climbOk(this.foot.x, this.foot.z, nx, nz, 1.12)
+    const steep = this.hop < 0.28 && !this.climbOk(this.foot.x, this.foot.z, nx, nz, 2.6)
     const clear = !blocked && !steep
     if (clear) {
       this.foot.x = nx
@@ -908,14 +940,14 @@ export class SurfaceWorld {
     else if (this.crisis === 'power') prompt = 'Battery under 15%. Sleep, or push and lose the rover.'
     else if (this.crisis === 'comm') prompt = 'No relay. Wait for the orbiter, or burn power on a blind send.'
     else if (!this.introDone) prompt = this.setup.siteId === 'jezero'
-      ? 'On Jezero crater. WASD or arrows to walk. F boards the rover. E picks a sample.'
-      : 'On the surface. WASD or arrows to walk. F boards the rover. E picks a sample.'
+      ? 'On Jezero crater. Five glowing markers. WASD walk, F rover, E sample.'
+      : 'On the surface. Five glowing markers. WASD walk, F rover, E sample.'
     else if (this.notice) prompt = this.notice
     else if (sky.storm) prompt = 'Dust storm. Visibility gone. WASD crawls. Wait it out or reach the lander.'
     else if (sky.flare) prompt = 'Solar flare. Particle flux is high. Keep close to the lander.'
     else if (this.mode === 'drive' && this.energy <= 0) prompt = 'Batteries empty. Wait in the sun.'
     else if (this.mode === 'drive' && this.parked) prompt = 'Parked. WASD drive. F get down.'
-    else if (this.mode === 'drive' && slope > 16 && Math.abs(this.drive.speed) < 0.15 && this.keys.has('w')) prompt = 'Grade too steep.'
+    else if (this.mode === 'drive' && slope > 38 && Math.abs(this.drive.speed) < 0.12 && this.keys.has('w')) prompt = 'Grade too steep.'
     else if (this.mode === 'drive') prompt = 'WASD drive. F get down.'
     else if (this.mode === 'eva' && this.setup.roverMassKg !== null && Math.hypot(this.foot.x - this.drive.x, this.foot.z - this.drive.z) < 5.5) prompt = 'F — Board the rover'
     else if (this.mode === 'eva' && this.oxygen < 18) prompt = 'Air low. Walk back to the lander.'
@@ -933,6 +965,8 @@ export class SurfaceWorld {
       sol: this.sol,
       held: held.length,
       sent: this.notes.length - held.length,
+      found: this.found.size,
+      total: this.setup.samples.length,
       link: sky.comms || this.linkForce,
       label: chosen ? chosen.name : sky.label,
       zoom: Math.round(this.fov),
@@ -951,6 +985,7 @@ export class SurfaceWorld {
       lost: this.lost,
       sky: sky.label,
       weather: this.weatherSim,
+      hint: this.hintReadout(),
     }
   }
 
@@ -1040,9 +1075,9 @@ export class SurfaceWorld {
     const rise = this.heightAt(x1, z1) - this.heightAt(x0, z0)
     const run = Math.hypot(x1 - x0, z1 - z0)
     if (run < 1e-4) return true
-    if (rise <= 1.15) return true
+    if (rise <= 2.4) return true
     if (rise < 0) return true
-    return rise / run <= Math.max(limit, 1.35)
+    return rise / run <= Math.max(limit, 2.8)
   }
 
   private grade(x: number, z: number): { x: number; z: number } {
@@ -1082,7 +1117,7 @@ export class SurfaceWorld {
 
   private nearSample(): FieldSample | null {
     const at = this.focus()
-    return this.setup.samples.find((sample) => !this.found.has(sample.id) && Math.hypot(at.x - sample.x, at.z - sample.z) < 4.8) ?? null
+    return this.setup.samples.find((sample) => !this.found.has(sample.id) && Math.hypot(at.x - sample.x, at.z - sample.z) < 6.8) ?? null
   }
 
   private syncChunks(x: number, z: number): void {
@@ -1174,7 +1209,7 @@ export class SurfaceWorld {
       const x = (shade(i, 3) - 0.5) * 160
       const z = (shade(i, 9) - 0.5) * 160
       if (Math.hypot(x, z) < 12) continue
-      if (this.setup.samples.some((sample) => Math.hypot(sample.x - x, sample.z - z) < 2.4)) continue
+      if (this.setup.samples.some((sample) => Math.hypot(sample.x - x, sample.z - z) < 4.2)) continue
       const scale = 0.35 + shade(i, 5) * (0.7 + this.setup.difficulty)
       const tall = this.setup.siteId === 'valles' || this.setup.siteId === 'boulders' ? 1.4 + shade(i, 2) : 0.7 + shade(i, 2) * 0.5
       dummy.position.set(x, this.heightAt(x, z) + scale * tall, z)
@@ -1192,66 +1227,152 @@ export class SurfaceWorld {
 
   private placeSamples(): void {
     for (const sample of this.setup.samples) {
-      const mark = this.buildSampleStation(sample.id)
+      const mark = this.buildSampleStation(sample)
       mark.position.set(sample.x, this.heightAt(sample.x, sample.z), sample.z)
       mark.visible = !this.found.has(sample.id)
       this.scene.add(mark)
       this.markers.push(mark)
-      this.rocks.push({ x: sample.x, z: sample.z, r: 0.7 })
     }
   }
 
-  /** Cache crate, core rock, and a mast — real objects, not a yellow pip. */
-  private buildSampleStation(id: string): THREE.Group {
+  private sampleLook(kind: SampleKind): { color: number; glow: number } {
+    if (kind === 'core') return { color: 0xff7a18, glow: 0xffb060 }
+    if (kind === 'crystal') return { color: 0x3de0ff, glow: 0x9af2ff }
+    if (kind === 'dust') return { color: 0xff4d9a, glow: 0xff9ec8 }
+    if (kind === 'ice') return { color: 0xe8f6ff, glow: 0xffffff }
+    return { color: 0xffd24a, glow: 0xffe9a0 }
+  }
+
+  private tagSample(obj: THREE.Object3D, id: string): void {
+    obj.userData.sample = id
+    obj.traverse((child) => {
+      child.userData.sample = id
+    })
+  }
+
+  /** Distinct glowing find — color, shape, and a tall beacon so it cannot hide in the rocks. */
+  private buildSampleStation(sample: FieldSample): THREE.Group {
     const root = new THREE.Group()
-    root.userData.sample = id
-    const rock = new THREE.Mesh(
-      new THREE.DodecahedronGeometry(0.58, 0),
-      new THREE.MeshStandardMaterial({ color: this.colors.rock, roughness: 0.96, metalness: 0.04 }),
-    )
-    rock.scale.set(1.2, 0.7, 1.35)
-    rock.position.set(0.15, 0.26, 0)
-    rock.rotation.y = 0.4
-    rock.castShadow = true
-    rock.userData.sample = id
-    root.add(rock)
-    const crate = new THREE.Mesh(
-      new THREE.BoxGeometry(0.46, 0.3, 0.34),
-      new THREE.MeshStandardMaterial({ color: 0xcfc6b4, metalness: 0.28, roughness: 0.52 }),
-    )
-    crate.position.set(-0.62, 0.18, 0.08)
-    crate.castShadow = true
-    crate.userData.sample = id
-    root.add(crate)
-    const lid = new THREE.Mesh(
-      new THREE.BoxGeometry(0.48, 0.04, 0.36),
-      new THREE.MeshStandardMaterial({ color: 0x8aa0a8, metalness: 0.45, roughness: 0.4 }),
-    )
-    lid.position.set(-0.62, 0.34, 0.08)
-    lid.userData.sample = id
-    root.add(lid)
+    const look = this.sampleLook(sample.kind)
+    const glow = new THREE.MeshStandardMaterial({
+      color: look.color,
+      emissive: look.glow,
+      emissiveIntensity: 1.8,
+      roughness: 0.28,
+      metalness: 0.22,
+    })
+    const ring = new THREE.Mesh(new THREE.RingGeometry(1.15, 1.7, 28), new THREE.MeshBasicMaterial({
+      color: look.color,
+      transparent: true,
+      opacity: 0.92,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    }))
+    ring.rotation.x = -Math.PI / 2
+    ring.position.y = 0.06
+    root.add(ring)
+    const pad = new THREE.Mesh(new THREE.CircleGeometry(1.12, 20), new THREE.MeshBasicMaterial({
+      color: look.color,
+      transparent: true,
+      opacity: 0.28,
+      depthWrite: false,
+    }))
+    pad.rotation.x = -Math.PI / 2
+    pad.position.y = 0.04
+    root.add(pad)
     const pole = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.028, 0.034, 0.96, 8),
-      new THREE.MeshStandardMaterial({ color: 0xb8c0c4, metalness: 0.62, roughness: 0.32 }),
+      new THREE.CylinderGeometry(0.05, 0.07, 3.4, 8),
+      new THREE.MeshStandardMaterial({ color: 0xf2f0ea, metalness: 0.55, roughness: 0.28, emissive: look.color, emissiveIntensity: 0.35 }),
     )
-    pole.position.set(0.48, 0.5, -0.16)
-    pole.userData.sample = id
+    pole.position.y = 1.72
+    pole.castShadow = true
     root.add(pole)
-    const head = new THREE.Mesh(
-      new THREE.BoxGeometry(0.2, 0.11, 0.16),
-      new THREE.MeshStandardMaterial({ color: 0x24343c, metalness: 0.4, roughness: 0.38, emissive: 0x1a6a8a, emissiveIntensity: 0.28 }),
+    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 12), glow)
+    orb.position.y = 3.55
+    root.add(orb)
+    const beam = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.16, 0.55, 3.6, 10, 1, true),
+      new THREE.MeshBasicMaterial({ color: look.glow, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide }),
     )
-    head.position.set(0.48, 0.98, -0.16)
-    head.userData.sample = id
-    root.add(head)
-    const flag = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.3, 0.18),
-      new THREE.MeshStandardMaterial({ color: 0xd9b45c, side: THREE.DoubleSide, metalness: 0.12, roughness: 0.55 }),
-    )
-    flag.position.set(0.64, 0.86, -0.16)
-    flag.userData.sample = id
-    root.add(flag)
+    beam.position.y = 1.85
+    root.add(beam)
+    root.add(this.sampleProp(sample.kind, glow))
+    const lamp = new THREE.PointLight(look.color, 2.1, 18, 1.7)
+    lamp.position.set(0, 2.6, 0)
+    root.add(lamp)
+    this.tagSample(root, sample.id)
     return root
+  }
+
+  private sampleProp(kind: SampleKind, glow: THREE.MeshStandardMaterial): THREE.Mesh {
+    if (kind === 'core') {
+      const mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 0.9, 10), glow)
+      mesh.rotation.z = 0.55
+      mesh.position.set(0.55, 0.42, 0.12)
+      mesh.castShadow = true
+      return mesh
+    }
+    if (kind === 'crystal') {
+      const mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.48, 0), glow)
+      mesh.position.set(0.5, 0.52, -0.1)
+      mesh.castShadow = true
+      return mesh
+    }
+    if (kind === 'dust') {
+      const mesh = new THREE.Mesh(new THREE.ConeGeometry(0.55, 0.22, 16, 1, true), glow)
+      mesh.rotation.x = Math.PI
+      mesh.position.set(0.48, 0.22, 0.08)
+      mesh.castShadow = true
+      return mesh
+    }
+    if (kind === 'ice') {
+      const mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(0.42, 0), glow)
+      mesh.position.set(0.46, 0.4, 0.06)
+      mesh.castShadow = true
+      return mesh
+    }
+    const mesh = new THREE.Mesh(new THREE.DodecahedronGeometry(0.4, 0), glow)
+    mesh.position.set(0.5, 0.38, -0.08)
+    mesh.castShadow = true
+    return mesh
+  }
+
+  private makeHintArrow(): THREE.Group {
+    const root = new THREE.Group()
+    const mat = new THREE.MeshBasicMaterial({ color: 0xffe14a, depthTest: false })
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(0.62, 1.5, 4), mat)
+    cone.rotation.x = Math.PI
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 1.15, 6), mat)
+    stem.position.y = 1.15
+    root.add(cone, stem)
+    root.renderOrder = 12
+    root.visible = false
+    this.scene.add(root)
+    return root
+  }
+
+  private tickHint(): void {
+    const open = this.openSamples()
+    if (open.length === 0) {
+      this.hintOn = false
+      this.hintArrow.visible = false
+      return
+    }
+    if (!this.hintOn && this.clock >= this.hintDue) this.hintOn = true
+    const target = open[0]
+    const y = this.heightAt(target.x, target.z)
+    this.hintArrow.position.set(target.x, y + 4.6 + Math.sin(this.clock * 3.2) * 0.38, target.z)
+    this.hintArrow.rotation.y = this.clock * 1.5
+    this.hintArrow.visible = this.hintOn
+  }
+
+  private hintReadout(): SurfaceHint | null {
+    if (!this.hintOn) return null
+    const target = this.openSamples()[0]
+    if (!target) return null
+    this.hintNdc.set(target.x, this.heightAt(target.x, target.z) + 2.2, target.z).project(this.camera)
+    const onScreen = this.hintNdc.z < 1 && this.hintNdc.z > 0 && Math.abs(this.hintNdc.x) <= 0.9 && Math.abs(this.hintNdc.y) <= 0.78
+    return { name: target.name, nx: this.hintNdc.x, ny: this.hintNdc.y, onScreen }
   }
 
   private poseRoute(): void {

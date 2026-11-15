@@ -6,8 +6,13 @@ NASA Space Apps requires a visible record of where Super Intelligence was used. 
 
 NVIDIA NIM, OpenAI-compatible chat at `https://integrate.api.nvidia.com/v1/chat/completions`.
 
-- Model: `meta/llama-3.3-70b-instruct`
-- Visible watermark: `SI-generated · NVIDIA NIM · Llama 3.3 70B`
+The hangar tries these models in order and keeps the first answer:
+
+1. `nvidia/nemotron-3.5-super-vl-120b-a12b`
+2. `nvidia/nemotron-3-ultra-550b-a55b`
+3. `nvidia/nemotron-3.5-lightning-30b-a3b`
+
+- Visible watermark: `SI-generated · NVIDIA NIM · Nemotron` plus the model that answered
 - Key: server-side `NVIDIA_API_KEY` only. It is never sent to the browser.
 
 ## Where it is used
@@ -33,4 +38,4 @@ If the form also lists chatbots or large language models, select that too. The h
 
 ## Credits line
 
-The hangar engineer is SI-generated text from NVIDIA NIM, model meta/llama-3.3-70b-instruct. It explains holds and can suggest catalog parts. Mass, delta-v, power, link, heat, and cost are still computed in the game. No NASA logos or mission marks are generated.
+The hangar engineer is SI-generated text from NVIDIA NIM. It tries nvidia/nemotron-3.5-super-vl-120b-a12b, then nvidia/nemotron-3-ultra-550b-a55b, then nvidia/nemotron-3.5-lightning-30b-a3b. It explains holds and can suggest catalog parts. Mass, delta-v, power, link, heat, and cost are still computed in the game. No NASA logos or mission marks are generated.

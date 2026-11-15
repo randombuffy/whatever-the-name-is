@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, House, Plus } from 'lucide-react'
+import { AlertTriangle, Plus } from 'lucide-react'
 import { fieldSamples, siteOf } from '../domain/campaign'
 import type { CampPhase, CampSave } from '../domain/save'
 import { getSpec } from '../domain/catalog'
@@ -7,7 +7,8 @@ import { landingThrustN } from '../domain/dynamics'
 import { massBudget } from '../domain/mass'
 import type { SpacecraftConfig } from '../domain/types'
 import { DescentWorld, type DescentBody, type DescentReadout } from '../render/descentWorld'
-import { SurfaceWorld, type SurfaceReadout } from '../render/surfaceWorld'
+import { SurfaceWorld, type SurfaceHint, type SurfaceReadout } from '../render/surfaceWorld'
+import { MARS_LANDING } from '../render/marsGround'
 import { useActiveMission, useMission } from '../store/useMission'
 import { setBed, setScoreBoost, sting } from './audio'
 import { say } from './voice'
@@ -235,7 +236,6 @@ export function SurfaceScreen() {
   const craft = useMission((state) => state.craft)
   const plan = useMission((state) => state.plan)
   const finish = useMission((state) => state.finish)
-  const go = useMission((state) => state.go)
   const bankSurface = useMission((state) => state.bankSurface)
   const mount = useRef<HTMLDivElement>(null)
   const worldRef = useRef<SurfaceWorld | null>(null)
@@ -259,6 +259,7 @@ export function SurfaceScreen() {
     const difficultySetting = useMission.getState().difficulty
     const diffMult = difficultySetting === 'commander' ? 1.4 : difficultySetting === 'cadet' ? 0.6 : 1.0
     const scaledDiff = Math.max(0.1, Math.min(1.0, site.difficulty * diffMult))
+    const onMars = mission.id === 'mars' || mission.id === 'custom'
     const world = new SurfaceWorld(canvas, {
       missionId: mission.id,
       siteId: site.id,
@@ -269,7 +270,7 @@ export function SurfaceScreen() {
       roverMassKg: rover ? (getSpec(rover.specId)?.massKg ?? 42) : (mission.id === 'mars' || mission.id === 'custom' ? 42 : null),
       heli: enabled.some((part) => getSpec(part.specId)?.instrument === 'helicopter'),
       craft,
-      samples: fieldSamples(site, plan.objectiveId ?? 'water'),
+      samples: fieldSamples(site, plan.objectiveId ?? 'water', onMars ? MARS_LANDING : [0, 0]),
       instruments,
       storageBits: Math.max(512e6, enabled.reduce((sum, part) => sum + (getSpec(part.specId)?.storageBits ?? 0), 0)),
       uplinkBps: Math.max(40_000, enabled.reduce((best, part) => Math.max(best, getSpec(part.specId)?.dataRateBps ?? 0), 0)),
@@ -361,6 +362,7 @@ export function SurfaceScreen() {
   return (
       <div className={`field-stage${sky === 'Dust' ? ' is-dust' : sky === 'Flare' ? ' is-flare' : ''}`} ref={mount}>
       {hud?.mode === 'eva' && <div className="crosshair" />}
+      {hud?.hint && <HuntArrow hint={hud.hint} />}
       <div className="deck">
         {marsSurface && moreHud && <CampBar camp={camp} onChange={setCamp} />}
         <div className="deck-top surface-top">
@@ -384,6 +386,11 @@ export function SurfaceScreen() {
               <button type="button" aria-pressed={hud?.weather === 'blackout'} onClick={() => worldRef.current?.setWeather('blackout')}>Blackout</button>
             </div>
           )}
+          <div className="hunt-card">
+            <span>Sol {hud?.sol ?? 1} · Mission</span>
+            <strong>Collect {hud?.total ?? 5} samples</strong>
+            <em>{hud?.found ?? 0} of {hud?.total ?? 5} collected · {hud?.sent ?? 0} sent to Earth</em>
+          </div>
           <p className="deck-note">{hud?.prompt || siteLabel(hud)}</p>
           {hud?.mode === 'eva' && (
             <span className="eva-note">
@@ -424,14 +431,11 @@ export function SurfaceScreen() {
             <Read label="Speed" value={hud ? hud.speed.toFixed(1) : '0'} />
             <Read label="Battery" value={hud ? `${Math.round(hud.energy)}%` : '0'} />
             <Read label="Radio" value={hud ? (hud.link ? 'Open' : 'Dark') : '—'} />
-            <Read label="Held" value={hud ? String(hud.held) : '0'} />
-            <Read label="Sent" value={hud ? String(hud.sent) : '0'} />
           </div>
-          <div className="group">
-            <button type="button" onClick={() => world?.sample()}>Sample</button>
-            <button type="button" onClick={() => world?.transmit()}>Send</button>
-            <button type="button" onClick={send}>File return</button>
-            <button type="button" aria-label="Home" onClick={() => go('design')}><House size={16} /></button>
+          <div className="group field-actions">
+            <button type="button" className="act-sample" onClick={() => world?.sample()}>Sample</button>
+            <button type="button" className={`act-send${hud && hud.held > 0 ? ' is-ready' : ''}`} onClick={() => world?.transmit()}>Send</button>
+            <button type="button" className="act-return" onClick={send}>File return</button>
           </div>
         </div>
       </div>
@@ -645,6 +649,18 @@ function Read({ label, value }: { label: string; value: string }) {
     <div className="meter" title={label}>
       <span>{label}</span>
       <b>{value}</b>
+    </div>
+  )
+}
+
+function HuntArrow({ hint }: { hint: SurfaceHint }) {
+  const x = Math.min(0.92, Math.max(0.08, (hint.nx + 1) / 2))
+  const y = Math.min(0.84, Math.max(0.1, (1 - hint.ny) / 2))
+  const rot = Math.atan2(hint.nx, hint.ny) * 180 / Math.PI
+  return (
+    <div className="hunt-arrow" style={{ left: `${x * 100}%`, top: `${y * 100}%` }}>
+      <i style={{ transform: hint.onScreen ? 'rotate(180deg)' : `rotate(${rot}deg)` }} />
+      <b>{hint.onScreen ? hint.name : 'Sample'}</b>
     </div>
   )
 }

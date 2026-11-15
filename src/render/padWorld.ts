@@ -152,7 +152,7 @@ export class PadWorld {
   private controlAt = new THREE.Vector3(-32, 0, 46)
   private chevrons: THREE.Mesh[] = []
   private walkBody: WalkAstronaut | null = null
-  private ascentView: AscentView = 'chase'
+  private ascentView: AscentView = 'cinematic'
   private viewLocked = false
   private crewStowed = false
   private readonly padSeat = new THREE.Vector3(0, 0, 0)
@@ -277,10 +277,9 @@ export class PadWorld {
   setCrewStowed(stowed: boolean): void {
     if (stowed && !this.crewStowed) {
       this.firstPerson = false
-      this.ascentView = 'chase'
-      this.viewLocked = true
-      this.lookYaw = Math.PI
-      this.pitch = 0.16
+      if (!this.viewLocked) this.ascentView = 'cinematic'
+      this.lookYaw = 0.7
+      this.pitch = 0.3
       if (document.pointerLockElement === this.canvas) document.exitPointerLock()
     }
     this.crewStowed = stowed

@@ -1,67 +1,27 @@
 import { useEffect, useRef, useState } from 'react'
 import { preloadAssets } from '../render/gltf'
 import { applyMix, startScore, unlock } from './audio'
+import { CallChip, type CallChipIcon, type CallChipStatus } from './CallChip'
 import { useMission } from '../store/useMission'
-
-const ROCKET = [
-  [
-    '        /\\',
-    '       /  \\',
-    '      |    |',
-    '      | MC |',
-    '      |    |',
-    '      /||||\\',
-    '     /      \\',
-    '        ..',
-  ],
-  [
-    '        /\\',
-    '       /  \\',
-    '      |    |',
-    '      | MC |',
-    '      |    |',
-    '      /||||\\',
-    '     /      \\',
-    '       .||.',
-  ],
-  [
-    '        /\\',
-    '       /  \\',
-    '      |    |',
-    '      | MC |',
-    '      |    |',
-    '      /||||\\',
-    '     /      \\',
-    '      .||||.',
-  ],
-  [
-    '        /\\',
-    '       /  \\',
-    '      |    |',
-    '      | MC |',
-    '      |    |',
-    '      /||||\\',
-    '     /      \\',
-    '     .||||||.',
-  ],
-]
 
 type Props = { onReady: () => void }
 
-const HOLD_MS = 1800
+const MIN_MS = 2000
+const MAX_MS = 4000
+const ICONS: CallChipIcon[] = ['terminal', 'file', 'search', 'edit']
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms)
+  })
+}
 
 export function Boot({ onReady }: Props) {
-  const [done, setDone] = useState(0)
-  const [total, setTotal] = useState(1)
-  const [label, setLabel] = useState('assets')
-  const [frame, setFrame] = useState(0)
-  const [ready, setReady] = useState(false)
+  const [status, setStatus] = useState<CallChipStatus>('running')
+  const [icon, setIcon] = useState<CallChipIcon>('terminal')
   const video = useRef<HTMLVideoElement>(null)
   const readyRef = useRef(onReady)
   readyRef.current = onReady
-  const ratio = total > 0 ? done / total : 0
-  const pct = Math.round(ratio * 100)
-  const art = ROCKET[frame % ROCKET.length]
 
   useEffect(() => {
     applyMix(useMission.getState().audio, useMission.getState().volume)
@@ -73,32 +33,32 @@ export function Boot({ onReady }: Props) {
       clip.playsInline = true
       void clip.play().catch(() => undefined)
     }
-    const id = window.setInterval(() => setFrame((n) => n + 1), 180)
+    const spin = window.setInterval(() => {
+      setIcon((current) => ICONS[(ICONS.indexOf(current) + 1) % ICONS.length])
+    }, 700)
     let live = true
-    const hold = new Promise<void>((resolve) => {
-      window.setTimeout(resolve, HOLD_MS)
-    })
-    void Promise.all([
-      preloadAssets((next, count, name) => {
-        if (!live) return
-        setDone(next)
-        setTotal(count)
-        setLabel(name)
-      }),
-      hold,
-    ]).then(() => {
+    const started = performance.now()
+    void (async () => {
+      const preload = preloadAssets(() => undefined)
+      const gated = preload.then(async () => {
+        const remain = MIN_MS - (performance.now() - started)
+        if (remain > 0) await wait(remain)
+      })
+      await Promise.race([gated, wait(MAX_MS)])
       if (!live) return
-      setReady(true)
+      setStatus('done')
+      await wait(320)
+      if (!live) return
       readyRef.current()
-    })
+    })()
     return () => {
       live = false
-      window.clearInterval(id)
+      window.clearInterval(spin)
     }
   }, [])
 
   return (
-    <div className="boot-ascii" aria-busy={!ready} aria-live="polite">
+    <div className="boot-ascii" aria-busy={status === 'running'} aria-live="polite">
       <video
         ref={video}
         className="boot-video"
@@ -111,27 +71,17 @@ export function Boot({ onReady }: Props) {
         aria-hidden="true"
       />
       <div className="boot-veil" />
-      <pre className="boot-rocket">{art.join('\n')}</pre>
-      <aside className="boot-card">
-        <b>AeroAestro</b>
-        <span>
-          Loading pad assets · {done}/{total}
-        </span>
-        <div
-          className="boot-track"
-          role="progressbar"
-          aria-valuenow={pct}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-label="Asset load progress"
-        >
-          <i style={{ width: `${pct}%` }} />
-        </div>
-        <p className="boot-stat">
-          <code>{pct}%</code>
-          <em>{ready ? 'Ready' : label}</em>
-        </p>
-      </aside>
+      <CallChip
+        icon={icon}
+        name="load"
+        argument="assets"
+        status={status}
+        expectedMs={3000}
+        size={36}
+        color="#f4f1ea"
+        surfaceColor="#18181b"
+        progressColor="#f4f1ea"
+      />
     </div>
   )
 }

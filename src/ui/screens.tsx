@@ -12,6 +12,8 @@ import {
   CircleCheck,
   Clock,
   Crosshair,
+  Eye,
+  EyeOff,
   Droplets,
   Gauge,
   Info,
@@ -29,6 +31,7 @@ import {
   Rocket,
   RotateCcw,
   Sparkles,
+  Trash2,
   Undo2,
   Zap,
 } from 'lucide-react'
@@ -273,10 +276,7 @@ export function DifficultyPanel({ compact = false }: { compact?: boolean }) {
   const setDifficulty = useMission((state) => state.setDifficulty)
   return (
     <div className={`diff-panel${compact ? ' is-compact' : ' is-gate'}`}>
-      <div className="diff-panel-head">
-        <b>Flight difficulty</b>
-        <span>{DIFFICULTY_BLURB[difficulty]}</span>
-      </div>
+      <p className="diff-panel-blurb">{DIFFICULTY_BLURB[difficulty]}</p>
       <div className="diff-grid" role="group" aria-label="Flight difficulty">
         {DIFFICULTY.map(({ id, label, Icon }) => (
           <button
@@ -435,7 +435,7 @@ export function BriefScreen() {
           )}
           {solar && <p className="muted">DONKI lists a {solar.classType} flare issued {solar.begin.slice(0, 10)}. Catalogued space weather. It does not change this flight.</p>}
           {nasa?.status === 'error' && <p className="muted">The image library did not answer. The mission text above is the fallback.</p>}
-          <p className="muted">{EDU_LIMITS}</p>
+          <p className="edu-note">{EDU_LIMITS}</p>
         </Glass>
       </aside>
       {info && (
@@ -637,7 +637,7 @@ export function DesignScreen() {
             <Meter label="Fuel / Δv" value={mps(report.propulsion.dvMps)} ratio={report.requiredDvMps > 0 ? report.propulsion.dvMps / report.requiredDvMps : 1} tone={report.propulsion.dvMps + 1 < report.requiredDvMps ? 'bad' : 'ok'} />
             <Meter label="Power" value={watts(generation)} ratio={report.power.loadW > 0 ? generation / report.power.loadW : 1} tone={generation + 1 < report.power.loadW ? 'bad' : 'ok'} />
             <Meter label="Cost" value={shortMoney(report.cost.totalUsd)} ratio={report.cost.totalUsd / mission.budgetUsd} tone={report.cost.marginUsd < 0 ? 'bad' : 'ok'} />
-            <p className="muted">{EDU_LIMITS}</p>
+            <p className="edu-note">{EDU_LIMITS}</p>
             <SiDesk mission={mission} craft={craft} plan={plan} report={report} />
             <h2 className="section-label">Fix these first</h2>
             {hard === 0 && <p className="ready">The required parts are aboard. Add a part from the left list, or drag it onto the ship.</p>}
@@ -656,11 +656,23 @@ export function DesignScreen() {
                     <strong>{family?.name ?? fitted.name}</strong>
                     <em>{headline(fitted)} · {shortMoney(fitted.costUsd)}</em>
                   </span>
-                  <button type="button" className="word slim" onClick={(event) => { event.stopPropagation(); togglePart(part.instanceId) }}>
-                    {part.enabled ? 'Hide' : 'Show'}
+                  <button
+                    type="button"
+                    className="icon"
+                    title={part.enabled ? `Hide ${fitted.name}` : `Show ${fitted.name}`}
+                    aria-label={part.enabled ? `Hide ${fitted.name}` : `Show ${fitted.name}`}
+                    onClick={(event) => { event.stopPropagation(); togglePart(part.instanceId) }}
+                  >
+                    {part.enabled ? <Eye size={13} /> : <EyeOff size={13} />}
                   </button>
-                  <button type="button" className="word slim" onClick={(event) => { event.stopPropagation(); removePart(part.instanceId) }}>
-                    Remove
+                  <button
+                    type="button"
+                    className="icon danger"
+                    title={`Remove ${fitted.name}`}
+                    aria-label={`Remove ${fitted.name}`}
+                    onClick={(event) => { event.stopPropagation(); removePart(part.instanceId) }}
+                  >
+                    <Trash2 size={13} />
                   </button>
                   {family && (
                     <Setting
@@ -816,7 +828,7 @@ export function PlanScreen() {
         <Glass className="pad-card">
           <Meter label="Available Δv" value={mps(report.propulsion.dvMps)} ratio={report.requiredDvMps > 0 ? report.propulsion.dvMps / report.requiredDvMps : 1} tone={report.propulsion.dvMps + 1 < report.requiredDvMps ? 'bad' : 'ok'} />
           <Meter label="Needed Δv" value={mps(report.requiredDvMps)} ratio={1} />
-          <p className="muted">{EDU_LIMITS}</p>
+          <p className="edu-note">{EDU_LIMITS}</p>
           <label className="slider">
             <span>Reserve <b>{mps(plan.reserveDvMps)}</b></span>
             <input type="range" min={0} max={200} step={5} value={plan.reserveDvMps} onChange={(event) => setPlan({ reserveDvMps: Number(event.target.value) })} />
@@ -1255,7 +1267,7 @@ export function DebriefScreen() {
   const mars = missionId === 'mars' || missionId === 'custom'
 
   return (
-    <div className="center-stage" style={{ padding: '20px 0' }}>
+    <div className="center-stage debrief-stage">
       <Glass className={`debrief-console result-card ${outcome.success ? 'is-win' : outcome.partial ? 'is-partial' : 'is-lose'}`}>
         <div className="debrief-header">
           <div>
@@ -1269,7 +1281,7 @@ export function DebriefScreen() {
         </div>
 
         <p className="result-why">{why}</p>
-        <p className="muted">{EDU_LIMITS}</p>
+        <p className="edu-note">{EDU_LIMITS}</p>
 
         <div className="debrief-hero">
           <div className="debrief-summary-box">
@@ -1400,7 +1412,7 @@ export function DebriefScreen() {
             </ul>
           </div>
         )}
-        <RankBoard />
+        {history.length > 1 && <RankBoard compact />}
         <div className="debrief-objectives-box">
           <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', fontWeight: 600 }}>
             Goals
@@ -1482,7 +1494,7 @@ export function CreditsScreen() {
         <p>Sound effects are the Oculus Audio Pack 1 by Oculus VR, LLC, CC BY 4.0, from the Meta open-sound collection. https://github.com/facebookincubator/Meta-open-sound</p>
         <p>The Mars surface rover is the NASA/JPL public-domain Perseverance model. The yard also uses NASA’s Ingenuity helicopter, Apollo lunar module, Explorer Jupiter-C, astronaut, and extravehicular suit. Those models are free of copyright. https://github.com/nasa/NASA-3D-Resources</p>
         <p>Starfield, flame and renderer fallback follow VOIDTYPE by Itz-Murali and Itz-Anya. https://github.com/Itz-Murali/Void-Type</p>
-        <p>The hangar engineer is SI-generated text from NVIDIA NIM, model meta/llama-3.3-70b-instruct. It explains holds and can suggest catalog parts. Mass, delta-v, power, link, heat, and cost are still computed in the game. No NASA logos or mission marks are generated.</p>
+        <p>The hangar engineer is SI-generated text from NVIDIA NIM. It tries nvidia/nemotron-3.5-super-vl-120b-a12b, then nvidia/nemotron-3-ultra-550b-a55b, then nvidia/nemotron-3.5-lightning-30b-a3b. It explains holds and can suggest catalog parts. Mass, delta-v, power, link, heat, and cost are still computed in the game. No NASA logos or mission marks are generated.</p>
         <p>Mission titles use TechText; spotlight cards, the dock and the starfield follow patterns from React Bits (reactbits.dev).</p>
         <p className="muted">{gpu}</p>
       </Glass>

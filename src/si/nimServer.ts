@@ -1,7 +1,14 @@
 import { CATALOG } from '../domain/catalog'
 
-export const NIM_MODEL = 'meta/llama-3.3-70b-instruct'
+export const NIM_MODELS = [
+  'nvidia/nemotron-3.5-super-vl-120b-a12b',
+  'nvidia/nemotron-3-ultra-550b-a55b',
+  'nvidia/nemotron-3.5-lightning-30b-a3b',
+] as const
+
+export const NIM_MODEL = NIM_MODELS[0]
 const NIM_URL = 'https://integrate.api.nvidia.com/v1/chat/completions'
+const RETRY = new Set([404, 408, 409, 410, 422, 429, 500, 502, 503, 529])
 
 const IDS = CATALOG.map((spec) => spec.id).join(', ')
 
@@ -17,7 +24,35 @@ export function nimSystemPrompt(): string {
   ].join('\n')
 }
 
-export async function completeNim(apiKey: string, note: unknown, ask: string): Promise<{ brief: string; steps: string[]; add: string[]; name: string | null }> {
+export async function completeNim(
+  apiKey: string,
+  note: unknown,
+  ask: string,
+): Promise<{ brief: string; steps: string[]; add: string[]; name: string | null; model: string }> {
+  const prompt = typeof ask === 'string' && ask.trim() ? ask.trim() : 'Explain the holds and what to fit next.'
+  let last = 'NVIDIA NIM did not answer.'
+  for (const model of NIM_MODELS) {
+    try {
+      const { status, text, error } = await invokeNim(apiKey, model, note, prompt)
+      if (status === 401 || status === 403) {
+        throw new Error('NVIDIA_API_KEY was rejected. Put a current key in .env and in the Vercel NVIDIA_API_KEY env var.')
+      }
+      if (!status || status >= 400) {
+        last = error || `NVIDIA NIM ${status || 'failed'} on ${shortName(model)}`
+        if (RETRY.has(status)) continue
+        throw new Error(last)
+      }
+      const advice = parseAdvice(text)
+      return { ...advice, model }
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith('NVIDIA_API_KEY was rejected')) throw error
+      last = error instanceof Error ? error.message : `NVIDIA NIM failed on ${shortName(model)}`
+    }
+  }
+  throw new Error(last)
+}
+
+async function invokeNim(apiKey: string, model: string, note: unknown, ask: string): Promise<{ status: number; text: string; error: string }> {
   const response = await fetch(NIM_URL, {
     method: 'POST',
     headers: {
@@ -26,27 +61,43 @@ export async function completeNim(apiKey: string, note: unknown, ask: string): P
       Accept: 'application/json',
     },
     body: JSON.stringify({
-      model: NIM_MODEL,
+      model,
       messages: [
         { role: 'system', content: nimSystemPrompt() },
-        { role: 'user', content: `${typeof ask === 'string' && ask.trim() ? ask.trim() : 'Explain the holds and what to fit next.'}\n\nCRAFT:\n${JSON.stringify(note)}` },
+        { role: 'user', content: `${ask}\n\nCRAFT:\n${JSON.stringify(note)}` },
       ],
-      temperature: 0.25,
+      temperature: 0.2,
       top_p: 0.7,
-      max_tokens: 700,
+      max_tokens: 900,
       stream: false,
+      chat_template_kwargs: { enable_thinking: false },
+      reasoning_effort: 'none',
     }),
   })
   const raw = await response.text()
-  if (!response.ok) {
-    throw new Error(cutError(raw, response.status))
+  if (!response.ok) return { status: response.status, text: '', error: cutError(raw, response.status, model) }
+  let payload: { choices?: { message?: { content?: unknown; reasoning_content?: unknown } }[] }
+  try {
+    payload = JSON.parse(raw) as typeof payload
+  } catch {
+    return { status: 502, text: '', error: `${shortName(model)} sent a broken payload.` }
   }
-  const payload = JSON.parse(raw) as { choices?: { message?: { content?: string } }[] }
-  const text = payload.choices?.[0]?.message?.content ?? ''
-  return parseAdvice(text)
+  const text = messageText(payload.choices?.[0]?.message)
+  if (!text.trim()) return { status: 502, text: '', error: `${shortName(model)} returned an empty answer.` }
+  return { status: response.status, text, error: '' }
 }
 
-function parseAdvice(text: string): { brief: string; steps: string[]; add: string[]; name: string | null } {
+function messageText(message: { content?: unknown; reasoning_content?: unknown } | undefined): string {
+  if (!message) return ''
+  const content = message.content
+  if (typeof content === 'string') return content
+  if (Array.isArray(content)) {
+    return content.map((part) => (part && typeof part === 'object' && 'text' in part ? String((part as { text?: unknown }).text ?? '') : '')).join('')
+  }
+  return typeof message.reasoning_content === 'string' ? message.reasoning_content : ''
+}
+
+export function parseAdvice(text: string): { brief: string; steps: string[]; add: string[]; name: string | null } {
   const start = text.indexOf('{')
   const end = text.lastIndexOf('}')
   const slice = start >= 0 && end > start ? text.slice(start, end + 1) : ''
@@ -68,13 +119,17 @@ function parseAdvice(text: string): { brief: string; steps: string[]; add: strin
   return { brief, steps, add, name }
 }
 
-function cutError(raw: string, status: number): string {
+function shortName(model: string): string {
+  return model.split('/')[1] ?? model
+}
+
+function cutError(raw: string, status: number, model: string): string {
   try {
-    const parsed = JSON.parse(raw) as { detail?: unknown; error?: { message?: string }; message?: string }
-    const detail = parsed.detail ?? parsed.error?.message ?? parsed.message
-    if (typeof detail === 'string' && detail.trim()) return detail.trim().slice(0, 240)
+    const parsed = JSON.parse(raw) as { detail?: unknown; title?: unknown; error?: { message?: string }; message?: string }
+    const detail = parsed.detail ?? parsed.error?.message ?? parsed.message ?? parsed.title
+    if (typeof detail === 'string' && detail.trim()) return `${shortName(model)}: ${detail.trim().slice(0, 200)}`
   } catch {
     /* keep status */
   }
-  return `NVIDIA NIM ${status}`
+  return `${shortName(model)}: NVIDIA NIM ${status}`
 }
